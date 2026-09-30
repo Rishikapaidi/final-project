@@ -1,8 +1,6 @@
 streamlit
 numpy
 pandas
-opencv-python
-opencv-python-headless
+opencv-python<5
 tensorflow
 keras
-collection
