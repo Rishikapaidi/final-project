@@ -34,88 +34,36 @@ df_angry = df[36000:54000]
 df_neutral = df[54000:72000]
 df_happy = df[72000:]
 
+# Map each detected emotion (case-insensitive) to a song bucket. The dataset
+# only has five buckets, so Disgusted and Surprised share one with a close match.
+EMOTION_BUCKETS = {
+    'angry': df_angry,
+    'disgusted': df_angry,
+    'fearful': df_fear,
+    'fear': df_fear,
+    'happy': df_happy,
+    'surprised': df_happy,
+    'neutral': df_neutral,
+    'sad': df_sad,
+}
+
+# How many songs to sample for each emotion, keyed by how many distinct
+# emotions were detected (most frequent emotion first).
+SAMPLE_SIZES = {
+    1: [30],
+    2: [30, 20],
+    3: [55, 20, 15],
+    4: [30, 29, 18, 9],
+}
+
 def fun(list):
 
     data = pd.DataFrame()
+    times = SAMPLE_SIZES.get(len(list), [10, 7, 6, 5, 2])
 
-    if len(list) == 1:
-        v = list[0]
-        t = 30
-        if v == 'Neutral':
-            data = pd.concat([data, df_neutral.sample(n=t)], ignore_index=True)
-        elif v == 'Angry':
-             data = pd.concat([data, df_angry.sample(n=t)], ignore_index=True)
-        elif v == 'fear':
-            data = pd.concat([data, df_fear.sample(n=t)], ignore_index=True)
-        elif v == 'happy':
-            data = pd.concat([data, df_happy.sample(n=t)], ignore_index=True)
-        else:
-            data = pd.concat([data, df_angry.sample(n=t)], ignore_index=True)
-
-    elif len(list) == 2:
-        times = [30,20]
-        for i in range(len(list)):
-            v = list[i]
-            t = times[i]
-            if v == 'Neutral':
-                data = pd.concat([data, df_neutral.sample(n=t)], ignore_index=True)
-            elif v == 'Angry':    
-                data = pd.concat([data, df_angry.sample(n=t)], ignore_index=True)
-            elif v == 'fear':              
-                data = pd.concat([data, df_fear.sample(n=t)], ignore_index=True)
-            elif v == 'happy':             
-                data = pd.concat([data, df_happy.sample(n=t)], ignore_index=True)
-            else:              
-               data = pd.concat([df_sad.sample(n=t)])
-
-    elif len(list) == 3:
-        times = [55,20,15]
-        for i in range(len(list)): 
-            v = list[i]          
-            t = times[i]
-
-            if v == 'Neutral':              
-                data = pd.concat([data, df_neutral.sample(n=t)], ignore_index=True)
-            elif v == 'Angry':               
-                data = pd.concat([data, df_angry.sample(n=t)], ignore_index=True)
-            elif v == 'fear':             
-                data = pd.concat([data, df_fear.sample(n=t)], ignore_index=True)
-            elif v == 'happy':               
-                data = pd.concat([data, df_happy.sample(n=t)], ignore_index=True)
-            else:      
-                data = pd.concat([df_sad.sample(n=t)])
-
-
-    elif len(list) == 4:
-        times = [30,29,18,9]
-        for i in range(len(list)):
-            v = list[i]
-            t = times[i]
-            if v == 'Neutral': 
-                data = pd.concat([data, df_neutral.sample(n=t)], ignore_index=True)
-            elif v == 'Angry':              
-                data = pd.concat([data, df_angry.sample(n=t)], ignore_index=True)
-            elif v == 'fear':              
-                data = pd.concat([data, df_fear.sample(n=t)], ignore_index=True)
-            elif v == 'happy':               
-                data =pd.concat([data, df_happy.sample(n=t)], ignore_index=True)
-            else:              
-               data = pd.concat([df_sad.sample(n=t)])
-    else:
-        times = [10,7,6,5,2]
-        for i in range(len(list)):           
-            v = list[i]         
-            t = times[i]
-            if v == 'Neutral':
-                data = pd.concat([data, df_neutral.sample(n=t)], ignore_index=True)
-            elif v == 'Angry':           
-                data = pd.concat([data, df_angry.sample(n=t)], ignore_index=True)
-            elif v == 'fear':           
-                data = pd.concat([data, df_fear.sample(n=t)], ignore_index=True)
-            elif v == 'happy':          
-                data = pd.concat([data, df_happy.sample(n=t)], ignore_index=True)
-            else:
-                data = pd.concat([df_sad.sample(n=t)])
+    for v, t in zip(list, times):
+        bucket = EMOTION_BUCKETS.get(v.strip().lower(), df_neutral)
+        data = pd.concat([data, bucket.sample(n=t)], ignore_index=True)
 
     print("data of list func... :",data)
     return data
