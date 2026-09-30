@@ -39,10 +39,12 @@ df_happy = df[72000:]
 EMOTION_BUCKETS = {
     'angry': df_angry,
     'disgusted': df_angry,
+    'disgust': df_angry,
     'fearful': df_fear,
     'fear': df_fear,
     'happy': df_happy,
     'surprised': df_happy,
+    'surprise': df_happy,
     'neutral': df_neutral,
     'sad': df_sad,
 }
