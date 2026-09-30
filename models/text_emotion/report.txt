@@ -1,0 +1,43 @@
+== unweighted: validation macro-F1 by C: C=0.25: 0.463, C=0.5: 0.534, C=1: 0.576, C=2: 0.582, C=4: 0.573, C=8: 0.574  -> best C=2
+== balanced: validation macro-F1 by C: C=0.25: 0.561, C=0.5: 0.575, C=1: 0.579, C=2: 0.586, C=4: 0.582, C=8: 0.581  -> best C=2
+
+== TEST, unweighted (C=2)
+              precision    recall  f1-score   support
+
+       angry      0.660     0.305     0.417       325
+     disgust      0.771     0.355     0.486        76
+        fear      0.868     0.429     0.574        77
+       happy      0.800     0.749     0.774      1367
+         sad      0.684     0.417     0.518       259
+    surprise      0.585     0.376     0.458       449
+     neutral      0.665     0.862     0.751      2037
+
+    accuracy                          0.701      4590
+   macro avg      0.719     0.499     0.568      4590
+weighted avg      0.703     0.701     0.685      4590
+
+
+== TEST, balanced (C=2)
+              precision    recall  f1-score   support
+
+       angry      0.421     0.486     0.451       325
+     disgust      0.512     0.539     0.526        76
+        fear      0.566     0.727     0.636        77
+       happy      0.813     0.756     0.783      1367
+         sad      0.466     0.560     0.509       259
+    surprise      0.485     0.570     0.524       449
+     neutral      0.726     0.686     0.706      2037
+
+    accuracy                          0.673      4590
+   macro avg      0.570     0.618     0.591      4590
+weighted avg      0.686     0.673     0.678      4590
+
+== TEST confusion matrix, balanced (rows = true, columns = predicted)
+          angry  disgust  fear  happy  sad  surprise  neutral
+angry       158        6     4     14   16        21      106
+disgust      12       41     3      2    2         2       14
+fear          5        2    56      1    6         0        7
+happy        35        4     8   1033   26        44      217
+sad          12        2     4     21  145        14       61
+surprise     14        4     5     27   20       256      123
+neutral     139       21    19    173   96       191     1398

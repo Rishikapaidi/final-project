@@ -4,3 +4,6 @@ pandas
 opencv-python<5
 tensorflow
 keras
+scikit-learn
+matplotlib
+joblib

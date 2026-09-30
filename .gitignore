@@ -5,3 +5,6 @@ __pycache__/
 # Generated datasets: rebuild with the scripts described in data/README.md
 data/*
 !data/README.md
+
+# Trained models: rebuild with scripts/train_text_emotion.py
+models/**/*.joblib
