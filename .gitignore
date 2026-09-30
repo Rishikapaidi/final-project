@@ -1,3 +1,7 @@
 venv/
 __pycache__/
 *.pyc
+
+# Generated datasets: rebuild with the scripts described in data/README.md
+data/*
+!data/README.md
