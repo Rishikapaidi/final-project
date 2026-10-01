@@ -74,6 +74,10 @@ def fun(list):
         bucket = EMOTION_BUCKETS.get(v.strip().lower(), df_neutral)
         data = pd.concat([data, bucket.sample(n=t)], ignore_index=True)
 
+    # Songs are added one emotion at a time, and only the first 30 are shown,
+    # so shuffle to make the displayed songs reflect the whole mix.
+    data = data.sample(frac=1).reset_index(drop=True)
+
     print("data of list func... :",data)
     return data
 
