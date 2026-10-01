@@ -165,7 +165,8 @@ with col2:
             for (x, y, w, h) in faces:               
                 cv2.rectangle(frame, (x, y - 50), (x + w, y + h + 10), (255, 0, 0), 2)               
                 roi_gray = gray[y:y + h, x:x + w]               
-                cropped_img = np.expand_dims(np.expand_dims(cv2.resize(roi_gray, (48, 48)), -1), 0)             
+                # The model was trained on pixels scaled to 0-1, not raw 0-255.
+                cropped_img = np.expand_dims(np.expand_dims(cv2.resize(roi_gray, (48, 48)), -1), 0).astype('float32') / 255.0
                 prediction = model.predict(cropped_img)             
                 max_index = int(np.argmax(prediction))
 
