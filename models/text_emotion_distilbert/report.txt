@@ -1,0 +1,26 @@
+DistilBERT (distilbert-base-uncased), best epoch 3 of 3, validation macro-F1 0.6023
+
+== TEST
+              precision    recall  f1-score   support
+
+       angry      0.427     0.649     0.515       325
+     disgust      0.422     0.645     0.510        76
+        fear      0.496     0.779     0.606        77
+       happy      0.816     0.835     0.825      1367
+         sad      0.449     0.656     0.533       259
+    surprise      0.463     0.713     0.561       449
+     neutral      0.822     0.561     0.667      2037
+
+    accuracy                          0.674      4590
+   macro avg      0.556     0.691     0.603      4590
+weighted avg      0.724     0.674     0.682      4590
+
+== TEST confusion matrix (rows = true, columns = predicted)
+          angry  disgust  fear  happy  sad  surprise  neutral
+angry       211        9     4     14   23        19       45
+disgust      12       49     3      2    4         1        5
+fear          4        2    60      2    6         3        0
+happy        22        5     7   1141   26        45      121
+sad          20        7     8     12  170        16       26
+surprise     21        8     7     23   19       320       51
+neutral     204       36    32    204  131       287     1143

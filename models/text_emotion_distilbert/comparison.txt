@@ -1,0 +1,15 @@
+Test set: logistic regression baseline vs DistilBERT (both class-weighted)
+
+          support  P_logreg  P_distilbert  R_logreg  R_distilbert  F1_logreg  F1_distilbert  F1_change
+class                                                                                                 
+angry         325     0.421         0.427     0.486         0.649      0.451          0.515      0.064
+disgust        76     0.512         0.422     0.539         0.645      0.526          0.510     -0.015
+fear           77     0.566         0.496     0.727         0.779      0.636          0.606     -0.030
+happy        1367     0.813         0.816     0.756         0.835      0.783          0.825      0.042
+sad           259     0.466         0.449     0.560         0.656      0.509          0.533      0.024
+surprise      449     0.485         0.463     0.570         0.713      0.524          0.561      0.037
+neutral      2037     0.726         0.822     0.686         0.561      0.706          0.667     -0.039
+
+          logreg  distilbert  change
+macro-F1   0.591       0.603   0.012
+accuracy   0.673       0.674   0.002

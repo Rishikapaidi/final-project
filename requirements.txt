@@ -7,3 +7,5 @@ keras
 scikit-learn
 matplotlib
 joblib
+torch
+transformers
