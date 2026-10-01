@@ -4,15 +4,22 @@ import streamlit as st
 import cv2
 import pandas as pd
 
-from collections import Counter
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, Flatten
 from tensorflow.keras.layers import Conv2D
 from tensorflow.keras.layers import MaxPooling2D
 import base64
+import json
 import os
 
+from fusion import EMOTIONS, fuse
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+TEXT_MODEL_DIR = os.path.join(BASE_DIR, "models", "text_emotion_distilbert", "model")
+with open(os.path.join(BASE_DIR, "models", "fusion", "fusion_config.json")) as f:
+    FUSION_CONFIG = json.load(f)
+# Emotions whose fused probability is at least this share go into the playlist mix.
+MIN_EMOTION_SHARE = 0.15
 
 df = pd.read_csv(os.path.join(BASE_DIR, "muse_v3.csv"))
 
@@ -70,24 +77,6 @@ def fun(list):
     print("data of list func... :",data)
     return data
 
-def pre(l):
-
-    emotion_counts = Counter(l)
-    result = []
-    for emotion, count in emotion_counts.items():
-        result.extend([emotion] * count)
-    print("Processed Emotions:", result)
-
-    # result = [item for items, c in Counter(l).most_common()
-    #           for item in [items] * c]
-
-    ul = []
-    for x in result:
-        if x not in ul:
-            ul.append(x)
-            print(result)
-    print("Return the list of unique emotions in the order of occurrence frequency :",ul)
-    return ul
     
 
 
@@ -116,6 +105,51 @@ model.load_weights(os.path.join(BASE_DIR, 'model.h5'))
 emotion_dict = {0: "Angry", 1: "Disgusted", 2: "Fearful", 3: "Happy", 4: "Neutral", 5: "Sad", 6: "Surprised"}
 
 
+@st.cache_resource
+def load_text_model():
+    """DistilBERT text-emotion model, or None if it hasn't been trained on this machine."""
+    if not os.path.isdir(TEXT_MODEL_DIR):
+        return None
+    from transformers import AutoModelForSequenceClassification, AutoTokenizer
+    tokenizer = AutoTokenizer.from_pretrained(TEXT_MODEL_DIR)
+    text_model = AutoModelForSequenceClassification.from_pretrained(TEXT_MODEL_DIR).eval()
+    return tokenizer, text_model
+
+
+def text_probabilities(text):
+    """Text model softmax output (TEXT_MODEL_LABELS order), or None if unavailable."""
+    loaded = load_text_model()
+    if loaded is None or not text.strip():
+        return None
+    import torch
+    tokenizer, text_model = loaded
+    with torch.no_grad():
+        enc = tokenizer(text, truncation=True, max_length=64, return_tensors="pt")
+        return torch.softmax(text_model(**enc).logits, -1)[0].numpy()
+
+
+def combine_emotions(face_probs, text_probs):
+    """Fuse face and text predictions; returns (emotions ranked for the playlist, fused probs).
+
+    If only one of them is available, it is used on its own.
+    """
+    if face_probs is None and text_probs is None:
+        return [], None
+    face_weight = FUSION_CONFIG["face_weight"]
+    uniform = np.full(len(EMOTIONS), 1 / len(EMOTIONS))
+    if text_probs is None:
+        face_weight, text_probs = 1.0, uniform
+    elif face_probs is None:
+        face_weight, face_probs = 0.0, uniform
+    _, fused = fuse(face_probs, text_probs, face_weight=face_weight,
+                    method=FUSION_CONFIG["method"],
+                    face_temperature=FUSION_CONFIG["face_temperature"],
+                    text_temperature=FUSION_CONFIG["text_temperature"])
+    ranked = sorted(fused, key=fused.get, reverse=True)
+    chosen = [e for e in ranked if fused[e] >= MIN_EMOTION_SHARE][:5] or ranked[:1]
+    return chosen, fused
+
+
 cv2.ocl.setUseOpenCL(False)
 cap = cv2.VideoCapture(0)
 
@@ -140,6 +174,9 @@ st.markdown("<h2 style='text-align: center; color: white'><b>Emotion based music
 st.markdown("<h5 style='text-align: center; color: grey;'><b>Click on the name of recommended song to reach website</b></h5>"
             , unsafe_allow_html=True)
 
+user_text = st.text_area("How are you feeling? (optional, combined with your face)",
+                         placeholder="e.g. Finally finished my exams, can't wait for the weekend!")
+
 col1,col2,col3 = st.columns(3)
 
 list = []
@@ -150,6 +187,7 @@ with col2:
 
         count = 0
         list.clear()
+        face_frame_probs = []
 
         while True:
 
@@ -170,7 +208,7 @@ with col2:
                 prediction = model.predict(cropped_img)             
                 max_index = int(np.argmax(prediction))
 
-                list.append(emotion_dict[max_index])
+                face_frame_probs.append(prediction[0])
 
                 cv2.putText(frame, emotion_dict[max_index], (x + 20, y - 60), 
                 cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)              
@@ -183,8 +221,21 @@ with col2:
         cap.release()
         cv2.destroyAllWindows()
 
-        list = pre(list)
-        st.success(" emotions successfully detected") 
+        face_probs = np.mean(face_frame_probs, axis=0) if face_frame_probs else None
+        text_probs = text_probabilities(user_text)
+        list, fused = combine_emotions(face_probs, text_probs)
+
+        if fused is None:
+            st.warning("No face detected and no text entered, so there's no emotion to recommend for.")
+        else:
+            if face_probs is not None and text_probs is not None:
+                source = "face + text"
+            elif face_probs is not None:
+                source = "face only" + (" (text model not found)" if user_text.strip() and load_text_model() is None else "")
+            else:
+                source = "text only (no face detected)"
+            shares = ", ".join(f"{e} {fused[e]:.0%}" for e in list)
+            st.success(f"Detected ({source}): {shares}")
         
 
 with col3:
