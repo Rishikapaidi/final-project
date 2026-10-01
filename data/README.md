@@ -77,3 +77,29 @@ files. SHA-256 of the versions used in this project:
 ef147d8d290a27e7dd2bd392a3eec875e054a4bde24c8ce2294b6e78b81c31ae  go_emotions.csv
 9c5fff0866b603f0f5180663bae2a9b7757ac55003d71564e29b540bf38c9646  go_emotions_single.csv
 ```
+
+## Face emotion: `data/face_emotion/raw/`
+
+FER2013 (48×48 grayscale faces, 7 emotions) from the Hugging Face copy
+[Aaryan333/fer2013_train_publicTest_privateTest](https://huggingface.co/datasets/Aaryan333/fer2013_train_publicTest_privateTest),
+which keeps the official splits:
+
+```
+python scripts/prepare_fer2013.py
+```
+
+The script stops with an error unless the copy matches official FER2013:
+35,887 images; Training 28,709 / PublicTest 3,589 / PrivateTest 3,589; and
+class counts Angry 4,953, Disgust 547, Fear 5,121, Happy 8,989, Sad 6,077,
+Surprise 4,002, Neutral 6,198. Its PublicTest and PrivateTest sets were also
+checked image for image against a second upload (`AutumnQiu/fer2013`).
+
+Known FER2013 quirks, left as-is: 1,853 exact duplicate images (57 duplicate
+groups with conflicting labels), 13 near-blank images, and 288 PrivateTest
+images that are identical to Training images.
+
+## Fusion cache: `data/fusion/`
+
+Face- and text-model probabilities on the validation and test splits, written
+by `scripts/evaluate_fusion.py` so reruns skip model inference. Delete the
+folder to recompute.

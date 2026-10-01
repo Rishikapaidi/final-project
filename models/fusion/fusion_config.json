@@ -1,0 +1,8 @@
+{
+  "method": "log_linear",
+  "face_weight": 0.55,
+  "face_temperature": 1.9311,
+  "text_temperature": 1.3061,
+  "face_input_scaling": "pixels / 255",
+  "chosen_on": "validation pairs (FER2013 PublicTest x GoEmotions validation)"
+}

@@ -1,0 +1,71 @@
+== (a) EACH MODEL ON ITS OWN TEST SET
+-- Face model, FER2013 PrivateTest (n=3,589)
+              precision    recall  f1-score   support
+
+       angry      0.543     0.509     0.526       491
+     disgust      0.729     0.636     0.680        55
+        fear      0.515     0.424     0.465       528
+       happy      0.772     0.875     0.820       879
+         sad      0.479     0.490     0.485       594
+    surprise      0.790     0.760     0.775       416
+     neutral      0.599     0.615     0.607       626
+
+    accuracy                          0.632      3589
+   macro avg      0.633     0.616     0.622      3589
+weighted avg      0.626     0.632     0.627      3589
+
+-- Text model, GoEmotions test (n=4,590)
+              precision    recall  f1-score   support
+
+       angry      0.427     0.649     0.515       325
+     disgust      0.422     0.645     0.510        76
+        fear      0.496     0.779     0.606        77
+       happy      0.816     0.835     0.825      1367
+         sad      0.449     0.656     0.533       259
+    surprise      0.463     0.713     0.561       449
+     neutral      0.822     0.561     0.667      2037
+
+    accuracy                          0.674      4590
+   macro avg      0.556     0.691     0.603      4590
+weighted avg      0.724     0.674     0.682      4590
+
+Face accuracy 63.2% is within the normal range for FER2013 (warning threshold 75%): no sign of test-set leakage from this number alone.
+Note: 288 PrivateTest images are pixel-identical to FER2013 Training images (a known FER2013 issue).
+
+== CALIBRATION (temperatures fitted on each model's own validation set)
+face: T = 1.931 | test ECE 0.136 -> 0.027 | test mean confidence 0.768 -> 0.611 (accuracy 0.632)
+text: T = 1.306 | test ECE 0.119 -> 0.043 | test mean confidence 0.791 -> 0.710 (accuracy 0.674)
+
+== SELECTION ON VALIDATION PAIRS (50 pairs x 7 emotions, 20 random pairings)
+face only (w=1.00): macro-F1 0.606
+text only (w=0.00): macro-F1 0.703
+weighted_average  best face_weight 0.55: macro-F1 0.789 +/- 0.017   (without calibration: best w 0.50, 0.784)
+log_linear        best face_weight 0.55: macro-F1 0.805 +/- 0.019   (without calibration: best w 0.45, 0.805)
+CHOSEN: log_linear, face_weight 0.55
+
+== FINAL: TEST PAIRS (FER2013 PrivateTest x GoEmotions test; settings chosen on validation)
+                             macro-F1 mean +/- std   min   max   beats better single model in
+Face only                    0.615 +/- 0.021   0.575 0.658   
+Text only                    0.689 +/- 0.022   0.645 0.725   
+weighted_average, w=0.55     0.799 +/- 0.018   0.772 0.845   100% of pairings
+log_linear, w=0.55           0.816 +/- 0.018   0.786 0.861   100% of pairings
+
+Per-class F1 on test pairs (all pairings pooled):
+          Face only  Text only  weighted_average, w=0.55  log_linear, w=0.55
+angry         0.503      0.612                     0.709               0.722
+disgust       0.767      0.728                     0.871               0.856
+fear          0.449      0.820                     0.846               0.858
+happy         0.756      0.786                     0.874               0.887
+sad           0.457      0.654                     0.723               0.751
+surprise      0.784      0.692                     0.862               0.902
+neutral       0.592      0.536                     0.710               0.741
+
+Confusion matrix, chosen rule on test pairs (rows = true, columns = predicted; 20 pairings pooled, 1000 pairs per emotion):
+          angry  disgust  fear  happy  sad  surprise  neutral
+angry       767        5    15     31   54        10      118
+disgust     156      757    22      8   34         7       16
+fear         47        2   825     13   63        25       25
+happy        10        0     1    942    8         8       31
+sad          69        4    40     31  734        11      111
+surprise     13        0    15     35    5       883       49
+neutral      64        1     6     65   57        13      794
