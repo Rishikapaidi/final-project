@@ -149,27 +149,29 @@ in `scripts/prepare_songs.py`.
 
 | Bucket | Songs | Built from | Valence/arousal check |
 |---|---|---|---|
-| happy | 2,057 | happy, fun, playful, positive, cheerful, … | V ≥ 6.0 and A ≥ 4.0 |
-| sad | 1,860 | gloomy, lonely, bleak, sad, melancholy, … | V ≤ 5.0 and A ≤ 4.5 |
+| happy | 2,056 | happy, fun, playful, positive, cheerful, … | V ≥ 6.0 and A ≥ 4.0 |
+| sad | 1,857 | gloomy, lonely, bleak, sad, melancholy, … | V ≤ 5.0 and A ≤ 4.5 |
 | angry | 422 | harsh, urgent, gritty, defiant, feral, … | V ≤ 5.0 and A ≥ 4.0 |
-| fear | 2,497 | scary, eerie, spooky, paranoid, ominous, … | V ≤ 5.0 |
-| disgust | 1,177 | sarcastic, sardonic, cynical, grim, … | V ≤ 4.5 |
-| surprise | 1,033 | eccentric, exotic, quirky, whimsical, … | V ≥ 5.0 and A ≥ 4.5 |
-| neutral | 1,887 | soothing, meditative, relaxed, gentle, calm, … | 4.0 ≤ V ≤ 6.8 and A ≤ 4.2 |
+| fear | 2,493 | scary, eerie, spooky, paranoid, ominous, … | V ≤ 5.0 |
+| disgust | 1,175 | sarcastic, sardonic, cynical, grim, … | V ≤ 4.5 |
+| surprise | 1,032 | eccentric, exotic, quirky, whimsical, … | V ≥ 5.0 and A ≥ 4.5 |
+| neutral | 1,886 | soothing, meditative, relaxed, gentle, calm, … | 4.0 ≤ V ≤ 6.8 and A ≤ 4.2 |
 
-10,933 songs in total. They are mostly Western; the Hindi songs were all in
+10,921 songs in total. They are mostly Western; the Hindi songs were all in
 the overwritten rows.
 
 ### Profanity filter
 
-Songs whose title or artist contains strong profanity or a slur are dropped
-(71 songs: 23 from disgust, 17 happy, 16 fear, 7 angry, 4 sad, 2 neutral,
-2 surprise). The word list (`PROFANITY` in the script) is matched on whole
-words only, so names like "Cockburn" or "Shub-Niggurath" are kept; that also
-means compounds such as "Goatwhore" or "Shitloads" are not caught. Milder or
-ambiguous words (hell, damn, ass, bastard, dick, cock, piss, crap) are not on
-the list. Run `python scripts/prepare_songs.py --list-dropped` to see exactly
-which songs were removed.
+Songs whose title or artist contains strong profanity, a slur, or the words
+rape, raped or porn are dropped (83 songs: 25 from disgust, 20 fear, 18 happy,
+7 angry, 7 sad, 3 neutral, 3 surprise). The word list (`PROFANITY` in the
+script) is matched on whole words only, so names like "Cockburn",
+"Shub-Niggurath" and "Shitao" are kept. Whole-word matching misses compounds,
+so the ones found in the data ("Goatwhore", "Shitloads" and four others) are
+listed explicitly. Milder or ambiguous words (hell, damn, ass, bastard, dick,
+cock, piss, crap, prick) are deliberately not on the list. Run
+`python scripts/prepare_songs.py --list-dropped` to see exactly which songs
+were removed.
 
 ### Known weaknesses
 

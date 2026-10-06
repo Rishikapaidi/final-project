@@ -64,7 +64,9 @@ BUCKET_CHECKS = {
 # Songs whose title or artist contains one of these as a whole word are
 # dropped. Whole words only, so "Cockburn", "Glass" or "Shub-Niggurath" are not
 # caught. Strong profanity and slurs only; milder or ambiguous words (hell,
-# damn, ass, bastard, dick, cock, piss, crap) are deliberately not listed.
+# damn, ass, bastard, dick, cock, piss, crap, prick) are deliberately not listed.
+# Whole-word matching misses compounds, so the ones found in the data are
+# listed explicitly.
 PROFANITY = {
     "fuck", "fucks", "fucked", "fucking", "fuckin", "fucker", "fuckers", "motherfucker",
     "motherfuckers", "motherfucking", "starfucker", "f*ck", "f**k", "f***", "f****n", "f***ing",
@@ -74,6 +76,9 @@ PROFANITY = {
     "retard", "retards", "retarded", "faggot", "faggots", "fag", "fags", "dyke", "dykes", "tranny",
     "nigger", "niggers", "nigga", "niggas", "chink", "chinks", "kike", "kikes", "spic", "spics",
     "wetback", "wetbacks",
+    "rape", "raped", "porn",
+    "goatwhore", "pzychobitch", "chromebitch", "shitloads", "shitslide",
+    "psychoparanoidflowerpowerelectroshitsong",
 }
 
 
