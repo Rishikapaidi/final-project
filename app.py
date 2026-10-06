@@ -13,6 +13,7 @@ import json
 import os
 
 from fusion import EMOTIONS, fuse
+import uplift
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEXT_MODEL_DIR = os.path.join(BASE_DIR, "models", "text_emotion_distilbert", "model")
@@ -20,6 +21,8 @@ with open(os.path.join(BASE_DIR, "models", "fusion", "fusion_config.json")) as f
     FUSION_CONFIG = json.load(f)
 # Emotions whose fused probability is at least this share go into the playlist mix.
 MIN_EMOTION_SHARE = 0.15
+RESONANCE_MODE = "Resonance (match my mood)"
+UPLIFT_MODE = "Uplift (gently lift my mood)"
 
 # Songs with one emotion bucket each, built from muse_v3.csv by
 # scripts/prepare_songs.py (see data/README.md for how and why).
@@ -171,12 +174,15 @@ st.markdown("<h2 style='text-align: center; color: white'><b>Emotion based music
 st.markdown("<h5 style='text-align: center; color: grey;'><b>Click on the name of recommended song to reach website</b></h5>"
             , unsafe_allow_html=True)
 
+mode = st.radio("Mode", [RESONANCE_MODE, UPLIFT_MODE], horizontal=True)
+
 user_text = st.text_area("How are you feeling? (optional, combined with your face)",
                          placeholder="e.g. Finally finished my exams, can't wait for the weekend!")
 
 col1,col2,col3 = st.columns(3)
 
 list = []
+uplift_playlist, uplift_journey = None, None
 with col1:
     pass
 with col2:
@@ -233,16 +239,32 @@ with col2:
                 source = "text only (no face detected)"
             shares = ", ".join(f"{e} {fused[e]:.0%}" for e in list)
             st.success(f"Detected ({source}): {shares}")
+
+            if mode == UPLIFT_MODE:
+                uplift_playlist, uplift_journey = uplift.build_playlist(df, fused, list)
+                if uplift_playlist is None:
+                    st.info(f"Uplift is for low moods. Sad, angry, fearful and disgusted feelings make up only "
+                            f"{uplift.negative_share(fused):.0%} of this result, so here are songs that match your mood instead.")
         
 
 with col3:
     pass
 
-new_df = fun(list)
+if uplift_playlist is not None:
+    # Five songs in play order, from the detected mood towards the target.
+    new_df = uplift_playlist
+    heading = "Uplift playlist: from {} towards {}, play in this order".format(
+        uplift_journey["start_emotion"], " then ".join(uplift_journey["targets"]))
+else:
+    new_df = fun(list)
+    heading = "Recommended song's with artist names"
 st.write("")
 
-st.markdown("<h5 style='text-align: center; color: grey;'><b>Recommended song's with artist names</b></h5>"
+st.markdown("<h5 style='text-align: center; color: grey;'><b>{}</b></h5>".format(heading)
             , unsafe_allow_html=True)
+
+if uplift_playlist is not None:
+    st.pyplot(uplift.trajectory_figure(uplift_playlist, uplift_journey), use_container_width=False)
 
 st.write("---------------------------------------------------------------------------------------------------------------------")
 
@@ -252,6 +274,8 @@ try:
 
         st.markdown("""<h4 style='text-align: center;'><a href={}>{} - {}</a></h4>"""
                     .format(l,i+1,n),unsafe_allow_html=True)
+        if uplift_playlist is not None:
+            a = "{} · valence {:.1f}, arousal {:.1f}".format(a, new_df["valence_tags"][i], new_df["arousal_tags"][i])
         st.markdown("<h5 style='text-align: center; color: grey;'><i>{}</i></h5>" 
                     .format(a), unsafe_allow_html=True)
         st.write("---------------------------------------------------------------------------------------------------------------------")
