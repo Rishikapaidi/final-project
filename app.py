@@ -21,39 +21,32 @@ with open(os.path.join(BASE_DIR, "models", "fusion", "fusion_config.json")) as f
 # Emotions whose fused probability is at least this share go into the playlist mix.
 MIN_EMOTION_SHARE = 0.15
 
-df = pd.read_csv(os.path.join(BASE_DIR, "muse_v3.csv"))
+# Songs with one emotion bucket each, built from muse_v3.csv by
+# scripts/prepare_songs.py (see data/README.md for how and why).
+SONGS_FILE = os.path.join(BASE_DIR, "data", "songs", "songs_clean.csv")
+if not os.path.exists(SONGS_FILE):
+    st.error("Song file not found. Build it once with:  python scripts/prepare_songs.py")
+    st.stop()
 
+df = pd.read_csv(SONGS_FILE)
 df['link'] = df['lastfm_url']
-df['name'] = df['track']
-df['emotional'] = df['number_of_emotion_tags']
-df['pleasant'] = df['valence_tags']
+df['name'] = df['title']
 
-df = df[['name','emotional','pleasant','link','artist']]
-print(df)
+SONG_BUCKETS = {bucket: songs for bucket, songs in df.groupby('bucket')}
 
-df = df.sort_values(by=["emotional", "pleasant"])
-df.reset_index()
-print(df)
-
-df_sad = df[:18000]
-df_fear = df[18000:36000]
-df_angry = df[36000:54000]
-df_neutral = df[54000:72000]
-df_happy = df[72000:]
-
-# Map each detected emotion (case-insensitive) to a song bucket. The dataset
-# only has five buckets, so Disgusted and Surprised share one with a close match.
+# Map each detected emotion (case-insensitive) to its song bucket. The face
+# model says Disgusted/Fearful/Surprised; the text model says disgust/fear/surprise.
 EMOTION_BUCKETS = {
-    'angry': df_angry,
-    'disgusted': df_angry,
-    'disgust': df_angry,
-    'fearful': df_fear,
-    'fear': df_fear,
-    'happy': df_happy,
-    'surprised': df_happy,
-    'surprise': df_happy,
-    'neutral': df_neutral,
-    'sad': df_sad,
+    'angry': SONG_BUCKETS['angry'],
+    'disgusted': SONG_BUCKETS['disgust'],
+    'disgust': SONG_BUCKETS['disgust'],
+    'fearful': SONG_BUCKETS['fear'],
+    'fear': SONG_BUCKETS['fear'],
+    'happy': SONG_BUCKETS['happy'],
+    'surprised': SONG_BUCKETS['surprise'],
+    'surprise': SONG_BUCKETS['surprise'],
+    'neutral': SONG_BUCKETS['neutral'],
+    'sad': SONG_BUCKETS['sad'],
 }
 
 # How many songs to sample for each emotion, keyed by how many distinct
@@ -71,7 +64,7 @@ def fun(list):
     times = SAMPLE_SIZES.get(len(list), [10, 7, 6, 5, 2])
 
     for v, t in zip(list, times):
-        bucket = EMOTION_BUCKETS.get(v.strip().lower(), df_neutral)
+        bucket = EMOTION_BUCKETS.get(v.strip().lower(), SONG_BUCKETS['neutral'])
         data = pd.concat([data, bucket.sample(n=t)], ignore_index=True)
 
     # Songs are added one emotion at a time, and only the first 30 are shown,
