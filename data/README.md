@@ -103,3 +103,90 @@ images that are identical to Training images.
 Face- and text-model probabilities on the validation and test splits, written
 by `scripts/evaluate_fusion.py` so reruns skip model inference. Delete the
 folder to recompute.
+
+## Songs: `data/songs/songs_clean.csv`
+
+The song list the app recommends from, built from `muse_v3.csv` (which is kept
+untouched in the project root):
+
+```
+python scripts/prepare_songs.py
+```
+
+Columns: `title`, `artist`, `valence_tags` (positivity, about 0.2–8.5),
+`arousal_tags` (energy, about 0.1–7.3), `seeds` (mood words), `bucket` and
+`lastfm_url`.
+
+### Why the original buckets were wrong
+
+The app used to sort `muse_v3.csv` by `number_of_emotion_tags` and then
+valence, and cut it into five slices of 18,000 rows called sad, fear, angry,
+neutral and happy. Two problems:
+
+- **The slices were sorted by tag count, not emotion.** "Happy" was simply the
+  songs with six or more tags, and "melancholy" and "sad" were among its most
+  common mood words. Four of the five slices had almost the same average
+  valence and arousal.
+- **About 64% of the rows have overwritten titles.** 57,955 of the 90,001 rows
+  had their title, artist and link replaced (mostly with Hindi film and rap
+  songs, with Spotify links), while the mood words, valence, arousal and genre
+  of the original song were left in place. Those rows contain only 2,162
+  distinct songs, each repeated up to 174 times with different mood values, so
+  their mood data says nothing about the song named. Only the 32,046 rows that
+  still have a Last.fm link are intact, and only those are used.
+
+### How the buckets are built
+
+A song goes into the bucket whose mood words appear most often in its `seeds`
+(ties are dropped), and it must also pass that bucket's valence/arousal check.
+Songs with none of the listed words are dropped; assigning them from valence
+and arousal alone put songs in the wrong bucket. The word lists and checks are
+in `scripts/prepare_songs.py`.
+
+| Bucket | Songs | Built from | Valence/arousal check |
+|---|---|---|---|
+| happy | 2,057 | happy, fun, playful, positive, cheerful, … | V ≥ 6.0 and A ≥ 4.0 |
+| sad | 1,860 | gloomy, lonely, bleak, sad, melancholy, … | V ≤ 5.0 and A ≤ 4.5 |
+| angry | 422 | harsh, urgent, gritty, defiant, feral, … | V ≤ 5.0 and A ≥ 4.0 |
+| fear | 2,497 | scary, eerie, spooky, paranoid, ominous, … | V ≤ 5.0 |
+| disgust | 1,177 | sarcastic, sardonic, cynical, grim, … | V ≤ 4.5 |
+| surprise | 1,033 | eccentric, exotic, quirky, whimsical, … | V ≥ 5.0 and A ≥ 4.5 |
+| neutral | 1,887 | soothing, meditative, relaxed, gentle, calm, … | 4.0 ≤ V ≤ 6.8 and A ≤ 4.2 |
+
+10,933 songs in total. They are mostly Western; the Hindi songs were all in
+the overwritten rows.
+
+### Profanity filter
+
+Songs whose title or artist contains strong profanity or a slur are dropped
+(71 songs: 23 from disgust, 17 happy, 16 fear, 7 angry, 4 sad, 2 neutral,
+2 surprise). The word list (`PROFANITY` in the script) is matched on whole
+words only, so names like "Cockburn" or "Shub-Niggurath" are kept; that also
+means compounds such as "Goatwhore" or "Shitloads" are not caught. Milder or
+ambiguous words (hell, damn, ass, bastard, dick, cock, piss, crap) are not on
+the list. Run `python scripts/prepare_songs.py --list-dropped` to see exactly
+which songs were removed.
+
+### Known weaknesses
+
+- **Angry is the weakest bucket.** Every song tagged angry, aggressive,
+  hostile or fierce is in the overwritten rows, so the bucket is built from
+  proxy words only ("bitter" was tried and removed: resentful, not angry).
+  Valence and arousal cannot separate angry from fear at all (a classifier on
+  those two numbers scores no better than a coin flip); only the mood words do.
+- **Surprise is really "quirky/unusual".** Nearly all of it comes from two
+  words, eccentric and exotic. It is unexpected-sounding music, not music that
+  expresses being startled.
+- **Disgust is contempt.** It is built from sardonic, cynical and sarcastic
+  songs, the closest thing the data has.
+- **Neutral means calm.** No mood word means "neutral", so calm, unobtrusive
+  music stands in for it.
+- **Valence and arousal come from listener tags, not audio.** For songs with a
+  single emotion tag (about a quarter) the values are just that word's score.
+
+### Possible future work
+
+About 1,870 overwritten rows tagged angry, aggressive, hostile or outraged
+still carry the original song's `mbid` or `spotify_id`. Their real titles and
+artists could be looked up through MusicBrainz (free, no account) to give the
+angry bucket genuinely angry songs. This has not been tried.
