@@ -8,7 +8,8 @@ See data/README.md for the details.
 A song goes into the bucket whose mood words appear most often in its `seeds`
 (ties are dropped), provided it also passes that bucket's valence/arousal
 check. Songs with none of the listed words are dropped, and so are songs whose
-title or artist contains profanity or a slur (whole words, see PROFANITY).
+title or artist contains profanity, a slur or an explicit sexual word (whole
+words, see PROFANITY).
 
 Writes data/songs/songs_clean.csv with columns:
     title, artist, valence_tags, arousal_tags, seeds, bucket, lastfm_url
@@ -79,6 +80,13 @@ PROFANITY = {
     "rape", "raped", "porn",
     "goatwhore", "pzychobitch", "chromebitch", "shitloads", "shitslide",
     "psychoparanoidflowerpowerelectroshitsong",
+    # Explicit anatomy and sex-act words. Broader words (sex, sexy, sexual, naked,
+    # lust, virgin, bondage, hooker, balls) are left off: in this data they are
+    # mostly band names and ordinary titles such as "Sexual Healing".
+    "penis", "penises", "vagina", "vaginas", "anal", "anus", "clit", "tits", "boobs", "dildo",
+    "phallus", "scrotum", "testicles", "genitals", "semen", "sperm", "cum", "cumshot", "jizz",
+    "boner", "erection", "orgasm", "orgasms", "orgy", "orgies", "masturbate", "masturbating",
+    "masturbation", "blowjob", "handjob", "fellatio", "sodomy", "bukkake",
 }
 
 

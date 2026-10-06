@@ -149,29 +149,34 @@ in `scripts/prepare_songs.py`.
 
 | Bucket | Songs | Built from | Valence/arousal check |
 |---|---|---|---|
-| happy | 2,056 | happy, fun, playful, positive, cheerful, … | V ≥ 6.0 and A ≥ 4.0 |
+| happy | 2,055 | happy, fun, playful, positive, cheerful, … | V ≥ 6.0 and A ≥ 4.0 |
 | sad | 1,857 | gloomy, lonely, bleak, sad, melancholy, … | V ≤ 5.0 and A ≤ 4.5 |
-| angry | 422 | harsh, urgent, gritty, defiant, feral, … | V ≤ 5.0 and A ≥ 4.0 |
-| fear | 2,493 | scary, eerie, spooky, paranoid, ominous, … | V ≤ 5.0 |
-| disgust | 1,175 | sarcastic, sardonic, cynical, grim, … | V ≤ 4.5 |
-| surprise | 1,032 | eccentric, exotic, quirky, whimsical, … | V ≥ 5.0 and A ≥ 4.5 |
+| angry | 421 | harsh, urgent, gritty, defiant, feral, … | V ≤ 5.0 and A ≥ 4.0 |
+| fear | 2,483 | scary, eerie, spooky, paranoid, ominous, … | V ≤ 5.0 |
+| disgust | 1,170 | sarcastic, sardonic, cynical, grim, … | V ≤ 4.5 |
+| surprise | 1,029 | eccentric, exotic, quirky, whimsical, … | V ≥ 5.0 and A ≥ 4.5 |
 | neutral | 1,886 | soothing, meditative, relaxed, gentle, calm, … | 4.0 ≤ V ≤ 6.8 and A ≤ 4.2 |
 
-10,921 songs in total. They are mostly Western; the Hindi songs were all in
+10,901 songs in total. They are mostly Western; the Hindi songs were all in
 the overwritten rows.
 
 ### Profanity filter
 
-Songs whose title or artist contains strong profanity, a slur, or the words
-rape, raped or porn are dropped (83 songs: 25 from disgust, 20 fear, 18 happy,
-7 angry, 7 sad, 3 neutral, 3 surprise). The word list (`PROFANITY` in the
+Songs whose title or artist contains strong profanity, a slur, the words
+rape, raped or porn, or an explicit anatomy or sex-act word (penis, anal,
+blowjob, …) are dropped (103 songs: 30 from disgust, 30 fear, 19 happy,
+8 angry, 7 sad, 6 surprise, 3 neutral). The word list (`PROFANITY` in the
 script) is matched on whole words only, so names like "Cockburn",
 "Shub-Niggurath" and "Shitao" are kept. Whole-word matching misses compounds,
 so the ones found in the data ("Goatwhore", "Shitloads" and four others) are
-listed explicitly. Milder or ambiguous words (hell, damn, ass, bastard, dick,
-cock, piss, crap, prick) are deliberately not on the list. Run
-`python scripts/prepare_songs.py --list-dropped` to see exactly which songs
-were removed.
+listed explicitly.
+
+Deliberately not on the list: milder or ambiguous words (hell, damn, ass,
+bastard, dick, cock, piss, crap, prick) and broader sexual words (sex, sexy,
+sexual, naked, lust, virgin, bondage, hooker, balls), which in this data are
+mostly band names and ordinary titles such as "Sexual Healing" or John Lee
+Hooker. Run `python scripts/prepare_songs.py --list-dropped` to see exactly
+which songs were removed.
 
 ### Known weaknesses
 
