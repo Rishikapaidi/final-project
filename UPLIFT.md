@@ -1,0 +1,93 @@
+# Uplift mode
+
+The app has two modes, chosen with the selector above the text box:
+
+- **Resonance (match my mood):** recommends songs from the bucket of the
+  detected emotion. This is the original behaviour.
+- **Uplift (gently lift my mood):** builds a five-song playlist that starts at
+  the detected mood and steps towards a better one.
+
+The logic is in `uplift.py` and needs neither the webcam nor Streamlit.
+
+## Design
+
+1. **When it applies.** Uplift only runs when sad, angry, fear and disgust
+   together hold at least 50% of the fused face + text probability. Otherwise
+   (mostly happy, surprised or neutral) the app says so and falls back to
+   Resonance.
+2. **Start point.** The probability-weighted average of the valence/arousal
+   centres of the detected emotions' song buckets (the emotions at 15% or
+   more).
+3. **Target**, chosen by the strongest negative emotion:
+
+   | Start | Path |
+   |---|---|
+   | sad | → neutral (calm) → happy |
+   | angry, fear, disgust | → neutral (calm) |
+
+4. **Waypoints.** Five points evenly spaced from the start to the target. On
+   the sad path, two steps go to neutral and two more to happy, so song 3 sits
+   at the calm point.
+5. **Songs.** Each waypoint gets the nearest unused song in valence/arousal
+   (both scaled by their spread), picked at random among the 10 nearest so
+   playlists differ between runs.
+6. **Display.** The five songs are listed in play order, numbered 1 to 5, with
+   each song's valence and arousal and a small chart of the planned path and
+   the songs picked.
+
+### One departure from "nearest song in the whole file"
+
+Songs are only drawn from the journey's own buckets: the detected emotions
+plus the targets. Valence and arousal cannot tell sad, angry, fear and disgust
+songs apart, so with the whole file as the pool the opening song was usually
+from the wrong bucket:
+
+| Detected | Bucket of song 1, whole file as pool | With the restriction |
+|---|---|---|
+| sad | 83% disgust, 17% sad | 100% sad |
+| angry | 100% fear | 100% angry |
+| fear | 83% fear, 9% disgust, 8% angry | 100% fear |
+| disgust | 80% disgust, 20% sad | 100% disgust |
+
+`RESTRICT_TO_JOURNEY_BUCKETS` in `uplift.py` switches this off.
+
+## Check
+
+`python scripts/evaluate_uplift.py` builds 500 playlists per emotion and writes
+`models/uplift/report.txt`.
+
+| Start | Valence rises at every step | Last song more positive than first | Mean valence, song 1 → 5 | Mean arousal, song 1 → 5 |
+|---|---|---|---|---|
+| sad | 100.0% | 100% | 3.43 → 7.33 | 3.50 → 3.22 (song 3) → 5.22 |
+| angry | 97.4% | 100% | 3.95 → 5.72 | 5.21 → 3.22 |
+| fear | 100.0% | 100% | 3.56 → 5.72 | 4.78 → 3.22 |
+| disgust | 100.0% | 100% | 2.96 → 5.71 | 3.76 → 3.22 |
+
+Read this as "the code does what it was designed to do", not as evidence that
+it lifts anyone's mood: songs are picked to sit close to waypoints whose
+valence rises, so a rising sequence is nearly guaranteed. Angry is slightly
+lower because its bucket is small (421 songs), so the nearest songs sit
+further from the waypoints.
+
+## Limits
+
+- **The targets are design decisions, not findings.** Sad → calm → happy and
+  angry/fear/disgust → calm follow the general idea of meeting a listener where
+  they are and moving gradually, but these particular targets, the five steps
+  and the 50% threshold were chosen for this project. Nothing here has been
+  tested with listeners.
+- **Valence and arousal come from listener tags, not audio.** They are averages
+  of word scores for the mood tags people gave each song (see
+  `data/README.md`). A song's position on the chart says how it was described,
+  not how it sounds, and a quarter of the songs carry a single word's score.
+- **The start point is a bucket average**, so two people who are sad in
+  different ways start at the same place.
+- **Variety is limited.** Each position draws from its 10 nearest songs, and
+  the angry, fear and disgust paths all end at the same calm point, so the
+  same closing songs come up often.
+- **It inherits the earlier weaknesses**: the emotion detection itself
+  (`models/README.md`, `models/fusion/report.txt`) and the song buckets
+  (angry is built from proxy words; see `data/README.md`).
+- **Song titles are only screened by a word list** (profanity, slurs and
+  explicit sexual words; see `data/README.md`), so an occasional crude or oddly
+  fitting title can still appear.

@@ -1,0 +1,101 @@
+BUCKET CENTRES (valence, arousal)
+  angry     4.01, 5.16
+  disgust   2.99, 3.72
+  fear      3.54, 4.78
+  happy     7.32, 5.23
+  neutral   5.71, 3.24
+  sad       3.45, 3.52
+  surprise  6.40, 5.61
+
+== SAD: start (3.45, 3.52), target neutral -> happy
+ step  wp_V  wp_A           title             artist    V    A  bucket
+    1  3.45  3.52         Shadows Red House Painters 3.51 3.48     sad
+    2  4.58  3.38           So So            Gary Go 4.67 3.40     sad
+    3  5.71  3.24   Later Tonight      Pet Shop Boys 5.81 3.24 neutral
+    4  6.52  4.23   Postmodernizm   Jacek Kaczmarski 6.44 4.29   happy
+    5  7.32  5.23 Kung För En Dag       Magnus Uggla 7.42 5.24   happy
+
+== ANGRY: start (4.01, 5.16), target neutral
+ step  wp_V  wp_A                          title                         artist    V    A  bucket
+    1  4.01  5.16                      Chemicals                     aktivehate 3.66 5.32   angry
+    2  4.44  4.68                No Self Control                  Peter Gabriel 4.57 4.67   angry
+    3  4.86  4.20 The Killing Moon (All Night Ve            Echo & the Bunnymen 4.82 4.14   angry
+    4  5.29  3.72    Ketamine Entity (axiom mix) The Higher Intelligence Agency 5.27 3.70 neutral
+    5  5.71  3.24                   The Freshman                 The Verve Pipe 5.65 3.28 neutral
+
+== FEAR: start (3.54, 4.78), target neutral
+ step  wp_V  wp_A                          title                artist    V    A  bucket
+    1  3.54  4.78                      Auf Asche       Franz Ferdinand 3.59 4.71    fear
+    2  4.08  4.40           Between Bronze Walls The Ruins of Beverast 4.08 4.31    fear
+    3  4.62  4.01                  Ghost of Love           David Lynch 4.54 3.99    fear
+    4  5.17  3.63                   Pretty Dress          Rosie Thomas 5.22 3.61 neutral
+    5  5.71  3.24 Try (Just a Little Bit Harder)               Roxette 5.82 3.26 neutral
+
+== DISGUST: start (2.99, 3.72), target neutral
+ step  wp_V  wp_A             title          artist    V    A  bucket
+    1  2.99  3.72     No Man's Land    Alice Cooper 2.94 3.79 disgust
+    2  3.67  3.60 When I Was A Fool Concrete Blonde 3.56 3.58 disgust
+    3  4.35  3.48             Wings          Kitaro 4.36 3.37 neutral
+    4  5.03  3.36      Always There   Secret Garden 5.04 3.34 neutral
+    5  5.71  3.24      The Freshman  The Verve Pipe 5.65 3.28 neutral
+
+== MIXED: SAD 45%, ANGRY 30%, NEUTRAL 25%: start (4.19, 3.94), target neutral -> happy
+ step  wp_V  wp_A                               title           artist    V    A  bucket
+    1  4.19  3.94                Untitled #4 from ( )        Sigur Rós 4.13 3.90     sad
+    2  4.95  3.59 Why Don't You Find Out for Yourself        Morrissey 4.92 3.57     sad
+    3  5.71  3.24      Try (Just a Little Bit Harder)          Roxette 5.82 3.26 neutral
+    4  6.52  4.23                       Postmodernizm Jacek Kaczmarski 6.44 4.29   happy
+    5  7.32  5.23                   Her Love is Happy            Klima 7.33 5.21   happy
+
+== 500 PLAYLISTS PER CASE
+
+-- sad
+valence rises at every step (all 4):   100.0%
+valence rises at 3 or more of 4 steps: 100.0%
+last song more positive than first:    100.0%
+single steps that rise:                100.0%
+mean valence by song 1..5: 3.43  4.61  5.71  6.51  7.33
+mean arousal by song 1..5: 3.50  3.39  3.22  4.23  5.22
+song 1 bucket: {'sad': 1.0} | song 5 bucket: {'happy': 1.0}
+
+-- angry
+valence rises at every step (all 4):   97.4%
+valence rises at 3 or more of 4 steps: 100.0%
+last song more positive than first:    100.0%
+single steps that rise:                99.4%
+mean valence by song 1..5: 3.95  4.42  4.88  5.28  5.72
+mean arousal by song 1..5: 5.21  4.66  4.16  3.73  3.22
+song 1 bucket: {'angry': 1.0} | song 5 bucket: {'neutral': 1.0}
+
+-- fear
+valence rises at every step (all 4):   100.0%
+valence rises at 3 or more of 4 steps: 100.0%
+last song more positive than first:    100.0%
+single steps that rise:                100.0%
+mean valence by song 1..5: 3.56  4.09  4.63  5.17  5.72
+mean arousal by song 1..5: 4.78  4.37  4.00  3.63  3.22
+song 1 bucket: {'fear': 1.0} | song 5 bucket: {'neutral': 1.0}
+
+-- disgust
+valence rises at every step (all 4):   100.0%
+valence rises at 3 or more of 4 steps: 100.0%
+last song more positive than first:    100.0%
+single steps that rise:                100.0%
+mean valence by song 1..5: 2.96  3.65  4.38  5.06  5.71
+mean arousal by song 1..5: 3.76  3.61  3.44  3.37  3.22
+song 1 bucket: {'disgust': 1.0} | song 5 bucket: {'neutral': 1.0}
+
+-- mixed: sad 45%, angry 30%, neutral 25%
+valence rises at every step (all 4):   100.0%
+valence rises at 3 or more of 4 steps: 100.0%
+last song more positive than first:    100.0%
+single steps that rise:                100.0%
+mean valence by song 1..5: 4.16  4.96  5.71  6.51  7.32
+mean arousal by song 1..5: 3.93  3.58  3.22  4.23  5.22
+song 1 bucket: {'sad': 0.88, 'neutral': 0.12} | song 5 bucket: {'happy': 1.0}
+
+== WHY THE SONG POOL IS RESTRICTED: bucket of song 1 without the restriction
+sad      {'disgust': 0.83, 'sad': 0.17}
+angry    {'fear': 1.0}
+fear     {'fear': 0.83, 'disgust': 0.09, 'angry': 0.08}
+disgust  {'disgust': 0.8, 'sad': 0.2}
