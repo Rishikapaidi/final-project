@@ -3,6 +3,9 @@
 The dataset files in this folder are **not committed to git** (see `.gitignore`).
 They are generated from public sources by the scripts in `scripts/`.
 
+The one exception is `data/songs/songs_clean.csv`, which is committed so the app
+runs straight after cloning.
+
 ## Text emotion: `data/text_emotion/`
 
 Built from [GoEmotions](https://huggingface.co/datasets/google-research-datasets/go_emotions)
@@ -106,8 +109,9 @@ folder to recompute.
 
 ## Songs: `data/songs/songs_clean.csv`
 
-The song list the app recommends from, built from `muse_v3.csv` (which is kept
-untouched in the project root):
+The song list the app recommends from. It is committed to git (1.6 MB), so
+there is nothing to run after cloning. To rebuild it from `muse_v3.csv` (which
+is kept untouched in the project root):
 
 ```
 python scripts/prepare_songs.py

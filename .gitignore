@@ -5,6 +5,10 @@ __pycache__/
 # Generated datasets: rebuild with the scripts described in data/README.md
 data/*
 !data/README.md
+# Exception: the cleaned song list is small and the app needs it to run
+!data/songs/
+data/songs/*
+!data/songs/songs_clean.csv
 
 # Trained models: rebuild with scripts/train_text_emotion.py and
 # scripts/train_text_emotion_distilbert.py (their reports stay tracked)
