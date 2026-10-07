@@ -217,14 +217,22 @@ A result is accepted only if both the artist and the title loosely match
 usable preview.
 
 **The API is rate-limited** to roughly 20 requests a minute, and a burst of
-about 150 requests got this machine refused (HTTP 403) for well over half an
-hour. One scan can need 50 or more lookups, so:
+about 150 requests got this machine's searches refused (HTTP 403) for hours.
+One scan can need 50 or more lookups, so:
 
-- the app uses songs already in this file first and only looks up new ones
-  when it has to; if the API refuses, it shows what it has and says so
+- **the app is cache-only by default**: it only plays songs already in this
+  file and makes no API calls. Resonance and Uplift both pick only among
+  songs with a saved preview.
 - `python scripts/fetch_previews.py` fills the file slowly in the background
   (about 9 hours for all songs; `--limit N` for fewer). It can be stopped and
   rerun, and checks the songs Uplift is most likely to need first.
+- setting the environment variable `LIVE_LOOKUPS=1` before starting the app
+  lets it also look up songs it has not seen (in PowerShell:
+  `$env:LIVE_LOOKUPS=1; streamlit run app.py`). If the API refuses, it shows
+  what it has and says so.
+- `python scripts/evaluate_uplift.py --previews` reports how many songs per
+  bucket have a preview and whether each Uplift waypoint still has enough
+  candidates.
 
 Preview links belong to Apple and can stop working; the player skips a song
 whose clip fails to load.

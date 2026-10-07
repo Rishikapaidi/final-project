@@ -5,11 +5,14 @@ playlist with its waypoints, then builds RUNS playlists and reports how the
 songs' valence and arousal change from song 1 to song 5.
 
 Usage (from the project root):
-    python scripts/evaluate_uplift.py
+    python scripts/evaluate_uplift.py             # all songs
+    python scripts/evaluate_uplift.py --previews  # only songs with a saved preview,
+                                                  # which is what the app can play
 
-Reads   data/songs/songs_clean.csv
-Writes  models/uplift/report.txt
+Reads   data/songs/songs_clean.csv  (and data/songs/previews.csv with --previews)
+Writes  models/uplift/report.txt    (report_previews.txt with --previews)
 """
+import argparse
 import os
 import sys
 
@@ -22,24 +25,74 @@ import uplift  # noqa: E402
 RUNS = 500
 SEED = 42
 MIXED = {"sad": 0.45, "angry": 0.30, "neutral": 0.25}
+# A waypoint is "thin" if its 10th-nearest candidate is further than this
+# (in valence/arousal standard deviations) or it has fewer than 10 candidates.
+THIN_DISTANCE = 0.5
 
 
-def run_many(songs, fused, emotions, rng):
+def run_many(songs, fused, emotions, rng, pool=None):
     rows = []
     for _ in range(RUNS):
-        playlist, _ = uplift.build_playlist(songs, fused, emotions, rng)
+        playlist, _ = uplift.build_playlist(songs, fused, emotions, rng, pool=pool)
         rows.append({"valence": playlist.valence_tags.values, "arousal": playlist.arousal_tags.values,
-                     "first_bucket": playlist.bucket.iloc[0], "last_bucket": playlist.bucket.iloc[-1]})
+                     "first_bucket": playlist.bucket.iloc[0] if len(playlist) else None,
+                     "last_bucket": playlist.bucket.iloc[-1] if len(playlist) else None})
     return pd.DataFrame(rows)
 
 
+def preview_coverage(songs, pool, log):
+    """How many songs per bucket can be played, and how well each waypoint is served."""
+    import previews
+    checked = songs.lastfm_url.map(lambda url: previews.cached(url) is not None)
+    table = pd.DataFrame({"songs": songs.groupby("bucket").size(),
+                          "checked": checked.groupby(songs.bucket).sum(),
+                          "with_preview": pd.Series(pool, index=songs.index).groupby(songs.bucket).sum()})
+    table["hit_rate"] = (table.with_preview / table.checked.where(table.checked > 0)).map(
+        lambda x: "-" if pd.isna(x) else f"{x:.0%}")
+    log("SONGS WITH A SAVED PREVIEW, BY BUCKET")
+    log(table.to_string())
+    log(f"total: {int(pool.sum()):,} of {len(songs):,} songs have a preview; {int(checked.sum()):,} have been checked")
+
+    points = songs[["valence_tags", "arousal_tags"]].values
+    scale = points.std(axis=0)
+    centres = uplift.bucket_centres(songs)
+    log(f"\nCANDIDATES PER WAYPOINT (journey buckets only). 'd10' is the distance to the 10th-nearest candidate in\n"
+        f"standard deviations; a waypoint is thin if it has fewer than {uplift.NEAREST_K} candidates or d10 > {THIN_DISTANCE}.")
+    for emotion in uplift.NEGATIVE_EMOTIONS:
+        journey = uplift.plan_journey({emotion: 1.0}, [emotion], centres, scale)
+        in_buckets = songs.bucket.isin({emotion, *journey["targets"]}).values
+        log(f"-- {emotion} -> {' -> '.join(journey['targets'])}")
+        for step, waypoint in enumerate(journey["waypoints"], 1):
+            cells = []
+            for label, mask in [("all songs", in_buckets), ("with preview", in_buckets & pool)]:
+                distance = np.sort(np.linalg.norm((points[mask] - waypoint) / scale, axis=1))
+                d10 = distance[uplift.NEAREST_K - 1] if len(distance) >= uplift.NEAREST_K else float("inf")
+                cells.append((label, int((distance <= THIN_DISTANCE).sum()), d10))
+            thin = cells[1][2] > THIN_DISTANCE
+            log(f"   waypoint {step} ({waypoint[0]:.2f}, {waypoint[1]:.2f}): "
+                + " | ".join(f"{label}: {near} within {THIN_DISTANCE}, d10 {d10:.2f}" for label, near, d10 in cells)
+                + ("   <-- THIN" if thin else ""))
+
+
 def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--previews", action="store_true",
+                        help="only use songs that have a saved preview (data/songs/previews.csv)")
+    args = parser.parse_args()
+
     songs = pd.read_csv(os.path.join("data", "songs", "songs_clean.csv"), keep_default_na=False)
     os.makedirs(os.path.join("models", "uplift"), exist_ok=True)
     lines = []
     def log(s=""):
         print(s)
         lines.append(s)
+
+    pool = None
+    if args.previews:
+        import previews
+        pool = songs.lastfm_url.isin(previews.playable_urls()).values
+        preview_coverage(songs, pool, log)
+        log()
 
     centres = uplift.bucket_centres(songs)
     log("BUCKET CENTRES (valence, arousal)")
@@ -52,7 +105,7 @@ def main():
     pd.set_option("display.width", 200); pd.set_option("display.max_colwidth", 44)
     for name, fused, emotions in cases:
         rng = np.random.default_rng(SEED)
-        playlist, journey = uplift.build_playlist(songs, fused, emotions, rng)
+        playlist, journey = uplift.build_playlist(songs, fused, emotions, rng, pool=pool)
         log(f"\n== {name.upper()}: start ({journey['start'][0]:.2f}, {journey['start'][1]:.2f}), "
             f"target {' -> '.join(journey['targets'])}")
         table = playlist[["step", "waypoint_valence", "waypoint_arousal", "title", "artist",
@@ -62,27 +115,35 @@ def main():
 
     log(f"\n== {RUNS} PLAYLISTS PER CASE")
     for name, fused, emotions in cases:
-        runs = run_many(songs, fused, emotions, np.random.default_rng(SEED))
-        v, a = np.stack(runs.valence), np.stack(runs.arousal)
-        steps_up = (np.diff(v, axis=1) > 0)
+        runs = run_many(songs, fused, emotions, np.random.default_rng(SEED), pool)
         log(f"\n-- {name}")
+        full = runs[runs.valence.map(len) == uplift.N_SONGS]
+        if pool is not None:
+            log(f"playlists with all {uplift.N_SONGS} songs:               {len(full) / len(runs):.1%}")
+        if full.empty:
+            log("no complete playlists: not enough songs with previews along this path")
+            continue
+        v, a = np.stack(full.valence), np.stack(full.arousal)
+        steps_up = (np.diff(v, axis=1) > 0)
         log(f"valence rises at every step (all 4):   {steps_up.all(axis=1).mean():.1%}")
         log(f"valence rises at 3 or more of 4 steps: {(steps_up.sum(axis=1) >= 3).mean():.1%}")
         log(f"last song more positive than first:    {(v[:, -1] > v[:, 0]).mean():.1%}")
         log(f"single steps that rise:                {steps_up.mean():.1%}")
         log("mean valence by song 1..5: " + "  ".join(f"{x:.2f}" for x in v.mean(axis=0)))
         log("mean arousal by song 1..5: " + "  ".join(f"{x:.2f}" for x in a.mean(axis=0)))
-        log(f"song 1 bucket: {runs.first_bucket.value_counts(normalize=True).round(2).to_dict()} | "
-            f"song 5 bucket: {runs.last_bucket.value_counts(normalize=True).round(2).to_dict()}")
+        log(f"song 1 bucket: {full.first_bucket.value_counts(normalize=True).round(2).to_dict()} | "
+            f"song 5 bucket: {full.last_bucket.value_counts(normalize=True).round(2).to_dict()}")
 
-    log("\n== WHY THE SONG POOL IS RESTRICTED: bucket of song 1 without the restriction")
-    uplift.RESTRICT_TO_JOURNEY_BUCKETS = False
-    for name, fused, emotions in cases[:4]:
-        runs = run_many(songs, fused, emotions, np.random.default_rng(SEED))
-        log(f"{name:8} {runs.first_bucket.value_counts(normalize=True).round(2).to_dict()}")
-    uplift.RESTRICT_TO_JOURNEY_BUCKETS = True
+    if pool is None:
+        log("\n== WHY THE SONG POOL IS RESTRICTED: bucket of song 1 without the restriction")
+        uplift.RESTRICT_TO_JOURNEY_BUCKETS = False
+        for name, fused, emotions in cases[:4]:
+            runs = run_many(songs, fused, emotions, np.random.default_rng(SEED))
+            log(f"{name:8} {runs.first_bucket.value_counts(normalize=True).round(2).to_dict()}")
+        uplift.RESTRICT_TO_JOURNEY_BUCKETS = True
 
-    with open(os.path.join("models", "uplift", "report.txt"), "w", encoding="utf-8") as f:
+    report = "report_previews.txt" if args.previews else "report.txt"
+    with open(os.path.join("models", "uplift", report), "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
 
 

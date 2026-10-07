@@ -76,12 +76,15 @@ def plan_journey(fused, emotions, centres, scale):
             "waypoints": np.array(waypoints), "scale": np.asarray(scale)}
 
 
-def build_playlist(songs, fused, emotions, rng=None, playable=None):
+def build_playlist(songs, fused, emotions, rng=None, playable=None, pool=None):
     """Return (playlist, journey), or (None, None) if Uplift does not apply.
 
     songs needs the columns bucket, valence_tags and arousal_tags. The playlist
     is N_SONGS rows of `songs` in play order, with a `step` column (1..N_SONGS)
     and the waypoint each song was picked for.
+
+    pool: optional boolean array, one per row of `songs`; only True rows may be
+    picked. The start point, targets and waypoints still come from all songs.
 
     playable: optional function that takes row positions in `songs` and returns
     the ones that can be played. Each waypoint then gets a song from the
@@ -100,12 +103,16 @@ def build_playlist(songs, fused, emotions, rng=None, playable=None):
     if RESTRICT_TO_JOURNEY_BUCKETS:
         buckets = set(emotions) | {journey["start_emotion"]} | set(journey["targets"])
         allowed = songs.bucket.isin(buckets).to_numpy(copy=True)
+    if pool is not None:
+        allowed &= np.asarray(pool, dtype=bool)
 
     chosen, used_waypoints = [], []
     for waypoint in journey["waypoints"]:
         candidates = rng.permutation(np.flatnonzero(allowed))  # random order breaks ties
         distance = np.linalg.norm((points[candidates] - waypoint) / scale, axis=1)
         nearest = candidates[np.argsort(distance, kind="stable")]
+        if not len(nearest):
+            continue
         if playable is None:
             pick = rng.choice(nearest[:NEAREST_K])
         else:

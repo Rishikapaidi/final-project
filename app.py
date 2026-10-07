@@ -234,6 +234,12 @@ if queue["note"]:
 if previews.rate_limited():
     st.markdown('<div class="notice">The preview service is limiting requests right now, so some songs could not be '
                 'checked. Re-scan in a minute for a fuller list.</div>', unsafe_allow_html=True)
+if not queue["tracks"]:
+    # Cache-only by default: only songs already in data/songs/previews.csv can be played.
+    st.info("No songs with a saved preview match this mood yet. Fill the preview cache with "
+            "`python scripts/fetch_previews.py`, or start the app with the environment variable "
+            "`LIVE_LOOKUPS=1` to look songs up as you go.")
+    st.stop()
 
 # When the queue ends it loops; after an Uplift journey it loops over the
 # "keep listening" songs rather than replaying the journey.

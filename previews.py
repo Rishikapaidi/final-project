@@ -4,11 +4,15 @@ The song file only has Last.fm links, which cannot be played. This looks each
 song up in the free iTunes Search API (no key needed) and keeps the first
 result whose artist and title loosely match.
 
-The API allows roughly 20 requests a minute, so results are cached on disk
-(CACHE_PATH), including "no preview found", and each song is only ever looked
-up once. When the limit is hit, lookups pause for RATE_LIMIT_PAUSE seconds and
-songs that could not be checked are simply treated as not playable for now.
-`scripts/fetch_previews.py` fills the cache ahead of time.
+The API allows roughly 20 requests a minute and blocks a machine for a long
+time after a burst, so results are cached on disk (CACHE_PATH), including "no
+preview found", and each song is only ever looked up once.
+
+By default the app is cache-only: it uses songs already in the cache and makes
+no API calls. `scripts/fetch_previews.py` fills the cache ahead of time. Set
+the environment variable LIVE_LOOKUPS=1 to let the app also look up songs it
+has not seen; when the limit is hit, lookups then pause for RATE_LIMIT_PAUSE
+seconds and unchecked songs are treated as not playable for now.
 """
 import csv
 import os
@@ -26,6 +30,7 @@ CACHE_FIELDS = ["lastfm_url", "preview_url", "artwork_url", "itunes_title", "itu
 SEARCH_URL = "https://itunes.apple.com/search"
 MAX_WORKERS = 8
 RATE_LIMIT_PAUSE = 60
+LIVE_LOOKUPS = os.environ.get("LIVE_LOOKUPS") == "1"
 
 _lock = threading.Lock()
 _cache = None
@@ -109,6 +114,12 @@ def cached(key):
         return _load_cache().get(key)
 
 
+def playable_urls():
+    """The lastfm_url of every song known to have a preview."""
+    with _lock:
+        return {key for key, row in _load_cache().items() if row["preview_url"]}
+
+
 def rate_limited():
     return time.time() < _paused_until
 
@@ -120,7 +131,7 @@ def _lookup(song):
     row = cached(key)
     if row is not None:
         return row
-    if rate_limited():
+    if not LIVE_LOOKUPS or rate_limited():
         return None
     try:
         return remember(key, search_itunes(title, artist))

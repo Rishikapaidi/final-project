@@ -46,15 +46,16 @@ def _track(song, preview, **extra):
 def playable_songs(rows, wanted, rng):
     """Up to `wanted` rows of `rows` that have a preview, in random order.
 
-    Songs already known to have a preview are used first; unchecked songs are
-    only looked up if those are not enough.
+    Songs already known to have a preview are used first. With live lookups
+    on (previews.LIVE_LOOKUPS), unchecked songs are looked up if those are not
+    enough; otherwise only cached songs are used.
     """
     rows = rows.iloc[rng.permutation(len(rows))]
     known = [previews.cached(url) for url in rows.lastfm_url]
     ready = [(song, row) for song, row in zip(rows.itertuples(), known) if row and row["preview_url"]]
     unchecked = rows[[row is None for row in known]]
     for round_ in range(LOOKUP_ROUNDS):
-        if len(ready) >= wanted or previews.rate_limited():
+        if len(ready) >= wanted or not previews.LIVE_LOOKUPS or previews.rate_limited():
             break
         batch = unchecked.iloc[round_ * LOOKUP_BATCH:(round_ + 1) * LOOKUP_BATCH]
         if batch.empty:
@@ -91,7 +92,13 @@ def uplift_queue(songs, fused, emotions, rng=None):
         found = previews.resolve(_keys(songs.iloc[positions]))
         return np.array([p for p in positions if songs.lastfm_url.iloc[p] in found], dtype=int)
 
-    playlist, journey = uplift.build_playlist(songs, fused, emotions, rng, playable=playable)
+    if previews.LIVE_LOOKUPS:
+        # Check the nearest candidates of each waypoint, looking up unseen songs.
+        playlist, journey = uplift.build_playlist(songs, fused, emotions, rng, playable=playable)
+    else:
+        # Cache-only: pick among songs already known to have a preview.
+        known = songs.lastfm_url.isin(previews.playable_urls()).values
+        playlist, journey = uplift.build_playlist(songs, fused, emotions, rng, pool=known)
     if playlist is None:
         return None, None
     tracks = [_track(song, previews.cached(song.lastfm_url), section="journey", number=song.step,
