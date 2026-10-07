@@ -1,6 +1,7 @@
 # Uplift mode
 
-The app has two modes, chosen with the selector above the text box:
+The app has two modes. By default it picks one automatically (Uplift when the
+mood is low, otherwise Resonance); the settings popover can force either:
 
 - **Resonance (match my mood):** recommends songs from the bucket of the
   detected emotion. This is the original behaviour.
@@ -32,8 +33,15 @@ The logic is in `uplift.py` and needs neither the webcam nor Streamlit.
    (both scaled by their spread), picked at random among the 10 nearest so
    playlists differ between runs.
 6. **Display.** The five songs are listed in play order, numbered 1 to 5, with
-   each song's valence and arousal and a small chart of the planned path and
-   the songs picked.
+   a collapsible "Mood journey" chart of the planned path and the songs picked.
+7. **After the five songs.** The app keeps playing songs from the bucket the
+   journey ended in (happy after sad; neutral after angry, fear or disgust), so
+   the music does not stop. These are ordinary songs from that bucket, not
+   further steps of the journey.
+
+In the app, only songs with a playable preview can be picked (see "Song
+previews" in `data/README.md`): each waypoint's song comes from its 10 nearest
+candidates that have one.
 
 ### One departure from "nearest song in the whole file"
 

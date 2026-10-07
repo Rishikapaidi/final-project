@@ -15,6 +15,8 @@ import previews
 import uplift
 
 RESONANCE_TRACKS = 30
+# After the Uplift journey, this many more songs from the bucket it ended in.
+CONTINUE_TRACKS = 15
 # Share of the queue per detected emotion (most likely first), by how many
 # emotions were detected. Same proportions the app has always used.
 SAMPLE_SIZES = {
@@ -78,7 +80,11 @@ def resonance_queue(song_buckets, emotions, rng=None):
 
 
 def uplift_queue(songs, fused, emotions, rng=None):
-    """(tracks, journey) for an Uplift playlist, or (None, None) if Uplift does not apply."""
+    """(tracks, journey) for an Uplift playlist, or (None, None) if Uplift does not apply.
+
+    The journey's songs come first (section "journey"), followed by more songs
+    from the bucket it ended in (section "more").
+    """
     rng = rng or np.random.default_rng()
 
     def playable(positions):
@@ -91,6 +97,13 @@ def uplift_queue(songs, fused, emotions, rng=None):
     tracks = [_track(song, previews.cached(song.lastfm_url), section="journey", number=song.step,
                      waypoint=[round(float(song.waypoint_valence), 2), round(float(song.waypoint_arousal), 2)])
               for song in playlist.itertuples()]
+    if tracks:
+        # Keep the music going in the mood the journey reached (happy after
+        # sad, neutral after angry, fear or disgust).
+        final_bucket = journey["targets"][-1]
+        rest = songs[(songs.bucket == final_bucket) & ~songs.lastfm_url.isin(playlist.lastfm_url)]
+        tracks += [_track(song, preview, section="more", number=len(playlist) + i)
+                   for i, (song, preview) in enumerate(playable_songs(rest, CONTINUE_TRACKS, rng), 1)]
     return tracks, journey
 
 

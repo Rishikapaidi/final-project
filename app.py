@@ -155,8 +155,10 @@ def build_queue(songs, emotions, fused, mode_choice):
         tracks, journey = player.uplift_queue(songs, fused, emotions)
         if tracks:
             path = " → ".join([journey["start_emotion"]] + journey["targets"])
+            steps = sum(track["section"] == "journey" for track in tracks)
             return {"mode": "Uplift", "tracks": tracks, "journey": player.journey_summary(journey),
-                    "title": "Lifting your mood", "subtitle": f"{path} · {len(tracks)} songs, in order", "note": None}
+                    "title": "Lifting your mood", "note": None, "loop_from": steps,
+                    "subtitle": f"{path} · {steps} songs in order, then more {journey['targets'][-1]} songs"}
         if tracks is None:
             note = (f"Uplift is for low moods. Sad, angry, fearful and disgusted feelings make up only "
                     f"{uplift.negative_share(fused):.0%} of this result, so here are songs that match your mood instead.")
@@ -165,7 +167,7 @@ def build_queue(songs, emotions, fused, mode_choice):
     buckets = {bucket: rows for bucket, rows in songs.groupby("bucket")}
     tracks = player.resonance_queue(buckets, emotions)
     return {"mode": "Resonance", "tracks": tracks, "journey": None, "title": "Songs for your mood",
-            "subtitle": f"{', '.join(emotions)} · {len(tracks)} songs", "note": note}
+            "subtitle": f"{', '.join(emotions)} · {len(tracks)} songs", "note": note, "loop_from": 0}
 
 
 st.markdown(PAGE_CSS, unsafe_allow_html=True)
@@ -233,5 +235,7 @@ if previews.rate_limited():
     st.markdown('<div class="notice">The preview service is limiting requests right now, so some songs could not be '
                 'checked. Re-scan in a minute for a fuller list.</div>', unsafe_allow_html=True)
 
-components.html(player.render(queue["tracks"], queue["title"], queue["subtitle"], queue["journey"]),
-                height=PLAYER_HEIGHT)
+# When the queue ends it loops; after an Uplift journey it loops over the
+# "keep listening" songs rather than replaying the journey.
+components.html(player.render(queue["tracks"], queue["title"], queue["subtitle"], queue["journey"],
+                              loop_from=queue["loop_from"]), height=PLAYER_HEIGHT)
