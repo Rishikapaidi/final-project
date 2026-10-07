@@ -201,3 +201,30 @@ About 1,870 overwritten rows tagged angry, aggressive, hostile or outraged
 still carry the original song's `mbid` or `spotify_id`. Their real titles and
 artists could be looked up through MusicBrainz (free, no account) to give the
 angry bucket genuinely angry songs. This has not been tried.
+
+## Song previews: `data/songs/previews.csv`
+
+The song file only has Last.fm links, which cannot be played. The app looks
+each song up in the free iTunes Search API (no key) to get a 30-second preview
+clip and album art, and stores the answer here, including "no preview found",
+so each song is only ever looked up once. The file is not committed.
+
+Columns: `lastfm_url`, `preview_url`, `artwork_url`, `itunes_title`,
+`itunes_artist` (the last four are empty when no match was found).
+
+A result is accepted only if both the artist and the title loosely match
+(ignoring case, accents and punctuation). In a sample of 48 songs, 73% had a
+usable preview.
+
+**The API is rate-limited** to roughly 20 requests a minute, and a burst of
+about 150 requests got this machine refused (HTTP 403) for well over half an
+hour. One scan can need 50 or more lookups, so:
+
+- the app uses songs already in this file first and only looks up new ones
+  when it has to; if the API refuses, it shows what it has and says so
+- `python scripts/fetch_previews.py` fills the file slowly in the background
+  (about 9 hours for all songs; `--limit N` for fewer). It can be stopped and
+  rerun, and checks the songs Uplift is most likely to need first.
+
+Preview links belong to Apple and can stop working; the player skips a song
+whose clip fails to load.

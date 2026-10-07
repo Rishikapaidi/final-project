@@ -30,6 +30,9 @@ TARGETS = {
 }
 N_SONGS = 5
 NEAREST_K = 10
+# With a `playable` check, how far down the nearest-songs list to look before
+# giving up on a waypoint (checked NEAREST_K songs at a time).
+MAX_CANDIDATES = 40
 # Uplift only runs when the negative emotions hold at least this much of the
 # fused probability; otherwise the caller should fall back to Resonance.
 MIN_NEGATIVE_SHARE = 0.5
@@ -73,12 +76,17 @@ def plan_journey(fused, emotions, centres, scale):
             "waypoints": np.array(waypoints), "scale": np.asarray(scale)}
 
 
-def build_playlist(songs, fused, emotions, rng=None):
+def build_playlist(songs, fused, emotions, rng=None, playable=None):
     """Return (playlist, journey), or (None, None) if Uplift does not apply.
 
     songs needs the columns bucket, valence_tags and arousal_tags. The playlist
     is N_SONGS rows of `songs` in play order, with a `step` column (1..N_SONGS)
     and the waypoint each song was picked for.
+
+    playable: optional function that takes row positions in `songs` and returns
+    the ones that can be played. Each waypoint then gets a song from the
+    NEAREST_K nearest playable candidates; if none of those is playable the next
+    NEAREST_K are tried, and a waypoint with no playable song nearby is skipped.
     """
     if not emotions or not should_uplift(fused):
         return None, None
@@ -93,18 +101,30 @@ def build_playlist(songs, fused, emotions, rng=None):
         buckets = set(emotions) | {journey["start_emotion"]} | set(journey["targets"])
         allowed = songs.bucket.isin(buckets).to_numpy(copy=True)
 
-    chosen = []
+    chosen, used_waypoints = [], []
     for waypoint in journey["waypoints"]:
         candidates = rng.permutation(np.flatnonzero(allowed))  # random order breaks ties
         distance = np.linalg.norm((points[candidates] - waypoint) / scale, axis=1)
-        pick = rng.choice(candidates[np.argsort(distance, kind="stable")[:NEAREST_K]])
+        nearest = candidates[np.argsort(distance, kind="stable")]
+        if playable is None:
+            pick = rng.choice(nearest[:NEAREST_K])
+        else:
+            pick = None
+            for first in range(0, MAX_CANDIDATES, NEAREST_K):
+                ok = playable(nearest[first:first + NEAREST_K])
+                if len(ok):
+                    pick = rng.choice(ok)
+                    break
+            if pick is None:
+                continue
         chosen.append(pick)
+        used_waypoints.append(waypoint)
         allowed[pick] = False
 
     playlist = songs.iloc[chosen].copy().reset_index(drop=True)
     playlist.insert(0, "step", range(1, len(playlist) + 1))
-    playlist["waypoint_valence"] = journey["waypoints"][:, 0]
-    playlist["waypoint_arousal"] = journey["waypoints"][:, 1]
+    playlist["waypoint_valence"] = [w[0] for w in used_waypoints]
+    playlist["waypoint_arousal"] = [w[1] for w in used_waypoints]
     return playlist, journey
 
 

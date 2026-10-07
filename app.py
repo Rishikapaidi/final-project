@@ -1,108 +1,86 @@
-# Importing modules
-import numpy as np
-import streamlit as st
-import cv2
-import pandas as pd
+"""Emotion-based music player.
 
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout, Flatten
-from tensorflow.keras.layers import Conv2D
-from tensorflow.keras.layers import MaxPooling2D
-import base64
+Detects the listener's mood from the webcam (and optional text), fuses the two
+predictions, and plays matching songs (Resonance) or a short playlist that
+moves towards a better mood (Uplift). See UPLIFT.md, models/README.md and
+data/README.md for how each part works.
+"""
+import html
 import json
 import os
 
+import cv2
+import numpy as np
+import pandas as pd
+import streamlit as st
+import streamlit.components.v1 as components
+from tensorflow.keras.layers import Conv2D, Dense, Dropout, Flatten, MaxPooling2D
+from tensorflow.keras.models import Sequential
+
 from fusion import EMOTIONS, fuse
+import player
+import previews
 import uplift
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEXT_MODEL_DIR = os.path.join(BASE_DIR, "models", "text_emotion_distilbert", "model")
+SONGS_FILE = os.path.join(BASE_DIR, "data", "songs", "songs_clean.csv")
 with open(os.path.join(BASE_DIR, "models", "fusion", "fusion_config.json")) as f:
     FUSION_CONFIG = json.load(f)
 # Emotions whose fused probability is at least this share go into the playlist mix.
 MIN_EMOTION_SHARE = 0.15
-RESONANCE_MODE = "Resonance (match my mood)"
-UPLIFT_MODE = "Uplift (gently lift my mood)"
+FRAMES_TO_SCAN = 20
+MODES = ["Auto", "Resonance", "Uplift"]
+PLAYER_HEIGHT = 680
 
-# Songs with one emotion bucket each, built from muse_v3.csv by
-# scripts/prepare_songs.py (see data/README.md for how and why).
-SONGS_FILE = os.path.join(BASE_DIR, "data", "songs", "songs_clean.csv")
-if not os.path.exists(SONGS_FILE):
-    st.error("Song file not found. Build it once with:  python scripts/prepare_songs.py")
-    st.stop()
+st.set_page_config(page_title="Emotion Music Player", page_icon="🎧", layout="wide")
 
-df = pd.read_csv(SONGS_FILE)
-df['link'] = df['lastfm_url']
-df['name'] = df['title']
-
-SONG_BUCKETS = {bucket: songs for bucket, songs in df.groupby('bucket')}
-
-# Map each detected emotion (case-insensitive) to its song bucket. The face
-# model says Disgusted/Fearful/Surprised; the text model says disgust/fear/surprise.
-EMOTION_BUCKETS = {
-    'angry': SONG_BUCKETS['angry'],
-    'disgusted': SONG_BUCKETS['disgust'],
-    'disgust': SONG_BUCKETS['disgust'],
-    'fearful': SONG_BUCKETS['fear'],
-    'fear': SONG_BUCKETS['fear'],
-    'happy': SONG_BUCKETS['happy'],
-    'surprised': SONG_BUCKETS['surprise'],
-    'surprise': SONG_BUCKETS['surprise'],
-    'neutral': SONG_BUCKETS['neutral'],
-    'sad': SONG_BUCKETS['sad'],
-}
-
-# How many songs to sample for each emotion, keyed by how many distinct
-# emotions were detected (most frequent emotion first).
-SAMPLE_SIZES = {
-    1: [30],
-    2: [30, 20],
-    3: [55, 20, 15],
-    4: [30, 29, 18, 9],
-}
-
-def fun(list):
-
-    data = pd.DataFrame()
-    times = SAMPLE_SIZES.get(len(list), [10, 7, 6, 5, 2])
-
-    for v, t in zip(list, times):
-        bucket = EMOTION_BUCKETS.get(v.strip().lower(), SONG_BUCKETS['neutral'])
-        data = pd.concat([data, bucket.sample(n=t)], ignore_index=True)
-
-    # Songs are added one emotion at a time, and only the first 30 are shown,
-    # so shuffle to make the displayed songs reflect the whole mix.
-    data = data.sample(frac=1).reset_index(drop=True)
-
-    print("data of list func... :",data)
-    return data
-
-    
+PAGE_CSS = """
+<style>
+  #MainMenu, footer, header[data-testid="stHeader"], [data-testid="stToolbar"],
+  [data-testid="stDecoration"], [data-testid="stStatusWidget"] { display: none !important; }
+  .stApp { background: #121212; }
+  .block-container { padding: 1.1rem 1.6rem 0 1.6rem; max-width: 1200px; }
+  iframe { height: calc(100vh - 104px) !important; min-height: 420px; border-radius: 10px; }
+  .app-head { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .app-name { font-size: 24px; font-weight: 700; color: #fff; }
+  .chip { background: #1f1f1f; border: 1px solid #333; border-radius: 16px; padding: 5px 13px;
+          font-size: 13.5px; color: #e6e6e6; white-space: nowrap; }
+  .chip b { color: #1db954; font-weight: 600; }
+  .chip-source { color: #8a8a8a; font-size: 12px; }
+  .listening { display: flex; flex-direction: column; align-items: center; justify-content: center;
+               gap: 22px; height: 60vh; color: #b3b3b3; font-size: 18px; }
+  .pulse { width: 74px; height: 74px; border-radius: 50%; background: #1db954; animation: pulse 1.3s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { transform: scale(0.75); opacity: 0.55; } 50% { transform: scale(1.1); opacity: 1; } }
+  .notice { color: #b3b3b3; font-size: 13px; margin: 2px 0 8px; }
+</style>
+"""
+LISTENING_HTML = '<div class="listening"><div class="pulse"></div><div>Listening to your mood...</div></div>'
 
 
+@st.cache_data
+def load_songs():
+    """Songs with one emotion bucket each, built by scripts/prepare_songs.py (see data/README.md)."""
+    return pd.read_csv(SONGS_FILE, keep_default_na=False)
 
 
-model = Sequential()
-model.add(Conv2D(32, kernel_size=(3, 3), activation='relu', input_shape=(48,48,1)))
-model.add(Conv2D(64, kernel_size=(3, 3), activation='relu'))
-
-model.add(MaxPooling2D(pool_size=(2, 2)))
-
-model.add(Conv2D(128, kernel_size=(3, 3), activation='relu'))
-model.add(MaxPooling2D(pool_size=(2, 2)))
-model.add(Conv2D(128, kernel_size=(3, 3), activation='relu'))
-model.add(MaxPooling2D(pool_size=(2, 2)))
-model.add(Dropout(0.25))
-model.add(Flatten())
-model.add(Dense(1024, activation='relu'))
-model.add(Dropout(0.5))
-
-model.add(Dense(7, activation='softmax'))
-
-
-model.load_weights(os.path.join(BASE_DIR, 'model.h5'))
-
-emotion_dict = {0: "Angry", 1: "Disgusted", 2: "Fearful", 3: "Happy", 4: "Neutral", 5: "Sad", 6: "Surprised"}
+@st.cache_resource
+def load_face_model():
+    model = Sequential()
+    model.add(Conv2D(32, kernel_size=(3, 3), activation='relu', input_shape=(48, 48, 1)))
+    model.add(Conv2D(64, kernel_size=(3, 3), activation='relu'))
+    model.add(MaxPooling2D(pool_size=(2, 2)))
+    model.add(Conv2D(128, kernel_size=(3, 3), activation='relu'))
+    model.add(MaxPooling2D(pool_size=(2, 2)))
+    model.add(Conv2D(128, kernel_size=(3, 3), activation='relu'))
+    model.add(MaxPooling2D(pool_size=(2, 2)))
+    model.add(Dropout(0.25))
+    model.add(Flatten())
+    model.add(Dense(1024, activation='relu'))
+    model.add(Dropout(0.5))
+    model.add(Dense(7, activation='softmax'))
+    model.load_weights(os.path.join(BASE_DIR, 'model.h5'))
+    return model
 
 
 @st.cache_resource
@@ -114,6 +92,26 @@ def load_text_model():
     tokenizer = AutoTokenizer.from_pretrained(TEXT_MODEL_DIR)
     text_model = AutoModelForSequenceClassification.from_pretrained(TEXT_MODEL_DIR).eval()
     return tokenizer, text_model
+
+
+def scan_face():
+    """Face model softmax output averaged over webcam frames with a face, or None if no face was seen."""
+    model = load_face_model()
+    detector = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+    cv2.ocl.setUseOpenCL(False)
+    cap = cv2.VideoCapture(0)
+    frame_probs = []
+    for _ in range(FRAMES_TO_SCAN):
+        ret, frame = cap.read()
+        if not ret:
+            break
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        for (x, y, w, h) in detector.detectMultiScale(gray, scaleFactor=1.3, minNeighbors=5):
+            # The model was trained on pixels scaled to 0-1, not raw 0-255.
+            crop = cv2.resize(gray[y:y + h, x:x + w], (48, 48))[None, :, :, None].astype('float32') / 255.0
+            frame_probs.append(model.predict(crop, verbose=0)[0])
+    cap.release()
+    return np.mean(frame_probs, axis=0) if frame_probs else None
 
 
 def text_probabilities(text):
@@ -150,134 +148,90 @@ def combine_emotions(face_probs, text_probs):
     return chosen, fused
 
 
-cv2.ocl.setUseOpenCL(False)
-cap = cv2.VideoCapture(0)
-
-print("Loading Haarcascade Classifier...")
-face = cv2.CascadeClassifier(os.path.join(BASE_DIR, 'haarcascade_frontalface_default.xml'))
-if face.empty():
-    print("Haarcascade Classifier failed to load.")
-else:
-    print("Haarcascade Classifier loaded successfully.")
-
-page_bg_img = '''
-<style>
-body {
-    background-image: url("https://images.unsplash.com/photo-1542281286-9e0a16bb7366");
-    background-size: cover;
-}
-</style>
-'''
-st.markdown(page_bg_img, unsafe_allow_html=True)
-st.markdown("<h2 style='text-align: center; color: white'><b>Emotion based music recommendation</b></h2>"
-            , unsafe_allow_html=True)
-st.markdown("<h5 style='text-align: center; color: grey;'><b>Click on the name of recommended song to reach website</b></h5>"
-            , unsafe_allow_html=True)
-
-mode = st.radio("Mode", [RESONANCE_MODE, UPLIFT_MODE], horizontal=True)
-
-user_text = st.text_area("How are you feeling? (optional, combined with your face)",
-                         placeholder="e.g. Finally finished my exams, can't wait for the weekend!")
-
-col1,col2,col3 = st.columns(3)
-
-list = []
-uplift_playlist, uplift_journey = None, None
-with col1:
-    pass
-with col2:
-    if st.button('SCAN EMOTION(Click here)'):
-
-        count = 0
-        list.clear()
-        face_frame_probs = []
-
-        while True:
-
-            ret, frame = cap.read()
-            if not ret:
-                break
-            
-            face = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")          
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)        
-            faces = face.detectMultiScale(gray, scaleFactor=1.3, minNeighbors=5)          
-            count = count + 1
-
-            for (x, y, w, h) in faces:               
-                cv2.rectangle(frame, (x, y - 50), (x + w, y + h + 10), (255, 0, 0), 2)               
-                roi_gray = gray[y:y + h, x:x + w]               
-                # The model was trained on pixels scaled to 0-1, not raw 0-255.
-                cropped_img = np.expand_dims(np.expand_dims(cv2.resize(roi_gray, (48, 48)), -1), 0).astype('float32') / 255.0
-                prediction = model.predict(cropped_img)             
-                max_index = int(np.argmax(prediction))
-
-                face_frame_probs.append(prediction[0])
-
-                cv2.putText(frame, emotion_dict[max_index], (x + 20, y - 60), 
-                cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)              
-                cv2.imshow('Video', cv2.resize(frame, (1000, 700), interpolation=cv2.INTER_CUBIC))
-
-            if cv2.waitKey(1) & 0xFF == ord('s'):
-                break
-            if count >= 20:
-                break
-        cap.release()
-        cv2.destroyAllWindows()
-
-        face_probs = np.mean(face_frame_probs, axis=0) if face_frame_probs else None
-        text_probs = text_probabilities(user_text)
-        list, fused = combine_emotions(face_probs, text_probs)
-
-        if fused is None:
-            st.warning("No face detected and no text entered, so there's no emotion to recommend for.")
+def build_queue(songs, emotions, fused, mode_choice):
+    """Pick the mode and build the play queue for a detected mood."""
+    note = None
+    if mode_choice == "Uplift" or (mode_choice == "Auto" and uplift.should_uplift(fused)):
+        tracks, journey = player.uplift_queue(songs, fused, emotions)
+        if tracks:
+            path = " → ".join([journey["start_emotion"]] + journey["targets"])
+            return {"mode": "Uplift", "tracks": tracks, "journey": player.journey_summary(journey),
+                    "title": "Lifting your mood", "subtitle": f"{path} · {len(tracks)} songs, in order", "note": None}
+        if tracks is None:
+            note = (f"Uplift is for low moods. Sad, angry, fearful and disgusted feelings make up only "
+                    f"{uplift.negative_share(fused):.0%} of this result, so here are songs that match your mood instead.")
         else:
-            if face_probs is not None and text_probs is not None:
-                source = "face + text"
-            elif face_probs is not None:
-                source = "face only" + (" (text model not found)" if user_text.strip() and load_text_model() is None else "")
-            else:
-                source = "text only (no face detected)"
-            shares = ", ".join(f"{e} {fused[e]:.0%}" for e in list)
-            st.success(f"Detected ({source}): {shares}")
+            note = "No playable songs were found along the Uplift path right now, so here are songs that match your mood instead."
+    buckets = {bucket: rows for bucket, rows in songs.groupby("bucket")}
+    tracks = player.resonance_queue(buckets, emotions)
+    return {"mode": "Resonance", "tracks": tracks, "journey": None, "title": "Songs for your mood",
+            "subtitle": f"{', '.join(emotions)} · {len(tracks)} songs", "note": note}
 
-            if mode == UPLIFT_MODE:
-                uplift_playlist, uplift_journey = uplift.build_playlist(df, fused, list)
-                if uplift_playlist is None:
-                    st.info(f"Uplift is for low moods. Sad, angry, fearful and disgusted feelings make up only "
-                            f"{uplift.negative_share(fused):.0%} of this result, so here are songs that match your mood instead.")
-        
 
-with col3:
-    pass
+st.markdown(PAGE_CSS, unsafe_allow_html=True)
 
-if uplift_playlist is not None:
-    # Five songs in play order, from the detected mood towards the target.
-    new_df = uplift_playlist
-    heading = "Uplift playlist: from {} towards {}, play in this order".format(
-        uplift_journey["start_emotion"], " then ".join(uplift_journey["targets"]))
+if not os.path.exists(SONGS_FILE):
+    st.error("Song file not found. Build it once with:  python scripts/prepare_songs.py")
+    st.stop()
+songs = load_songs()
+state = st.session_state
+
+head, rescan_slot, settings_slot = st.columns([8, 1.1, 0.7], vertical_alignment="center")
+with settings_slot:
+    with st.popover("⚙", help="Settings"):
+        mode_choice = st.radio("Mode", MODES, key="mode_choice",
+                               captions=["Uplift when the mood is low, otherwise Resonance",
+                                         "Songs that match my mood", "Gently lift my mood"])
+        user_text = st.text_input("Tell me how you feel (optional)", key="user_text",
+                                  placeholder="e.g. Finally finished my exams!")
+with rescan_slot:
+    if st.button("Re-scan", help="Look at the webcam again"):
+        state.pop("face_probs", None)
+
+# The webcam is only opened on first load and on Re-scan; changing a setting
+# reuses the cached face result.
+if "face_probs" not in state:
+    listening = st.empty()
+    listening.markdown(LISTENING_HTML, unsafe_allow_html=True)
+    state["face_probs"] = scan_face()
+    state["scan_id"] = state.get("scan_id", 0) + 1
+    listening.empty()
+
+face_probs = state["face_probs"]
+text_probs = text_probabilities(user_text)
+emotions, fused = combine_emotions(face_probs, text_probs)
+
+if fused is None:
+    head.markdown('<div class="app-head"><span class="app-name">Emotion Music Player</span>'
+                  '<span class="chip">No mood detected</span></div>', unsafe_allow_html=True)
+    st.warning("I couldn't see a face. Press Re-scan, or open the ⚙ settings and tell me how you feel.")
+    st.stop()
+
+# The queue is rebuilt only when the scan, the text or the mode changes, so
+# other reruns leave the player (and the music) alone.
+queue_key = (state["scan_id"], user_text.strip(), mode_choice)
+if state.get("queue_key") != queue_key:
+    state["queue"] = build_queue(songs, emotions, fused, mode_choice)
+    state["queue_key"] = queue_key
+queue = state["queue"]
+
+if face_probs is not None and text_probs is not None:
+    source = "face + text"
+elif face_probs is not None:
+    source = "face" + (" (text model not found)" if user_text.strip() and load_text_model() is None else "")
 else:
-    new_df = fun(list)
-    heading = "Recommended song's with artist names"
-st.write("")
+    source = "text (no face detected)"
+feeling = ", ".join(f"{e} {fused[e]:.0%}" for e in emotions)
+head.markdown(
+    '<div class="app-head"><span class="app-name">Emotion Music Player</span>'
+    f'<span class="chip">Feeling: {html.escape(feeling)} → <b>{queue["mode"]}</b></span>'
+    f'<span class="chip-source">from {html.escape(source)}</span></div>', unsafe_allow_html=True)
 
-st.markdown("<h5 style='text-align: center; color: grey;'><b>{}</b></h5>".format(heading)
-            , unsafe_allow_html=True)
+if queue["note"]:
+    st.markdown(f'<div class="notice">{html.escape(queue["note"])}</div>', unsafe_allow_html=True)
+if previews.rate_limited():
+    st.markdown('<div class="notice">The preview service is limiting requests right now, so some songs could not be '
+                'checked. Re-scan in a minute for a fuller list.</div>', unsafe_allow_html=True)
 
-if uplift_playlist is not None:
-    st.pyplot(uplift.trajectory_figure(uplift_playlist, uplift_journey), use_container_width=False)
-
-st.write("---------------------------------------------------------------------------------------------------------------------")
-
-try:
-  
-    for l,a,n,i in zip(new_df["link"],new_df['artist'],new_df['name'],range(30)):
-
-        st.markdown("""<h4 style='text-align: center;'><a href={}>{} - {}</a></h4>"""
-                    .format(l,i+1,n),unsafe_allow_html=True)
-        if uplift_playlist is not None:
-            a = "{} · valence {:.1f}, arousal {:.1f}".format(a, new_df["valence_tags"][i], new_df["arousal_tags"][i])
-        st.markdown("<h5 style='text-align: center; color: grey;'><i>{}</i></h5>" 
-                    .format(a), unsafe_allow_html=True)
-        st.write("---------------------------------------------------------------------------------------------------------------------")
-except:
-    pass
+components.html(player.render(queue["tracks"], queue["title"], queue["subtitle"], queue["journey"]),
+                height=PLAYER_HEIGHT)
