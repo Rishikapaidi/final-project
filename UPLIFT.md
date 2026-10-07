@@ -99,3 +99,28 @@ further from the waypoints.
 - **Song titles are only screened by a word list** (profanity, slurs and
   explicit sexual words; see `data/README.md`), so an occasional crude or oddly
   fitting title can still appear.
+
+## With playable songs only
+
+The app can only play songs that have a saved preview (1,180 so far; see
+"Song previews" in `data/README.md`). `python scripts/evaluate_uplift.py
+--previews` repeats the check on those songs alone and writes
+`models/uplift/report_previews.txt`:
+
+| Start | Valence rises at every step: all songs → playable only | Rises at 3 or more of 4 steps | Last song more positive than first |
+|---|---|---|---|
+| sad | 100.0% → 100.0% | 100% | 100% |
+| angry | 97.4% → 51.6% | 99.4% | 100% |
+| fear | 100.0% → 100.0% | 100% | 100% |
+| disgust | 100.0% → 100.0% | 100% | 100% |
+
+Every playlist still has all five songs and ends more positive than it began.
+Sad, fear and disgust are unaffected: each waypoint still has 50 or more
+playable songs close by.
+
+**The angry path is weaker in the app than in the full-file check.** Only 42%
+of angry songs have a preview (176 of 421, with the whole bucket checked), so
+the nearest playable songs sit further from the first three waypoints, and
+songs 2 and 3 overlap (mean valence 4.56 and 4.74). About half of angry
+playlists therefore have one step where valence dips slightly instead of
+rising, although the overall direction (4.02 to 5.72) holds.

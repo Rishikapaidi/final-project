@@ -207,14 +207,30 @@ angry bucket genuinely angry songs. This has not been tried.
 The song file only has Last.fm links, which cannot be played. The app looks
 each song up in the free iTunes Search API (no key) to get a 30-second preview
 clip and album art, and stores the answer here, including "no preview found",
-so each song is only ever looked up once. The file is not committed.
+so each song is only ever looked up once. The file is committed, so the app
+can play music straight after cloning without calling the API.
 
 Columns: `lastfm_url`, `preview_url`, `artwork_url`, `itunes_title`,
 `itunes_artist` (the last four are empty when no match was found).
 
 A result is accepted only if both the artist and the title loosely match
-(ignoring case, accents and punctuation). In a sample of 48 songs, 73% had a
-usable preview.
+(ignoring case, accents and punctuation).
+
+So far 1,721 of the 10,901 songs have been checked and 1,180 have a preview:
+
+| Bucket | Songs | Checked | With preview | Hit rate |
+|---|---|---|---|---|
+| happy | 2,055 | 201 | 153 | 76% |
+| sad | 1,857 | 198 | 149 | 75% |
+| angry | 421 | 421 | 176 | 42% |
+| fear | 2,483 | 232 | 162 | 70% |
+| disgust | 1,170 | 210 | 162 | 77% |
+| surprise | 1,029 | 153 | 111 | 73% |
+| neutral | 1,886 | 306 | 267 | 87% |
+
+The songs checked first were the ones nearest each Uplift waypoint, then
+others in turn from every bucket. The angry bucket has been checked in full;
+fewer than half its songs are on iTunes.
 
 **The API is rate-limited** to roughly 20 requests a minute, and a burst of
 about 150 requests got this machine's searches refused (HTTP 403) for hours.

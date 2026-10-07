@@ -11,6 +11,7 @@ buckets.
 Usage (from the project root):
     python scripts/fetch_previews.py              # everything (about 9 hours)
     python scripts/fetch_previews.py --limit 1500 # the first 1,500 unchecked songs
+    python scripts/fetch_previews.py --bucket angry  # only one bucket
 """
 import argparse
 import os
@@ -27,6 +28,8 @@ import uplift  # noqa: E402
 SECONDS_BETWEEN_REQUESTS = 3.5
 FIRST_WAIT = 120      # seconds to wait after the API refuses a request,
 LONGEST_WAIT = 1800   # doubling each time up to this
+MAX_ERRORS_PER_SONG = 3
+SKIP = object()
 NEAR_WAYPOINT = 30
 
 
@@ -51,10 +54,13 @@ def lookup_order(songs):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--limit", type=int, default=None, help="stop after this many lookups")
+    parser.add_argument("--bucket", default=None, help="only look up songs from this bucket, e.g. angry")
     args = parser.parse_args()
 
     songs = pd.read_csv(os.path.join("data", "songs", "songs_clean.csv"), keep_default_na=False)
     todo = [i for i in lookup_order(songs) if previews.cached(songs.lastfm_url[i]) is None]
+    if args.bucket:
+        todo = [i for i in todo if songs.bucket[i] == args.bucket]
     if args.limit:
         todo = todo[:args.limit]
     print(f"{len(songs) - len(todo):,} songs already checked or not requested; looking up {len(todo):,}", flush=True)
@@ -63,6 +69,7 @@ def main():
     wait = FIRST_WAIT
     for n, i in enumerate(todo, 1):
         song = songs.iloc[i]
+        errors = 0
         while True:
             try:
                 result = previews.search_itunes(song.title, song.artist)
@@ -73,9 +80,15 @@ def main():
                 print(f"rate limited, waiting {wait // 60} min", flush=True)
                 time.sleep(wait)
                 wait = min(wait * 2, LONGEST_WAIT)
-            except Exception as error:  # network hiccup: wait and retry
+            except Exception as error:  # network hiccup: wait and retry a few times
+                errors += 1
                 print(f"error ({type(error).__name__}), waiting 20s", flush=True)
                 time.sleep(20)
+                if errors >= MAX_ERRORS_PER_SONG:
+                    result = SKIP
+                    break
+        if result is SKIP:  # left unchecked, so a later run tries it again
+            continue
         previews.remember(song.lastfm_url, result)
         found += result is not None
         if n % 25 == 0 or n == len(todo):
