@@ -5,7 +5,7 @@ predictions, and plays matching songs (Resonance) or a short playlist that
 moves towards a better mood (Uplift). See UPLIFT.md, models/README.md and
 data/README.md for how each part works.
 """
-import html
+import base64
 import json
 import os
 
@@ -17,10 +17,21 @@ import streamlit.components.v1 as components
 from tensorflow.keras.layers import Conv2D, Dense, Dropout, Flatten, MaxPooling2D
 from tensorflow.keras.models import Sequential
 
-from fusion import EMOTIONS, fuse
+from fusion import EMOTIONS, align_face, align_text, calibrate, fuse
+import mood
 import player
 import previews
 import uplift
+
+APP_NAME = "MOOD TUNE"
+TAGLINE = "Music that meets your mood"
+# The app's own mark: four sound-wave bars in the accent green.
+LOGO_SVG = ('<svg class="logo" viewBox="0 0 40 40" width="40" height="40" role="img" aria-label="logo">'
+            '<rect width="40" height="40" rx="10" fill="#1f1f1f"/>'
+            '<rect x="8" y="16" width="4.5" height="8" rx="2.25" fill="#1db954"/>'
+            '<rect x="15" y="9" width="4.5" height="22" rx="2.25" fill="#1db954"/>'
+            '<rect x="22" y="13" width="4.5" height="14" rx="2.25" fill="#1db954"/>'
+            '<rect x="29" y="18" width="4.5" height="4" rx="2.25" fill="#1db954"/></svg>')
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEXT_MODEL_DIR = os.path.join(BASE_DIR, "models", "text_emotion_distilbert", "model")
@@ -30,31 +41,32 @@ with open(os.path.join(BASE_DIR, "models", "fusion", "fusion_config.json")) as f
 # Emotions whose fused probability is at least this share go into the playlist mix.
 MIN_EMOTION_SHARE = 0.15
 FRAMES_TO_SCAN = 20
+SCAN_IMAGE_WIDTH = 480
+BOX_GREEN = (84, 185, 29)  # the accent green, in OpenCV's blue-green-red order
 MODES = ["Auto", "Resonance", "Uplift"]
 PLAYER_HEIGHT = 680
 
-st.set_page_config(page_title="Emotion Music Player", page_icon="🎧", layout="wide")
+st.set_page_config(page_title=APP_NAME, page_icon="🎧", layout="wide")
 
 PAGE_CSS = """
 <style>
   #MainMenu, footer, header[data-testid="stHeader"], [data-testid="stToolbar"],
   [data-testid="stDecoration"], [data-testid="stStatusWidget"] { display: none !important; }
   .stApp { background: #121212; }
-  .block-container { padding: 1.1rem 1.6rem 0 1.6rem; max-width: 1200px; }
+  .block-container { padding: 1.1rem 1.6rem 0 1.6rem; max-width: 1500px; }
   iframe { height: calc(100vh - 104px) !important; min-height: 420px; border-radius: 10px; }
-  .app-head { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-  .app-name { font-size: 24px; font-weight: 700; color: #fff; }
-  .chip { background: #1f1f1f; border: 1px solid #333; border-radius: 16px; padding: 5px 13px;
-          font-size: 13.5px; color: #e6e6e6; white-space: nowrap; }
-  .chip b { color: #1db954; font-weight: 600; }
-  .chip-source { color: #8a8a8a; font-size: 12px; }
+  .app-head { display: flex; align-items: center; gap: 13px; }
+  .app-head .logo { flex: none; }
+  .app-name { font-size: 23px; font-weight: 800; color: #fff; letter-spacing: 0.08em; line-height: 1.1; }
+  .app-tagline { font-size: 13px; color: #9a9a9a; margin-top: 2px; }
   .listening { display: flex; flex-direction: column; align-items: center; justify-content: center;
                gap: 22px; height: 60vh; color: #b3b3b3; font-size: 18px; }
   .pulse { width: 74px; height: 74px; border-radius: 50%; background: #1db954; animation: pulse 1.3s ease-in-out infinite; }
   @keyframes pulse { 0%, 100% { transform: scale(0.75); opacity: 0.55; } 50% { transform: scale(1.1); opacity: 1; } }
-  .notice { color: #b3b3b3; font-size: 13px; margin: 2px 0 8px; }
 </style>
 """
+HEADER_HTML = (f'<div class="app-head">{LOGO_SVG}<div><div class="app-name">{APP_NAME}</div>'
+               f'<div class="app-tagline">{TAGLINE}</div></div></div>')
 LISTENING_HTML = '<div class="listening"><div class="pulse"></div><div>Listening to your mood...</div></div>'
 
 
@@ -94,24 +106,83 @@ def load_text_model():
     return tokenizer, text_model
 
 
-def scan_face():
-    """Face model softmax output averaged over webcam frames with a face, or None if no face was seen."""
+def face_view(face_probs):
+    """Face probabilities as the fusion sees them: canonical order, calibrated."""
+    return calibrate(align_face(face_probs), FUSION_CONFIG["face_temperature"])
+
+
+def text_view(text_probs):
+    return calibrate(align_text(text_probs), FUSION_CONFIG["text_temperature"])
+
+
+def read_faces(frame, model, detector):
+    """[(box, face-model softmax output)] for every face the Haar detector finds in a frame."""
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    found = []
+    for (x, y, w, h) in detector.detectMultiScale(gray, scaleFactor=1.3, minNeighbors=5):
+        # The model was trained on pixels scaled to 0-1, not raw 0-255.
+        crop = cv2.resize(gray[y:y + h, x:x + w], (48, 48))[None, :, :, None].astype('float32') / 255.0
+        found.append(((int(x), int(y), int(w), int(h)), model.predict(crop, verbose=0)[0]))
+    return found
+
+
+def scan_picture(frame, box, label):
+    """The scan frame as an in-memory JPEG data URI, with the face box and label drawn on it.
+
+    Nothing is written to disk: the picture only lives in the page and the session.
+    """
+    frame = frame.copy()
+    if box is not None:
+        x, y, w, h = box
+        scale = max(frame.shape[1] / 640, 0.5)
+        thick = max(2, round(2 * scale))
+        cv2.rectangle(frame, (x, y), (x + w, y + h), BOX_GREEN, thick)
+        (tw, th), base = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.85 * scale, thick)
+        top = max(y - th - base - 8, 0)
+        cv2.rectangle(frame, (x, top), (x + tw + 12, top + th + base + 8), BOX_GREEN, -1)
+        cv2.putText(frame, label, (x + 6, top + th + 4), cv2.FONT_HERSHEY_SIMPLEX, 0.85 * scale, (0, 0, 0), thick, cv2.LINE_AA)
+    if frame.shape[1] > SCAN_IMAGE_WIDTH:
+        height = round(frame.shape[0] * SCAN_IMAGE_WIDTH / frame.shape[1])
+        frame = cv2.resize(frame, (SCAN_IMAGE_WIDTH, height), interpolation=cv2.INTER_AREA)
+    ok, jpeg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    return "data:image/jpeg;base64," + base64.b64encode(jpeg.tobytes()).decode() if ok else None
+
+
+def summarise_scan(frames):
+    """Average the face model over all faces in `frames` and keep one frame to show.
+
+    Returns {"face_probs": averaged softmax or None, "image": data URI or None, "face_found": bool}.
+    The frame shown is the one with the largest face, or the last frame if no face was seen.
+    """
     model = load_face_model()
     detector = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+    all_probs, shown, shown_box, last = [], None, None, None
+    for frame in frames:
+        last = frame
+        for box, probs in read_faces(frame, model, detector):
+            all_probs.append(probs)
+            if shown_box is None or box[2] * box[3] > shown_box[2] * shown_box[3]:
+                shown, shown_box = frame, box
+    if not all_probs:
+        return {"face_probs": None, "face_found": False,
+                "image": scan_picture(last, None, "") if last is not None else None}
+    face_probs = np.mean(all_probs, axis=0)
+    view = face_view(face_probs)
+    label = f"{EMOTIONS[int(view.argmax())]} {view.max():.0%}"
+    return {"face_probs": face_probs, "face_found": True, "image": scan_picture(shown, shown_box, label)}
+
+
+def webcam_frames():
     cv2.ocl.setUseOpenCL(False)
     cap = cv2.VideoCapture(0)
-    frame_probs = []
-    for _ in range(FRAMES_TO_SCAN):
-        ret, frame = cap.read()
-        if not ret:
-            break
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        for (x, y, w, h) in detector.detectMultiScale(gray, scaleFactor=1.3, minNeighbors=5):
-            # The model was trained on pixels scaled to 0-1, not raw 0-255.
-            crop = cv2.resize(gray[y:y + h, x:x + w], (48, 48))[None, :, :, None].astype('float32') / 255.0
-            frame_probs.append(model.predict(crop, verbose=0)[0])
-    cap.release()
-    return np.mean(frame_probs, axis=0) if frame_probs else None
+    try:
+        for _ in range(FRAMES_TO_SCAN):
+            ret, frame = cap.read()
+            if not ret:
+                break
+            yield frame
+    finally:
+        cap.release()
 
 
 def text_probabilities(text):
@@ -154,20 +225,49 @@ def build_queue(songs, emotions, fused, mode_choice):
     if mode_choice == "Uplift" or (mode_choice == "Auto" and uplift.should_uplift(fused)):
         tracks, journey = player.uplift_queue(songs, fused, emotions)
         if tracks:
-            path = " → ".join([journey["start_emotion"]] + journey["targets"])
             steps = sum(track["section"] == "journey" for track in tracks)
             return {"mode": "Uplift", "tracks": tracks, "journey": player.journey_summary(journey),
-                    "title": "Lifting your mood", "note": None, "loop_from": steps,
-                    "subtitle": f"{path} · {steps} songs in order, then more {journey['targets'][-1]} songs"}
+                    "note": None, "loop_from": steps,
+                    "subtitle": f"{steps} songs in order, then more {journey['targets'][-1]} songs"}
         if tracks is None:
             note = (f"Uplift is for low moods. Sad, angry, fearful and disgusted feelings make up only "
-                    f"{uplift.negative_share(fused):.0%} of this result, so here are songs that match your mood instead.")
+                    f"{uplift.negative_share(fused):.0%} of this result, so these songs match your mood instead.")
         else:
-            note = "No playable songs were found along the Uplift path right now, so here are songs that match your mood instead."
+            note = "No playable songs were found along the Uplift path, so these songs match your mood instead."
     buckets = {bucket: rows for bucket, rows in songs.groupby("bucket")}
     tracks = player.resonance_queue(buckets, emotions)
-    return {"mode": "Resonance", "tracks": tracks, "journey": None, "title": "Songs for your mood",
-            "subtitle": f"{', '.join(emotions)} · {len(tracks)} songs", "note": note, "loop_from": 0}
+    return {"mode": "Resonance", "tracks": tracks, "journey": None, "note": note, "loop_from": 0,
+            "subtitle": f"{len(tracks)} {' and '.join(emotions)} songs"}
+
+
+def build_view(scan, face_probs, text_probs, fused, queue, user_text):
+    """What the page's panels show: the scan picture, the emotion bars and the mood card."""
+    order = mood.ranked(fused)
+    groups = []
+    if face_probs is not None:
+        face = dict(zip(EMOTIONS, face_view(face_probs)))
+        groups.append({"key": "face", "values": [round(float(face[e]), 4) for e in order]})
+    if text_probs is not None:
+        text = dict(zip(EMOTIONS, text_view(text_probs)))
+        groups.append({"key": "text", "values": [round(float(text[e]), 4) for e in order]})
+    groups.append({"key": "combined", "values": [round(float(fused[e]), 4) for e in order]})
+    if len(groups) == 3:
+        caption = "Combined = face and text fused"
+    elif face_probs is not None:
+        caption = "Only your face was read, so Combined is the same as Face."
+    else:
+        caption = "Only your text was read, so Combined is the same as Text."
+
+    scan_note = None
+    if not scan["face_found"]:
+        scan_note = ("No face was found in this picture, so your mood came from the text."
+                     if scan["image"] else "The webcam gave no picture, so your mood came from the text.")
+    elif user_text.strip() and text_probs is None:
+        scan_note = "The text model isn't available on this machine, so only your face was read."
+    return {"scan": {"image": scan["image"], "note": scan_note},
+            "bars": {"emotions": order, "groups": groups, "caption": caption},
+            "card": mood.card(fused, queue["mode"], queue["journey"]),
+            "note": queue["note"]}
 
 
 st.markdown(PAGE_CSS, unsafe_allow_html=True)
@@ -179,6 +279,7 @@ songs = load_songs()
 state = st.session_state
 
 head, rescan_slot, settings_slot = st.columns([8, 1.1, 0.7], vertical_alignment="center")
+head.markdown(HEADER_HTML, unsafe_allow_html=True)
 with settings_slot:
     with st.popover("⚙", help="Settings"):
         mode_choice = st.radio("Mode", MODES, key="mode_choice",
@@ -188,52 +289,38 @@ with settings_slot:
                                   placeholder="e.g. Finally finished my exams!")
 with rescan_slot:
     if st.button("Re-scan", help="Look at the webcam again"):
-        state.pop("face_probs", None)
+        state.pop("scan", None)
 
 # The webcam is only opened on first load and on Re-scan; changing a setting
-# reuses the cached face result.
-if "face_probs" not in state:
+# reuses the cached scan (face result and picture, both kept in memory only).
+if "scan" not in state:
     listening = st.empty()
     listening.markdown(LISTENING_HTML, unsafe_allow_html=True)
-    state["face_probs"] = scan_face()
+    state["scan"] = summarise_scan(webcam_frames())
     state["scan_id"] = state.get("scan_id", 0) + 1
     listening.empty()
 
-face_probs = state["face_probs"]
+scan = state["scan"]
+face_probs = scan["face_probs"]
 text_probs = text_probabilities(user_text)
 emotions, fused = combine_emotions(face_probs, text_probs)
 
 if fused is None:
-    head.markdown('<div class="app-head"><span class="app-name">Emotion Music Player</span>'
-                  '<span class="chip">No mood detected</span></div>', unsafe_allow_html=True)
     st.warning("I couldn't see a face. Press Re-scan, or open the ⚙ settings and tell me how you feel.")
     st.stop()
 
 # The queue is rebuilt only when the scan, the text or the mode changes, so
-# other reruns leave the player (and the music) alone.
+# other reruns leave the page (and the music) alone.
 queue_key = (state["scan_id"], user_text.strip(), mode_choice)
 if state.get("queue_key") != queue_key:
     state["queue"] = build_queue(songs, emotions, fused, mode_choice)
+    state["view"] = build_view(scan, face_probs, text_probs, fused, state["queue"], user_text)
     state["queue_key"] = queue_key
-queue = state["queue"]
+queue, view = state["queue"], state["view"]
 
-if face_probs is not None and text_probs is not None:
-    source = "face + text"
-elif face_probs is not None:
-    source = "face" + (" (text model not found)" if user_text.strip() and load_text_model() is None else "")
-else:
-    source = "text (no face detected)"
-feeling = ", ".join(f"{e} {fused[e]:.0%}" for e in emotions)
-head.markdown(
-    '<div class="app-head"><span class="app-name">Emotion Music Player</span>'
-    f'<span class="chip">Feeling: {html.escape(feeling)} → <b>{queue["mode"]}</b></span>'
-    f'<span class="chip-source">from {html.escape(source)}</span></div>', unsafe_allow_html=True)
-
-if queue["note"]:
-    st.markdown(f'<div class="notice">{html.escape(queue["note"])}</div>', unsafe_allow_html=True)
 if previews.rate_limited():
-    st.markdown('<div class="notice">The preview service is limiting requests right now, so some songs could not be '
-                'checked. Re-scan in a minute for a fuller list.</div>', unsafe_allow_html=True)
+    st.caption("The preview service is limiting requests right now, so some songs could not be checked. "
+               "Re-scan in a minute for a fuller list.")
 if not queue["tracks"]:
     # Cache-only by default: only songs already in data/songs/previews.csv can be played.
     st.info("No songs with a saved preview match this mood yet. Fill the preview cache with "
@@ -243,5 +330,5 @@ if not queue["tracks"]:
 
 # When the queue ends it loops; after an Uplift journey it loops over the
 # "keep listening" songs rather than replaying the journey.
-components.html(player.render(queue["tracks"], queue["title"], queue["subtitle"], queue["journey"],
-                              loop_from=queue["loop_from"]), height=PLAYER_HEIGHT)
+components.html(player.render(queue["tracks"], queue["subtitle"], queue["journey"],
+                              loop_from=queue["loop_from"], view=view), height=PLAYER_HEIGHT)
