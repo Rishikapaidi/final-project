@@ -6,6 +6,8 @@ moves towards a better mood (Uplift). See UPLIFT.md, models/README.md and
 data/README.md for how each part works.
 """
 import base64
+import hashlib
+import io
 import json
 import os
 
@@ -14,6 +16,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
+from PIL import Image, ImageOps
 from tensorflow.keras.layers import Conv2D, Dense, Dropout, Flatten, MaxPooling2D
 from tensorflow.keras.models import Sequential
 
@@ -42,6 +45,7 @@ with open(os.path.join(BASE_DIR, "models", "fusion", "fusion_config.json")) as f
 MIN_EMOTION_SHARE = 0.15
 FRAMES_TO_SCAN = 20
 SCAN_IMAGE_WIDTH = 480
+PHOTO_MAX_WIDTH = 1280  # uploaded photos are shrunk to this before face detection
 BOX_GREEN = (84, 185, 29)  # the accent green, in OpenCV's blue-green-red order
 MODES = ["Auto", "Resonance", "Uplift"]
 PLAYER_HEIGHT = 680
@@ -185,6 +189,17 @@ def webcam_frames():
         cap.release()
 
 
+def photo_frame(data):
+    """An uploaded photo as an OpenCV frame, decoded in memory (or None if it isn't a picture)."""
+    try:
+        picture = ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert("RGB")
+    except Exception:
+        return None
+    if picture.width > PHOTO_MAX_WIDTH:
+        picture = picture.resize((PHOTO_MAX_WIDTH, round(picture.height * PHOTO_MAX_WIDTH / picture.width)))
+    return cv2.cvtColor(np.asarray(picture), cv2.COLOR_RGB2BGR)
+
+
 def text_probabilities(text):
     """Text model softmax output (TEXT_MODEL_LABELS order), or None if unavailable."""
     loaded = load_text_model()
@@ -258,7 +273,7 @@ def build_view(scan, face_probs, text_probs, fused, queue, user_text):
     else:
         caption = "Only your text was read, so Combined is the same as Text."
 
-    scan_note = None
+    scan_note = "From your uploaded photo." if scan["source"] == "photo" else None
     if not scan["face_found"]:
         scan_note = ("No face was found in this picture, so your mood came from the text."
                      if scan["image"] else "The webcam gave no picture, so your mood came from the text.")
@@ -287,16 +302,31 @@ with settings_slot:
                                          "Songs that match my mood", "Gently lift my mood"])
         user_text = st.text_input("Tell me how you feel (optional)", key="user_text",
                                   placeholder="e.g. Finally finished my exams!")
+        photo = st.file_uploader("Upload a photo instead", type=["jpg", "jpeg", "png"], key="photo",
+                                 help="A backup if the webcam doesn't work. The photo is read once and not saved.")
 with rescan_slot:
     if st.button("Re-scan", help="Look at the webcam again"):
         state.pop("scan", None)
+
+# A newly uploaded photo replaces the scan. It is read from memory with the same
+# face detection as the webcam frames, and the webcam is not opened for it.
+if photo is not None:
+    photo_id = hashlib.md5(photo.getvalue()).hexdigest()
+    if state.get("photo_id") != photo_id:
+        state["photo_id"] = photo_id
+        frame = photo_frame(photo.getvalue())
+        if frame is None:
+            st.warning("That file couldn't be read as a picture. Try a JPEG or PNG.")
+        else:
+            state["scan"] = {**summarise_scan([frame]), "source": "photo"}
+            state["scan_id"] = state.get("scan_id", 0) + 1
 
 # The webcam is only opened on first load and on Re-scan; changing a setting
 # reuses the cached scan (face result and picture, both kept in memory only).
 if "scan" not in state:
     listening = st.empty()
     listening.markdown(LISTENING_HTML, unsafe_allow_html=True)
-    state["scan"] = summarise_scan(webcam_frames())
+    state["scan"] = {**summarise_scan(webcam_frames()), "source": "webcam"}
     state["scan_id"] = state.get("scan_id", 0) + 1
     listening.empty()
 
@@ -306,7 +336,8 @@ text_probs = text_probabilities(user_text)
 emotions, fused = combine_emotions(face_probs, text_probs)
 
 if fused is None:
-    st.warning("I couldn't see a face. Press Re-scan, or open the ⚙ settings and tell me how you feel.")
+    st.warning("I couldn't see a face. Press Re-scan, or open the ⚙ settings to tell me how you feel "
+               "or upload a photo.")
     st.stop()
 
 # The queue is rebuilt only when the scan, the text or the mode changes, so
