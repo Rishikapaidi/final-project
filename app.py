@@ -22,6 +22,7 @@ from fusion import EMOTIONS, align_face, align_text, calibrate, fuse
 import mood
 import player
 import previews
+import textmodel
 import uplift
 
 APP_NAME = "MOOD TUNE"
@@ -109,15 +110,14 @@ def load_face_model():
     return model
 
 
-@st.cache_resource(show_spinner=False)
 def load_text_model():
-    """DistilBERT text-emotion model, or None if it hasn't been trained on this machine."""
-    if not os.path.isdir(TEXT_MODEL_DIR):
-        return None
-    from transformers import AutoModelForSequenceClassification, AutoTokenizer
-    tokenizer = AutoTokenizer.from_pretrained(TEXT_MODEL_DIR)
-    text_model = AutoModelForSequenceClassification.from_pretrained(TEXT_MODEL_DIR).eval()
-    return tokenizer, text_model
+    """DistilBERT text-emotion model, or None if it hasn't been trained on this machine.
+
+    Loaded once per server process by textmodel.load(), which the background
+    warm-up (started after the first page is shown) may already have done. If
+    the warm-up is still running, this waits for it instead of loading again.
+    """
+    return textmodel.load(TEXT_MODEL_DIR)
 
 
 def face_view(face_probs):
@@ -387,3 +387,8 @@ if not queue["tracks"]:
 # "keep listening" songs rather than replaying the journey.
 components.html(player.render(queue["tracks"], queue["subtitle"], queue["journey"],
                               loop_from=queue["loop_from"], view=view), height=PLAYER_HEIGHT)
+
+# Now that the page is up, load the text model in the background (once per
+# server process), so it is usually ready before anyone types. The thread
+# only imports and loads the model; it never touches Streamlit.
+textmodel.warm_up(TEXT_MODEL_DIR)

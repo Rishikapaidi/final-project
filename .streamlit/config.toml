@@ -7,3 +7,10 @@ textColor = "#ffffff"
 
 [client]
 toolbarMode = "minimal"
+
+[server]
+# Streamlit's file watcher inspects every loaded module on each rerun. Once the
+# text model (transformers) is loaded, that triggers hundreds of lazy imports
+# and made each rerun ~6 s slower. With it off, edit-and-reload needs a
+# restart of the app during development.
+fileWatcherType = "none"
