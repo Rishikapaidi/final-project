@@ -17,8 +17,6 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 from PIL import Image, ImageOps
-from tensorflow.keras.layers import Conv2D, Dense, Dropout, Flatten, MaxPooling2D
-from tensorflow.keras.models import Sequential
 
 from fusion import EMOTIONS, align_face, align_text, calibrate, fuse
 import mood
@@ -67,21 +65,33 @@ PAGE_CSS = """
                gap: 22px; height: 60vh; color: #b3b3b3; font-size: 18px; }
   .pulse { width: 74px; height: 74px; border-radius: 50%; background: #1db954; animation: pulse 1.3s ease-in-out infinite; }
   @keyframes pulse { 0%, 100% { transform: scale(0.75); opacity: 0.55; } 50% { transform: scale(1.1); opacity: 1; } }
+  .reading { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); z-index: 1000;
+             display: inline-flex; align-items: center; gap: 10px; color: #b3b3b3; font-size: 14px;
+             background: #1b1b1b; border: 1px solid #2c2c2c; border-radius: 16px; padding: 7px 16px; box-shadow: 0 4px 14px rgba(0,0,0,.5); }
+  .reading .dot { width: 10px; height: 10px; border-radius: 50%; background: #1db954; animation: pulse 1.1s ease-in-out infinite; }
 </style>
 """
 HEADER_HTML = (f'<div class="app-head">{LOGO_SVG}<div><div class="app-name">{APP_NAME}</div>'
                f'<div class="app-tagline">{TAGLINE}</div></div></div>')
 LISTENING_HTML = '<div class="listening"><div class="pulse"></div><div>Listening to your mood...</div></div>'
+READING_HTML = '<div class="reading"><span class="dot"></span>Reading your text...</div>'
 
 
-@st.cache_data
+# The cached loaders never show a spinner: on a cold start Streamlit would
+# otherwise print "Running <function name>()" on the page.
+@st.cache_data(show_spinner=False)
 def load_songs():
     """Songs with one emotion bucket each, built by scripts/prepare_songs.py (see data/README.md)."""
     return pd.read_csv(SONGS_FILE, keep_default_na=False)
 
 
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def load_face_model():
+    # TensorFlow is imported here, not at the top of the file, so the page can
+    # appear (with "Listening to your mood...") before it has finished loading.
+    from tensorflow.keras.layers import Conv2D, Dense, Dropout, Flatten, MaxPooling2D
+    from tensorflow.keras.models import Sequential
+
     model = Sequential()
     model.add(Conv2D(32, kernel_size=(3, 3), activation='relu', input_shape=(48, 48, 1)))
     model.add(Conv2D(64, kernel_size=(3, 3), activation='relu'))
@@ -99,7 +109,7 @@ def load_face_model():
     return model
 
 
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def load_text_model():
     """DistilBERT text-emotion model, or None if it hasn't been trained on this machine."""
     if not os.path.isdir(TEXT_MODEL_DIR):
@@ -201,9 +211,15 @@ def photo_frame(data):
 
 
 def text_probabilities(text):
-    """Text model softmax output (TEXT_MODEL_LABELS order), or None if unavailable."""
+    """Text model softmax output (TEXT_MODEL_LABELS order), or None if unavailable.
+
+    Empty text returns straight away, so the text model (and torch) are only
+    loaded once someone actually types something.
+    """
+    if not text.strip():
+        return None
     loaded = load_text_model()
-    if loaded is None or not text.strip():
+    if loaded is None:
         return None
     import torch
     tokenizer, text_model = loaded
@@ -332,7 +348,15 @@ if "scan" not in state:
 
 scan = state["scan"]
 face_probs = scan["face_probs"]
-text_probs = text_probabilities(user_text)
+# Each distinct text is read once per session. The first read also loads the
+# text model, so a friendly message stands in while it happens.
+text_results = state.setdefault("text_results", {})
+if user_text.strip() and user_text.strip() not in text_results:
+    reading = st.empty()
+    reading.markdown(READING_HTML, unsafe_allow_html=True)
+    text_results[user_text.strip()] = text_probabilities(user_text)
+    reading.empty()
+text_probs = text_results.get(user_text.strip())
 emotions, fused = combine_emotions(face_probs, text_probs)
 
 if fused is None:
