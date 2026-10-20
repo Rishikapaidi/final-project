@@ -7,18 +7,19 @@ data/README.md for how each part works.
 """
 import base64
 import hashlib
-import io
 import json
+import math
 import os
+import time
 
 import cv2
 import numpy as np
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
-from PIL import Image, ImageOps
 
 from fusion import EMOTIONS, align_face, align_text, calibrate, fuse
+import face
 import mood
 import player
 import previews
@@ -42,9 +43,12 @@ with open(os.path.join(BASE_DIR, "models", "fusion", "fusion_config.json")) as f
     FUSION_CONFIG = json.load(f)
 # Emotions whose fused probability is at least this share go into the playlist mix.
 MIN_EMOTION_SHARE = 0.15
-FRAMES_TO_SCAN = 20
+# Guided webcam scan: a short countdown, then a few seconds of capture.
+GET_READY_SECONDS = 2
+CAPTURE_SECONDS = 3
+WARM_UP_FRAMES = 5         # first frames of the capture are dropped (exposure still settling)
+MAX_CAPTURE_FRAMES = 120   # safety cap (about 4 s at 30 frames a second)
 SCAN_IMAGE_WIDTH = 480
-PHOTO_MAX_WIDTH = 1280  # uploaded photos are shrunk to this before face detection
 BOX_GREEN = (84, 185, 29)  # the accent green, in OpenCV's blue-green-red order
 MODES = ["Auto", "Resonance", "Uplift"]
 PLAYER_HEIGHT = 680
@@ -65,6 +69,7 @@ PAGE_CSS = """
   .listening { display: flex; flex-direction: column; align-items: center; justify-content: center;
                gap: 22px; height: 60vh; color: #b3b3b3; font-size: 18px; }
   .pulse { width: 74px; height: 74px; border-radius: 50%; background: #1db954; animation: pulse 1.3s ease-in-out infinite; }
+  .listening-detail { font-size: 14px; color: #8a8a8a; margin-top: -12px; }
   @keyframes pulse { 0%, 100% { transform: scale(0.75); opacity: 0.55; } 50% { transform: scale(1.1); opacity: 1; } }
   .reading { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); z-index: 1000;
              display: inline-flex; align-items: center; gap: 10px; color: #b3b3b3; font-size: 14px;
@@ -74,7 +79,6 @@ PAGE_CSS = """
 """
 HEADER_HTML = (f'<div class="app-head">{LOGO_SVG}<div><div class="app-name">{APP_NAME}</div>'
                f'<div class="app-tagline">{TAGLINE}</div></div></div>')
-LISTENING_HTML = '<div class="listening"><div class="pulse"></div><div>Listening to your mood...</div></div>'
 READING_HTML = '<div class="reading"><span class="dot"></span>Reading your text...</div>'
 
 
@@ -88,26 +92,9 @@ def load_songs():
 
 @st.cache_resource(show_spinner=False)
 def load_face_model():
-    # TensorFlow is imported here, not at the top of the file, so the page can
-    # appear (with "Listening to your mood...") before it has finished loading.
-    from tensorflow.keras.layers import Conv2D, Dense, Dropout, Flatten, MaxPooling2D
-    from tensorflow.keras.models import Sequential
-
-    model = Sequential()
-    model.add(Conv2D(32, kernel_size=(3, 3), activation='relu', input_shape=(48, 48, 1)))
-    model.add(Conv2D(64, kernel_size=(3, 3), activation='relu'))
-    model.add(MaxPooling2D(pool_size=(2, 2)))
-    model.add(Conv2D(128, kernel_size=(3, 3), activation='relu'))
-    model.add(MaxPooling2D(pool_size=(2, 2)))
-    model.add(Conv2D(128, kernel_size=(3, 3), activation='relu'))
-    model.add(MaxPooling2D(pool_size=(2, 2)))
-    model.add(Dropout(0.25))
-    model.add(Flatten())
-    model.add(Dense(1024, activation='relu'))
-    model.add(Dropout(0.5))
-    model.add(Dense(7, activation='softmax'))
-    model.load_weights(os.path.join(BASE_DIR, 'model.h5'))
-    return model
+    # TensorFlow is only imported inside face.build_model(), so the page can
+    # appear (with the scan screen) before it has finished loading.
+    return face.build_model(os.path.join(BASE_DIR, 'model.h5'))
 
 
 def load_text_model():
@@ -127,17 +114,6 @@ def face_view(face_probs):
 
 def text_view(text_probs):
     return calibrate(align_text(text_probs), FUSION_CONFIG["text_temperature"])
-
-
-def read_faces(frame, model, detector):
-    """[(box, face-model softmax output)] for every face the Haar detector finds in a frame."""
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    found = []
-    for (x, y, w, h) in detector.detectMultiScale(gray, scaleFactor=1.3, minNeighbors=5):
-        # The model was trained on pixels scaled to 0-1, not raw 0-255.
-        crop = cv2.resize(gray[y:y + h, x:x + w], (48, 48))[None, :, :, None].astype('float32') / 255.0
-        found.append(((int(x), int(y), int(w), int(h)), model.predict(crop, verbose=0)[0]))
-    return found
 
 
 def scan_picture(frame, box, label):
@@ -165,49 +141,72 @@ def scan_picture(frame, box, label):
 def summarise_scan(frames):
     """Average the face model over all faces in `frames` and keep one frame to show.
 
-    Returns {"face_probs": averaged softmax or None, "image": data URI or None, "face_found": bool}.
-    The frame shown is the one with the largest face, or the last frame if no face was seen.
+    Returns {"face_probs": averaged softmax or None, "image": data URI or None,
+    "face_found": bool, "frames": n, "faces": n}. The frame shown is the one with
+    the largest face, or the last frame if no face was seen.
     """
     model = load_face_model()
-    detector = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-    all_probs, shown, shown_box, last = [], None, None, None
+    face_detector = face.detector()
+    crops, shown, shown_box, last = [], None, None, None
     for frame in frames:
         last = frame
-        for box, probs in read_faces(frame, model, detector):
-            all_probs.append(probs)
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        for box in face.find_faces(gray, face_detector):
+            crops.append(face.crop(gray, box))
             if shown_box is None or box[2] * box[3] > shown_box[2] * shown_box[3]:
                 shown, shown_box = frame, box
-    if not all_probs:
-        return {"face_probs": None, "face_found": False,
+    if not crops:
+        return {"face_probs": None, "face_found": False, "frames": len(frames), "faces": 0,
                 "image": scan_picture(last, None, "") if last is not None else None}
-    face_probs = np.mean(all_probs, axis=0)
+    face_probs = face.predict(model, crops).mean(axis=0)
     view = face_view(face_probs)
     label = f"{EMOTIONS[int(view.argmax())]} {view.max():.0%}"
-    return {"face_probs": face_probs, "face_found": True, "image": scan_picture(shown, shown_box, label)}
+    return {"face_probs": face_probs, "face_found": True, "frames": len(frames), "faces": len(crops),
+            "image": scan_picture(shown, shown_box, label)}
 
 
-def webcam_frames():
+def scan_screen(title, detail=""):
+    return (f'<div class="listening"><div class="pulse"></div><div>{title}</div>'
+            f'<div class="listening-detail">{detail}</div></div>')
+
+
+def guided_webcam_scan(screen):
+    """A short guided scan: "Get ready..." for GET_READY_SECONDS, then capture for CAPTURE_SECONDS.
+
+    The first WARM_UP_FRAMES captured frames are dropped. Returns the frames kept
+    (an empty list if there is no webcam). `screen` is an st.empty() that shows
+    the instructions.
+    """
     cv2.ocl.setUseOpenCL(False)
     cap = cv2.VideoCapture(0)
     try:
-        for _ in range(FRAMES_TO_SCAN):
-            ret, frame = cap.read()
-            if not ret:
+        if not cap.isOpened():
+            return []
+        # Countdown. Reading frames meanwhile lets the camera adjust to the light;
+        # these frames are not used.
+        end, shown = time.time() + GET_READY_SECONDS, None
+        while (left := end - time.time()) > 0:
+            if math.ceil(left) != shown:
+                shown = math.ceil(left)
+                screen.markdown(scan_screen("Get ready...", f"Look at the camera &middot; {shown}"), unsafe_allow_html=True)
+            if not cap.read()[0]:
+                return []
+        screen.markdown(scan_screen("Hold your expression...", "Reading your face for a few seconds"),
+                        unsafe_allow_html=True)
+        frames, end = [], time.time() + CAPTURE_SECONDS
+        while time.time() < end and len(frames) < WARM_UP_FRAMES + MAX_CAPTURE_FRAMES:
+            ok, frame = cap.read()
+            if not ok:
                 break
-            yield frame
+            frames.append(frame)
+        return frames[WARM_UP_FRAMES:]
     finally:
         cap.release()
 
 
 def photo_frame(data):
     """An uploaded photo as an OpenCV frame, decoded in memory (or None if it isn't a picture)."""
-    try:
-        picture = ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert("RGB")
-    except Exception:
-        return None
-    if picture.width > PHOTO_MAX_WIDTH:
-        picture = picture.resize((PHOTO_MAX_WIDTH, round(picture.height * PHOTO_MAX_WIDTH / picture.width)))
-    return cv2.cvtColor(np.asarray(picture), cv2.COLOR_RGB2BGR)
+    return face.load_photo(data)
 
 
 def text_probabilities(text):
@@ -341,8 +340,12 @@ if photo is not None:
 # reuses the cached scan (face result and picture, both kept in memory only).
 if "scan" not in state:
     listening = st.empty()
-    listening.markdown(LISTENING_HTML, unsafe_allow_html=True)
-    state["scan"] = {**summarise_scan(webcam_frames()), "source": "webcam"}
+    # The face model loads first, so the countdown and capture are not held up by it.
+    listening.markdown(scan_screen("Listening to your mood...", "Starting the camera"), unsafe_allow_html=True)
+    load_face_model()
+    frames = guided_webcam_scan(listening)
+    listening.markdown(scan_screen("Listening to your mood...", "Reading your expression"), unsafe_allow_html=True)
+    state["scan"] = {**summarise_scan(frames), "source": "webcam"}
     state["scan_id"] = state.get("scan_id", 0) + 1
     listening.empty()
 
