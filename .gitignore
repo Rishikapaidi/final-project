@@ -11,6 +11,8 @@ data/*
 data/songs/*
 !data/songs/songs_clean.csv
 !data/songs/previews.csv
+# Raw song sources (large, not committed)
+data/songs/raw/
 
 # Trained models: rebuild with scripts/train_text_emotion.py and
 # scripts/train_text_emotion_distilbert.py (their reports stay tracked)
