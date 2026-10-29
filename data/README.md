@@ -109,17 +109,28 @@ folder to recompute.
 
 ## Songs: `data/songs/songs_clean.csv`
 
-The song list the app recommends from. It is committed to git (1.6 MB), so
-there is nothing to run after cloning. To rebuild it from `muse_v3.csv` (which
-is kept untouched in the project root):
+The song list the app recommends from: 10,901 English songs from Muse and
+25,815 songs in Hindi, Tamil, Telugu, Malayalam and Korean from a Spotify
+dataset (see "Songs in other languages" below). It is committed to git
+(7.4 MB), so there is nothing to run after cloning. To rebuild it from
+`muse_v3.csv` (kept untouched in the project root) and
+`data/songs/raw/spotify_tracks.csv` (not committed; without it only the
+English songs are written):
 
 ```
 python scripts/prepare_songs.py
 ```
 
 Columns: `title`, `artist`, `valence_tags` (positivity, about 0.2–8.5),
-`arousal_tags` (energy, about 0.1–7.3), `seeds` (mood words), `bucket` and
-`lastfm_url`.
+`arousal_tags` (energy, about 0.1–7.3), `seeds` (mood words; empty for the
+Spotify songs), `bucket`, `lastfm_url` (the song's link: Last.fm for Muse
+songs, Spotify for the others; the name is kept because the app and the
+preview cache look songs up by it), `link_source` ("Last.fm" or "Spotify"),
+`language`, `artwork_url` (Spotify songs only), and `spotify_valence` /
+`spotify_energy` (the original 0–1 Spotify values, Spotify songs only).
+
+The sections below up to "Songs in other languages" describe the English
+(Muse) songs.
 
 ### Why the original buckets were wrong
 
@@ -201,6 +212,59 @@ About 1,870 overwritten rows tagged angry, aggressive, hostile or outraged
 still carry the original song's `mbid` or `spotify_id`. Their real titles and
 artists could be looked up through MusicBrainz (free, no account) to give the
 angry bucket genuinely angry songs. This has not been tried.
+
+### Songs in other languages
+
+**Source:** "Spotify Tracks Dataset (Updated Every Week)" by gauthamvijayaraj on
+Kaggle, licensed Apache 2.0, downloaded 2026-10-28 to
+`data/songs/raw/spotify_tracks.csv` (62,317 rows, not committed).
+
+**Which rows:** languages Hindi, Tamil, Telugu, Malayalam and Korean.
+Skipped: language "Unknown" (13,005 rows), rows with -1 for valence or energy
+(12 in these languages), repeated `track_id`s (75), and 18 songs caught by the
+same profanity filter as above. 25,815 songs are kept: Tamil 12,604,
+Korean 6,873, Hindi 5,735, Telugu 321, Malayalam 282. "English" stays the Muse
+songs.
+
+**Conversion to the Muse scale.** Spotify's valence and energy run from 0 to 1
+and are computed from the audio; the Muse values are averages of listener mood
+tags. Each Spotify song gets the Muse value at the same percentile: a song at
+the 40th percentile of Spotify valence (across all 25,815 added songs) gets the
+40th percentile of the Muse songs' `valence_tags`, and energy is mapped onto
+`arousal_tags` the same way. Differences between languages are kept: Tamil
+songs end up more positive on average and Korean songs more energetic.
+
+**Buckets.** These songs have no mood words, so each goes to the nearest
+bucket centre: the mean valence/arousal of the Muse songs in that bucket, with
+distance scaled by the Muse songs' spread (the same distance Uplift uses).
+
+| Language | happy | sad | angry | fear | disgust | surprise | neutral |
+|---|---|---|---|---|---|---|---|
+| Hindi | 697 | 1,288 | 760 | 753 | 1,026 | 683 | 528 |
+| Tamil | 2,101 | 2,318 | 1,453 | 899 | 964 | 1,243 | 3,626 |
+| Telugu | 45 | 59 | 51 | 37 | 52 | 42 | 35 |
+| Malayalam | 33 | 60 | 58 | 29 | 43 | 29 | 30 |
+| Korean | 775 | 652 | 2,153 | 1,003 | 723 | 1,207 | 360 |
+
+**Weaknesses.**
+
+- **The two scales only loosely agree.** 45 songs appear in both Muse and the
+  Spotify file; on those, Spotify valence correlates with Muse valence at
+  r = 0.50 and Spotify energy with Muse arousal at r = 0.28. That is too few
+  songs to fit a better mapping, and the conversion is an assumption.
+- **The negative buckets are ambiguous.** Valence and arousal cannot tell sad,
+  angry, fear and disgust apart (see "Known weaknesses" above); 43% of the
+  added songs in those buckets are almost as close to a second bucket centre.
+- **Angry catches upbeat, energetic songs.** The Muse angry centre sits at
+  valence 4.01, which corresponds to Spotify valence of about 0.5, the middle of
+  the scale. So mid-valence, high-energy songs land in angry: 53–83% of each
+  language's angry songs have Spotify valence of 0.5 or more, including much of
+  the energetic K-pop in Korean angry (2,153 songs).
+- **Telugu and Malayalam are small** (321 and 282 songs), which is too few for
+  Uplift journeys.
+- **The profanity filter is an English word list.** It does not cover slurs or
+  profanity in Hindi, Tamil, Telugu, Malayalam or Korean, written in Latin
+  script or otherwise.
 
 ## Song previews: `data/songs/previews.csv`
 
