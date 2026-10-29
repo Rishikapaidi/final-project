@@ -58,8 +58,24 @@ def _loosely_same(a, b):
     return bool(a) and bool(b) and (a in b or b in a)
 
 
+def _first_artist(artist):
+    """The first-listed artist of a credit like "A, B & C feat. D"."""
+    return re.split(r",|&|;|\s+(?:feat\.?|ft\.?|featuring|with|x)\s+", str(artist), maxsplit=1, flags=re.I)[0]
+
+
+def _title_matches(title, found_title):
+    return _loosely_same(title, found_title) or bool(_words(title) & _words(found_title))
+
+
 def search_itunes(title, artist):
     """Return {preview_url, artwork_url, itunes_title, itunes_artist}, or None if no match.
+
+    A result must loosely match the title and the artist. The artist is first
+    compared as a whole credit; only if no result matches that way is the
+    first-listed artist compared instead (multi-artist credits are often
+    spelled differently, e.g. "G. V. Prakash, Saindhavi" vs "G.V. Prakash
+    Kumar, Saindhavi"). Songs that matched before therefore keep the same
+    result.
 
     Raises RateLimited when the API refuses the request.
     """
@@ -68,16 +84,15 @@ def search_itunes(title, artist):
     if response.status_code in (403, 429):
         raise RateLimited()
     response.raise_for_status()
-    for result in response.json().get("results", []):
-        if not result.get("previewUrl"):
-            continue
-        if not _loosely_same(artist, result.get("artistName", "")):
-            continue
-        found_title = result.get("trackName", "")
-        if not (_loosely_same(title, found_title) or _words(title) & _words(found_title)):
-            continue
-        return {"preview_url": result["previewUrl"], "artwork_url": result.get("artworkUrl100", ""),
-                "itunes_title": found_title, "itunes_artist": result.get("artistName", "")}
+    results = [r for r in response.json().get("results", [])
+               if r.get("previewUrl") and _title_matches(title, r.get("trackName", ""))]
+    first = _first_artist(artist)
+    for same_artist in (lambda r: _loosely_same(artist, r.get("artistName", "")),
+                        lambda r: len(_norm(first)) >= 3 and _loosely_same(first, _first_artist(r.get("artistName", "")))):
+        for result in results:
+            if same_artist(result):
+                return {"preview_url": result["previewUrl"], "artwork_url": result.get("artworkUrl100", ""),
+                        "itunes_title": result.get("trackName", ""), "itunes_artist": result.get("artistName", "")}
     return None
 
 
