@@ -1,4 +1,4 @@
-"""Build a cleaned song file with seven emotion buckets from muse_v3.csv.
+"""Build a cleaned song file with seven emotion buckets from muse_v3.csv and Spotify tracks.
 
 muse_v3.csv is read only, never modified. Only its intact rows are used: the
 ones that still have a Last.fm link (about 36%). The rest had their title,
@@ -11,8 +11,28 @@ check. Songs with none of the listed words are dropped, and so are songs whose
 title or artist contains profanity, a slur or an explicit sexual word (whole
 words, see PROFANITY).
 
+These Muse songs are the "English" pool. Songs in Hindi, Tamil, Telugu,
+Malayalam and Korean come from data/songs/raw/spotify_tracks.csv (Spotify
+Tracks Dataset, gauthamvijayaraj, Kaggle, Apache 2.0). Rows with language
+"Unknown", rows with -1 for valence or energy, and repeated track_ids are
+skipped. Spotify's 0-1 valence and energy are put on the Muse scale by
+percentile: a song at the p-th percentile of Spotify valence (across all
+added songs) gets the p-th percentile of the Muse songs' valence_tags, and
+likewise energy -> arousal_tags. Each song then goes to the nearest bucket
+centre (the Muse buckets' mean valence/arousal, distance scaled by the Muse
+songs' spread, as Uplift measures it). These songs have no mood words, so
+their buckets rest on valence and arousal alone; see data/README.md for the
+weaknesses. The same profanity filter is applied.
+
 Writes data/songs/songs_clean.csv with columns:
-    title, artist, valence_tags, arousal_tags, seeds, bucket, lastfm_url
+    title, artist, valence_tags, arousal_tags, seeds, bucket, lastfm_url,
+    link_source, language, artwork_url, spotify_valence, spotify_energy
+lastfm_url holds the song's link: a Last.fm link for Muse songs and a Spotify
+link for the others (link_source says which). The column keeps its old name
+because the app and the preview cache look songs up by it.
+
+If the Spotify file is missing (it is not committed), only the Muse songs are
+written.
 
 Usage (from the project root):
     python scripts/prepare_songs.py
@@ -20,8 +40,15 @@ Usage (from the project root):
 import argparse
 import os
 import re
+import sys
 
+import numpy as np
 import pandas as pd
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import uplift  # noqa: E402
+
+SPOTIFY_LANGUAGES = ["Hindi", "Tamil", "Telugu", "Malayalam", "Korean"]
 
 BUCKET_WORDS = {
     "happy": ["happy", "fun", "cheerful", "positive", "joyous", "playful", "carefree", "uplifting",
@@ -95,6 +122,7 @@ def has_profanity(text):
 
 
 def build(source):
+    """The Muse ("English") songs; unchanged from before apart from the added columns."""
     raw = pd.read_csv(source)
     clean = raw[raw.lastfm_url.str.contains("last.fm/music", regex=False)].copy()
     seed_lists = clean.seeds.str.strip("[]").str.replace("'", "").str.split(", ")
@@ -117,12 +145,53 @@ def build(source):
     songs = songs[["title", "artist", "valence_tags", "arousal_tags", "seeds", "bucket", "lastfm_url"]]
     profane = songs.title.map(has_profanity) | songs.artist.map(has_profanity)
     stats["profanity in title or artist"] = int(profane.sum())
+    songs = songs.assign(link_source="Last.fm", language="English", artwork_url="",
+                         spotify_valence=np.nan, spotify_energy=np.nan)
+    return songs[~profane].reset_index(drop=True), stats, songs[profane].reset_index(drop=True)
+
+
+def percentile_map(values, target):
+    """Give each value the target value at the same percentile."""
+    return np.quantile(np.asarray(target, dtype=float), values.rank(pct=True, method="average").to_numpy())
+
+
+def build_spotify(source, muse):
+    """Songs in SPOTIFY_LANGUAGES, put on the Muse scale and into the nearest Muse bucket."""
+    raw = pd.read_csv(source, keep_default_na=False)
+    stats = {"Spotify rows": len(raw)}
+    rows = raw[raw.language.isin(SPOTIFY_LANGUAGES)].copy()
+    stats["in the five languages"] = len(rows)
+    rows["valence"], rows["energy"] = pd.to_numeric(rows.valence), pd.to_numeric(rows.energy)
+    missing = (rows.valence == -1) | (rows.energy == -1)
+    stats["valence or energy missing (-1)"] = int(missing.sum())
+    rows = rows[~missing]
+    repeated = rows.track_id.duplicated()
+    stats["repeated track_id"] = int(repeated.sum())
+    rows = rows[~repeated].copy()
+
+    rows["valence_tags"] = percentile_map(rows.valence, muse.valence_tags)
+    rows["arousal_tags"] = percentile_map(rows.energy, muse.arousal_tags)
+    centres = uplift.bucket_centres(muse)
+    names = sorted(centres)
+    scale = muse[["valence_tags", "arousal_tags"]].to_numpy().std(axis=0)
+    points = rows[["valence_tags", "arousal_tags"]].to_numpy()
+    distance = np.linalg.norm((points[:, None, :] - np.array([centres[b] for b in names])[None]) / scale, axis=2)
+    rows["bucket"] = np.array(names)[distance.argmin(axis=1)]
+
+    songs = pd.DataFrame({"title": rows.track_name, "artist": rows.artist_name,
+                          "valence_tags": rows.valence_tags.round(4), "arousal_tags": rows.arousal_tags.round(4),
+                          "seeds": "", "bucket": rows.bucket, "lastfm_url": rows.track_url, "link_source": "Spotify",
+                          "language": rows.language, "artwork_url": rows.artwork_url,
+                          "spotify_valence": rows.valence, "spotify_energy": rows.energy})
+    profane = songs.title.map(has_profanity) | songs.artist.map(has_profanity)
+    stats["profanity in title or artist"] = int(profane.sum())
     return songs[~profane].reset_index(drop=True), stats, songs[profane].reset_index(drop=True)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--source", default="muse_v3.csv")
+    parser.add_argument("--spotify", default=os.path.join("data", "songs", "raw", "spotify_tracks.csv"))
     parser.add_argument("--out", default=os.path.join("data", "songs", "songs_clean.csv"))
     parser.add_argument("--list-dropped", action="store_true",
                         help="print the songs dropped by the profanity filter")
@@ -131,18 +200,27 @@ def main():
     assert len({w for words in BUCKET_WORDS.values() for w in words}) == sum(map(len, BUCKET_WORDS.values())), \
         "a mood word is listed in two buckets"
     songs, stats, dropped = build(args.source)
-    os.makedirs(os.path.dirname(args.out), exist_ok=True)
-    songs.to_csv(args.out, index=False, encoding="utf-8")
-
     for name, n in stats.items():
         print(f"{name}: {n:,}")
-    print(f"songs kept: {len(songs):,} -> {args.out}")
-    summary = songs.groupby("bucket").agg(songs=("bucket", "size"), valence=("valence_tags", "mean"),
-                                          arousal=("arousal_tags", "mean")).round(2)
-    summary.insert(1, "dropped_for_profanity", dropped.bucket.value_counts().reindex(summary.index).fillna(0).astype(int))
-    print(summary.to_string())
+    print(f"Muse (English) songs kept: {len(songs):,}")
+    if os.path.exists(args.spotify):
+        added, spotify_stats, spotify_dropped = build_spotify(args.spotify, songs)
+        for name, n in spotify_stats.items():
+            print(f"{name}: {n:,}")
+        print(f"Spotify songs kept: {len(added):,}")
+        songs = pd.concat([songs, added], ignore_index=True)
+        dropped = pd.concat([dropped, spotify_dropped], ignore_index=True)
+    else:
+        print(f"{args.spotify} not found: writing the Muse (English) songs only")
+    os.makedirs(os.path.dirname(args.out), exist_ok=True)
+    songs.to_csv(args.out, index=False, encoding="utf-8")
+    print(f"songs written: {len(songs):,} -> {args.out}")
+
+    table = pd.crosstab(songs.language, songs.bucket)
+    table["total"] = table.sum(axis=1)
+    print(table.to_string())
     if args.list_dropped:
-        print(dropped[["bucket", "title", "artist"]].sort_values(["bucket", "artist"]).to_string(index=False))
+        print(dropped[["language", "bucket", "title", "artist"]].sort_values(["language", "bucket", "artist"]).to_string(index=False))
 
 
 if __name__ == "__main__":
