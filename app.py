@@ -51,6 +51,9 @@ MAX_CAPTURE_FRAMES = 120   # safety cap (about 4 s at 30 frames a second)
 SCAN_IMAGE_WIDTH = 480
 BOX_GREEN = (84, 185, 29)  # the accent green, in OpenCV's blue-green-red order
 MODES = ["Auto", "Resonance", "Uplift"]
+LANGUAGES = ["English", "Hindi", "Tamil", "Telugu", "Malayalam", "Korean"]
+# Telugu and Malayalam have too few playable songs near the Uplift waypoints.
+UPLIFT_LANGUAGES = {"English", "Hindi", "Tamil", "Korean"}
 PLAYER_HEIGHT = 680
 
 st.set_page_config(page_title=APP_NAME, page_icon="🎧", layout="wide")
@@ -86,12 +89,8 @@ READING_HTML = '<div class="reading"><span class="dot"></span>Reading your text.
 # otherwise print "Running <function name>()" on the page.
 @st.cache_data(show_spinner=False)
 def load_songs():
-    """Songs with one emotion bucket each, built by scripts/prepare_songs.py (see data/README.md).
-
-    Only the English songs for now: the other languages arrive with a language selector.
-    """
-    songs = pd.read_csv(SONGS_FILE, keep_default_na=False)
-    return songs[songs.language == "English"].reset_index(drop=True)
+    """Songs with one emotion bucket each, built by scripts/prepare_songs.py (see data/README.md)."""
+    return pd.read_csv(SONGS_FILE, keep_default_na=False)
 
 
 @st.cache_resource(show_spinner=False)
@@ -253,25 +252,34 @@ def combine_emotions(face_probs, text_probs):
     return chosen, fused
 
 
-def build_queue(songs, emotions, fused, mode_choice):
-    """Pick the mode and build the play queue for a detected mood."""
+def build_queue(songs, emotions, fused, mode_choice, language):
+    """Pick the mode and build the play queue for a detected mood.
+
+    Songs come only from `language`; a queue is never padded with another
+    language, so it may be shorter than usual.
+    """
     note = None
-    if mode_choice == "Uplift" or (mode_choice == "Auto" and uplift.should_uplift(fused)):
-        tracks, journey = player.uplift_queue(songs, fused, emotions)
+    in_language = (songs.language == language).values
+    in_language_text = "" if language == "English" else f" in {language}"
+    wants_uplift = mode_choice == "Uplift" or (mode_choice == "Auto" and uplift.should_uplift(fused))
+    if wants_uplift and language not in UPLIFT_LANGUAGES:
+        note = f"Uplift needs more songs than we have in {language}, so these songs match your mood instead."
+    elif wants_uplift:
+        tracks, journey = player.uplift_queue(songs, fused, emotions, pool=in_language)
         if tracks:
             steps = sum(track["section"] == "journey" for track in tracks)
             return {"mode": "Uplift", "tracks": tracks, "journey": player.journey_summary(journey),
                     "note": None, "loop_from": steps,
-                    "subtitle": f"{steps} songs in order, then more {journey['targets'][-1]} songs"}
+                    "subtitle": f"{steps} songs in order, then more {journey['targets'][-1]} songs{in_language_text}"}
         if tracks is None:
             note = (f"Uplift is for low moods. Sad, angry, fearful and disgusted feelings make up only "
                     f"{uplift.negative_share(fused):.0%} of this result, so these songs match your mood instead.")
         else:
             note = "No playable songs were found along the Uplift path, so these songs match your mood instead."
-    buckets = {bucket: rows for bucket, rows in songs.groupby("bucket")}
+    buckets = {bucket: rows for bucket, rows in songs[in_language].groupby("bucket")}
     tracks = player.resonance_queue(buckets, emotions)
     return {"mode": "Resonance", "tracks": tracks, "journey": None, "note": note, "loop_from": 0,
-            "subtitle": f"{len(tracks)} {' and '.join(emotions)} songs"}
+            "subtitle": f"{len(tracks)} {' and '.join(emotions)} songs{in_language_text}"}
 
 
 def build_view(scan, face_probs, text_probs, fused, queue, user_text):
@@ -321,6 +329,8 @@ with settings_slot:
                                          "Songs that match my mood", "Gently lift my mood"])
         user_text = st.text_input("Tell me how you feel (optional)", key="user_text",
                                   placeholder="e.g. Finally finished my exams!")
+        language = st.selectbox("Songs in", LANGUAGES, key="language",
+                                help="Language as labelled in the song dataset")
         photo = st.file_uploader("Upload a photo instead", type=["jpg", "jpeg", "png"], key="photo",
                                  help="A backup if the webcam doesn't work. The photo is read once and not saved.")
 with rescan_slot:
@@ -371,11 +381,11 @@ if fused is None:
                "or upload a photo.")
     st.stop()
 
-# The queue is rebuilt only when the scan, the text or the mode changes, so
-# other reruns leave the page (and the music) alone.
-queue_key = (state["scan_id"], user_text.strip(), mode_choice)
+# The queue is rebuilt only when the scan, the text, the mode or the language
+# changes, so other reruns leave the page (and the music) alone.
+queue_key = (state["scan_id"], user_text.strip(), mode_choice, language)
 if state.get("queue_key") != queue_key:
-    state["queue"] = build_queue(songs, emotions, fused, mode_choice)
+    state["queue"] = build_queue(songs, emotions, fused, mode_choice, language)
     state["view"] = build_view(scan, face_probs, text_probs, fused, state["queue"], user_text)
     state["queue_key"] = queue_key
 queue, view = state["queue"], state["view"]
@@ -385,9 +395,7 @@ if previews.rate_limited():
                "Re-scan in a minute for a fuller list.")
 if not queue["tracks"]:
     # Cache-only by default: only songs already in data/songs/previews.csv can be played.
-    st.info("No songs with a saved preview match this mood yet. Fill the preview cache with "
-            "`python scripts/fetch_previews.py`, or start the app with the environment variable "
-            "`LIVE_LOOKUPS=1` to look songs up as you go.")
+    st.info(f"No {language} songs with a saved preview match this mood yet. Try another language.")
     st.stop()
 
 # When the queue ends it loops; after an Uplift journey it loops over the

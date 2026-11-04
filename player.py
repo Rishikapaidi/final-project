@@ -38,9 +38,12 @@ def _keys(rows):
 
 
 def _track(song, preview, **extra):
+    # The link is Last.fm for the English (Muse) songs and Spotify for the others;
+    # artwork is iTunes', or the song file's own (Spotify) artwork if iTunes has none.
     track = {"title": song.title, "artist": song.artist, "lastfm": song.lastfm_url, "bucket": song.bucket,
+             "link_label": getattr(song, "link_source", "") or "Last.fm",
              "valence": round(float(song.valence_tags), 2), "arousal": round(float(song.arousal_tags), 2),
-             "preview": preview["preview_url"], "art": preview["artwork_url"]}
+             "preview": preview["preview_url"], "art": preview["artwork_url"] or getattr(song, "artwork_url", "")}
     track.update(extra)
     return track
 
@@ -82,13 +85,16 @@ def resonance_queue(song_buckets, emotions, rng=None):
     return tracks
 
 
-def uplift_queue(songs, fused, emotions, rng=None):
+def uplift_queue(songs, fused, emotions, rng=None, pool=None):
     """(tracks, journey) for an Uplift playlist, or (None, None) if Uplift does not apply.
 
     The journey's songs come first (section "journey"), followed by more songs
-    from the bucket it ended in (section "more").
+    from the bucket it ended in (section "more"). pool: optional boolean array,
+    one per row of `songs`, limiting which songs may be picked (e.g. one
+    language); bucket centres still come from the English songs.
     """
     rng = rng or np.random.default_rng()
+    pool = np.ones(len(songs), dtype=bool) if pool is None else np.asarray(pool, dtype=bool)
 
     def playable(positions):
         found = previews.resolve(_keys(songs.iloc[positions]))
@@ -96,11 +102,11 @@ def uplift_queue(songs, fused, emotions, rng=None):
 
     if previews.LIVE_LOOKUPS:
         # Check the nearest candidates of each waypoint, looking up unseen songs.
-        playlist, journey = uplift.build_playlist(songs, fused, emotions, rng, playable=playable)
+        playlist, journey = uplift.build_playlist(songs, fused, emotions, rng, playable=playable, pool=pool)
     else:
         # Cache-only: pick among songs already known to have a preview.
         known = songs.lastfm_url.isin(previews.playable_urls()).values
-        playlist, journey = uplift.build_playlist(songs, fused, emotions, rng, pool=known)
+        playlist, journey = uplift.build_playlist(songs, fused, emotions, rng, pool=pool & known)
     if playlist is None:
         return None, None
     tracks = [_track(song, previews.cached(song.lastfm_url), section="journey", number=song.step,
@@ -110,7 +116,7 @@ def uplift_queue(songs, fused, emotions, rng=None):
         # Keep the music going in the mood the journey reached (happy after
         # sad, neutral after angry, fear or disgust).
         final_bucket = journey["targets"][-1]
-        rest = songs[(songs.bucket == final_bucket) & ~songs.lastfm_url.isin(playlist.lastfm_url)]
+        rest = songs[pool & (songs.bucket == final_bucket).values & ~songs.lastfm_url.isin(playlist.lastfm_url).values]
         tracks += [_track(song, preview, section="more", number=len(playlist) + i)
                    for i, (song, preview) in enumerate(playable_songs(rest, CONTINUE_TRACKS, rng), 1)]
     return tracks, journey
@@ -323,7 +329,7 @@ function buildRows() {
     row.appendChild(el("span", "tag", t.bucket));
     const pill = el("button", "pill", "▶ Play"); pill.title = "Play this song";
     pill.addEventListener("click", e => { e.stopPropagation(); if (i === current) toggle(); else play(i); }); row.appendChild(pill);
-    const link = el("a", "lastfm", "Last.fm"); link.href = t.lastfm; link.target = "_blank"; link.rel = "noopener noreferrer";
+    const link = el("a", "lastfm", t.link_label || "Last.fm"); link.href = t.lastfm; link.target = "_blank"; link.rel = "noopener noreferrer";
     link.addEventListener("click", e => e.stopPropagation()); row.appendChild(link);
     row.addEventListener("click", () => play(i));
     rows.appendChild(row);
