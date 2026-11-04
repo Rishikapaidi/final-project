@@ -20,7 +20,9 @@ percentile: a song at the p-th percentile of Spotify valence (across all
 added songs) gets the p-th percentile of the Muse songs' valence_tags, and
 likewise energy -> arousal_tags. Each song then goes to the nearest bucket
 centre (the Muse buckets' mean valence/arousal, distance scaled by the Muse
-songs' spread, as Uplift measures it). These songs have no mood words, so
+songs' spread, as Uplift measures it), except that a song with Spotify
+valence of 0.5 or more may not go to sad, angry, fear or disgust and goes
+to the nearest of happy, surprise and neutral. These songs have no mood words, so
 their buckets rest on valence and arousal alone; see data/README.md for the
 weaknesses. The same profanity filter is applied.
 
@@ -49,6 +51,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import uplift  # noqa: E402
 
 SPOTIFY_LANGUAGES = ["Hindi", "Tamil", "Telugu", "Malayalam", "Korean"]
+# An added Spotify song may sit in a negative bucket only if its Spotify valence is
+# below this: the midpoint of Spotify's 0-1 scale, not tuned. Otherwise it goes to
+# the nearest of happy, surprise and neutral. (Without it, the Muse angry centre
+# maps to Spotify valence of about 0.5 and catches upbeat, energetic songs.)
+NEGATIVE_MAX_VALENCE = 0.5
+NEGATIVE_BUCKETS = ["sad", "angry", "fear", "disgust"]
 
 BUCKET_WORDS = {
     "happy": ["happy", "fun", "cheerful", "positive", "joyous", "playful", "carefree", "uplifting",
@@ -176,7 +184,9 @@ def build_spotify(source, muse):
     scale = muse[["valence_tags", "arousal_tags"]].to_numpy().std(axis=0)
     points = rows[["valence_tags", "arousal_tags"]].to_numpy()
     distance = np.linalg.norm((points[:, None, :] - np.array([centres[b] for b in names])[None]) / scale, axis=2)
-    rows["bucket"] = np.array(names)[distance.argmin(axis=1)]
+    # Songs with Spotify valence of NEGATIVE_MAX_VALENCE or more may not sit in a negative bucket.
+    blocked = np.isin(names, NEGATIVE_BUCKETS)[None] & (rows.valence.to_numpy() >= NEGATIVE_MAX_VALENCE)[:, None]
+    rows["bucket"] = np.array(names)[np.where(blocked, np.inf, distance).argmin(axis=1)]
 
     songs = pd.DataFrame({"title": rows.track_name, "artist": rows.artist_name,
                           "valence_tags": rows.valence_tags.round(4), "arousal_tags": rows.arousal_tags.round(4),

@@ -238,13 +238,24 @@ songs end up more positive on average and Korean songs more energetic.
 bucket centre: the mean valence/arousal of the Muse songs in that bucket, with
 distance scaled by the Muse songs' spread (the same distance Uplift uses).
 
+One rule on top: a song may sit in sad, angry, fear or disgust only if its
+Spotify valence is below 0.5 (`NEGATIVE_MAX_VALENCE` in
+`scripts/prepare_songs.py`: the midpoint of Spotify's 0–1 scale, not tuned);
+otherwise it goes to the nearest of happy, surprise and neutral. Without it,
+mid-valence, high-energy songs landed in angry, because the Muse angry centre
+(valence 4.01) maps to Spotify valence of about 0.5: 53–83% of each language's
+angry songs had Spotify valence of 0.5 or more, including much of the
+energetic K-pop (Korean angry had 2,153 songs; now 1,007). The rule moved
+4,675 songs, mostly into surprise and neutral. It applies to the added songs
+only; the Muse buckets are unchanged.
+
 | Language | happy | sad | angry | fear | disgust | surprise | neutral |
 |---|---|---|---|---|---|---|---|
-| Hindi | 697 | 1,288 | 760 | 753 | 1,026 | 683 | 528 |
-| Tamil | 2,101 | 2,318 | 1,453 | 899 | 964 | 1,243 | 3,626 |
-| Telugu | 45 | 59 | 51 | 37 | 52 | 42 | 35 |
-| Malayalam | 33 | 60 | 58 | 29 | 43 | 29 | 30 |
-| Korean | 775 | 652 | 2,153 | 1,003 | 723 | 1,207 | 360 |
+| Hindi | 697 | 951 | 220 | 538 | 1,026 | 1,196 | 1,107 |
+| Tamil | 2,101 | 1,585 | 535 | 601 | 964 | 2,124 | 4,694 |
+| Telugu | 45 | 48 | 24 | 32 | 52 | 69 | 51 |
+| Malayalam | 33 | 38 | 10 | 23 | 43 | 78 | 57 |
+| Korean | 775 | 471 | 1,007 | 815 | 723 | 2,343 | 739 |
 
 **Weaknesses.**
 
@@ -254,12 +265,21 @@ distance scaled by the Muse songs' spread (the same distance Uplift uses).
   songs to fit a better mapping, and the conversion is an assumption.
 - **The negative buckets are ambiguous.** Valence and arousal cannot tell sad,
   angry, fear and disgust apart (see "Known weaknesses" above); 43% of the
-  added songs in those buckets are almost as close to a second bucket centre.
-- **Angry catches upbeat, energetic songs.** The Muse angry centre sits at
-  valence 4.01, which corresponds to Spotify valence of about 0.5, the middle of
-  the scale. So mid-valence, high-energy songs land in angry: 53–83% of each
-  language's angry songs have Spotify valence of 0.5 or more, including much of
-  the energetic K-pop in Korean angry (2,153 songs).
+  added songs in those buckets were almost as close to a second bucket centre
+  (measured before the valence rule above). Angry in particular now means
+  "energetic and not cheerful" rather than angry: Korean angry is mostly
+  high-energy dance and live tracks with Spotify valence 0.2–0.5.
+- **"Neutral" means calm and mildly positive**, the same centre as for the Muse
+  songs (valence 5.71, arousal 3.24). It includes some clearly happy
+  low-energy songs (for example Ilaiyaraaja's "Jealous", Spotify valence 0.97,
+  energy 0.04), and the valence rule sends more songs there.
+- **The dataset's language labels are not verified.** Some are wrong: for
+  example "Yemainado" (a Telugu song by Thaman S) is labelled Hindi, and
+  "Ninthare Naanu" (a Kannada song) is labelled Malayalam.
+- **Repeated songs.** 5,995 added songs (23%) have the same title and artist as
+  another added song under a different `track_id` (the same recording on
+  several albums or compilations); for 219 songs the copies sit in different buckets.
+  They are kept.
 - **Telugu and Malayalam are small** (321 and 282 songs), which is too few for
   Uplift journeys.
 - **The profanity filter is an English word list.** It does not cover slurs or
