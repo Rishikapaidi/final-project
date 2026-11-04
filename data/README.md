@@ -288,7 +288,7 @@ only; the Muse buckets are unchanged.
 
 ## Song previews: `data/songs/previews.csv`
 
-The song file only has Last.fm links, which cannot be played. The app looks
+The song file only has Last.fm and Spotify links, which cannot be played. The app looks
 each song up in the free iTunes Search API (no key) to get a 30-second preview
 clip and album art, and stores the answer here, including "no preview found",
 so each song is only ever looked up once. The file is committed, so the app
@@ -297,10 +297,13 @@ can play music straight after cloning without calling the API.
 Columns: `lastfm_url`, `preview_url`, `artwork_url`, `itunes_title`,
 `itunes_artist` (the last four are empty when no match was found).
 
-A result is accepted only if both the artist and the title loosely match
-(ignoring case, accents and punctuation).
+A result is accepted only if the title loosely matches (ignoring case, accents
+and punctuation, or sharing a word) and so does the artist: the whole artist
+credit, or failing that its first-listed artist (for credits such as
+"G. V. Prakash, Saindhavi", which iTunes spells "G.V. Prakash Kumar, Saindhavi
+& ...").
 
-So far 1,721 of the 10,901 songs have been checked and 1,180 have a preview:
+So far 1,721 of the 10,901 English songs have been checked and 1,180 have a preview:
 
 | Bucket | Songs | Checked | With preview | Hit rate |
 |---|---|---|---|---|
@@ -315,6 +318,25 @@ So far 1,721 of the 10,901 songs have been checked and 1,180 have a preview:
 The songs checked first were the ones nearest each Uplift waypoint, then
 others in turn from every bucket. The angry bucket has been checked in full;
 fewer than half its songs are on iTunes.
+
+For the other languages, `python scripts/fetch_previews.py --language Hindi
+Tamil Korean Telugu Malayalam` checked up to 30 songs per bucket of Hindi,
+Tamil and Korean (nearest the Uplift waypoints first) and every Telugu and
+Malayalam song, skipping repeated copies of a song. 1,168 lookups, 948 with a
+preview (81%):
+
+| Language | Checked | happy | sad | angry | fear | disgust | surprise | neutral | With preview | Hit rate |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Hindi | 210 | 22 | 17 | 25 | 28 | 26 | 25 | 26 | 169 | 80% |
+| Tamil | 210 | 29 | 23 | 24 | 26 | 28 | 24 | 26 | 180 | 86% |
+| Korean | 210 | 25 | 24 | 27 | 18 | 23 | 24 | 25 | 166 | 79% |
+| Telugu | 298 | 31 | 39 | 17 | 25 | 39 | 48 | 41 | 240 | 81% |
+| Malayalam | 240 | 22 | 26 | 6 | 16 | 32 | 50 | 41 | 193 | 80% |
+
+(The bucket columns are songs with a preview.) The app's "Songs in" setting
+only plays songs in the chosen language, so these are the songs it has to
+work with; a queue is never padded with another language, so it can be
+shorter than 30 (for example 6 Malayalam angry songs).
 
 **The API is rate-limited** to roughly 20 requests a minute, and a burst of
 about 150 requests got this machine's searches refused (HTTP 403) for hours.
