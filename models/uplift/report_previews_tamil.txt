@@ -1,0 +1,141 @@
+LANGUAGE: Tamil (12,604 songs)
+
+SONGS WITH A SAVED PREVIEW, BY BUCKET
+          songs  checked  with_preview hit_rate
+bucket                                         
+angry       535       30            24      80%
+disgust     964       30            28      93%
+fear        601       30            26      87%
+happy      2101       30            29      97%
+neutral    4694       30            26      87%
+sad        1585       30            23      77%
+surprise   2124       30            24      80%
+total: 180 of 12,604 songs have a preview; 210 have been checked
+
+CANDIDATES PER WAYPOINT (journey buckets only). 'd10' is the distance to the 10th-nearest candidate in
+standard deviations; a waypoint is thin if it has fewer than 10 candidates or d10 > 0.5.
+-- sad -> neutral -> happy
+   waypoint 1 (3.45, 3.52): all songs: 994 within 0.5, d10 0.04 | with preview: 20 within 0.5, d10 0.06
+   waypoint 2 (4.58, 3.38): all songs: 1272 within 0.5, d10 0.04 | with preview: 19 within 0.5, d10 0.05
+   waypoint 3 (5.71, 3.24): all songs: 1043 within 0.5, d10 0.07 | with preview: 7 within 0.5, d10 0.60   <-- THIN
+   waypoint 4 (6.52, 4.23): all songs: 754 within 0.5, d10 0.05 | with preview: 17 within 0.5, d10 0.07
+   waypoint 5 (7.32, 5.23): all songs: 955 within 0.5, d10 0.05 | with preview: 12 within 0.5, d10 0.05
+-- angry -> neutral
+   waypoint 1 (4.01, 5.16): all songs: 193 within 0.5, d10 0.06 | with preview: 22 within 0.5, d10 0.07
+   waypoint 2 (4.44, 4.68): all songs: 335 within 0.5, d10 0.12 | with preview: 12 within 0.5, d10 0.47
+   waypoint 3 (4.86, 4.20): all songs: 725 within 0.5, d10 0.06 | with preview: 0 within 0.5, d10 0.75   <-- THIN
+   waypoint 4 (5.29, 3.72): all songs: 844 within 0.5, d10 0.05 | with preview: 12 within 0.5, d10 0.49
+   waypoint 5 (5.71, 3.24): all songs: 1043 within 0.5, d10 0.07 | with preview: 7 within 0.5, d10 0.60   <-- THIN
+-- fear -> neutral
+   waypoint 1 (3.54, 4.78): all songs: 408 within 0.5, d10 0.10 | with preview: 26 within 0.5, d10 0.10
+   waypoint 2 (4.08, 4.40): all songs: 554 within 0.5, d10 0.06 | with preview: 12 within 0.5, d10 0.43
+   waypoint 3 (4.62, 4.01): all songs: 786 within 0.5, d10 0.07 | with preview: 7 within 0.5, d10 0.53   <-- THIN
+   waypoint 4 (5.17, 3.63): all songs: 939 within 0.5, d10 0.09 | with preview: 25 within 0.5, d10 0.40
+   waypoint 5 (5.71, 3.24): all songs: 1043 within 0.5, d10 0.07 | with preview: 7 within 0.5, d10 0.60   <-- THIN
+-- disgust -> neutral
+   waypoint 1 (2.99, 3.72): all songs: 633 within 0.5, d10 0.04 | with preview: 28 within 0.5, d10 0.05
+   waypoint 2 (3.67, 3.60): all songs: 617 within 0.5, d10 0.22 | with preview: 29 within 0.5, d10 0.37
+   waypoint 3 (4.35, 3.48): all songs: 932 within 0.5, d10 0.05 | with preview: 19 within 0.5, d10 0.19
+   waypoint 4 (5.03, 3.36): all songs: 1120 within 0.5, d10 0.05 | with preview: 26 within 0.5, d10 0.24
+   waypoint 5 (5.71, 3.24): all songs: 1043 within 0.5, d10 0.07 | with preview: 7 within 0.5, d10 0.60   <-- THIN
+
+BUCKET CENTRES (valence, arousal)
+  angry     4.01, 5.16
+  disgust   2.99, 3.72
+  fear      3.54, 4.78
+  happy     7.32, 5.23
+  neutral   5.71, 3.24
+  sad       3.45, 3.52
+  surprise  6.40, 5.61
+
+== SAD: start (3.45, 3.52), target neutral -> happy
+ step  wp_V  wp_A                      title                                   artist    V    A  bucket
+    1  3.45  3.52                Naa Parraka                            G. V. Prakash 3.40 3.47     sad
+    2  4.58  3.38            Kan Paarum Devi                              Ilaiyaraaja 4.60 3.39 neutral
+    3  5.71  3.24                 Enna Aachi Vijay Antony, Vijay Yesudas, Janaki Iyer 5.82 3.26 neutral
+    4  6.52  4.23              Yamaga Undile      Devan Ekambaram, Guru Kiran, Allwyn 6.58 4.30   happy
+    5  7.32  5.23 Adho Andha Paravai - Remix                D. Imman, Sunitha Sarathy 7.26 5.27   happy
+
+== ANGRY: start (4.01, 5.16), target neutral
+ step  wp_V  wp_A                                  title                                       artist    V    A  bucket
+    1  4.01  5.16 Onnavitta Yaarum Yenakilla - Version 1        D. Imman, Sean Roldan, Shreya Ghoshal 3.98 5.19   angry
+    2  4.44  4.68                       Hunter Ka Avtaar        Anirudh Ravichander, Siddharth Basrur 3.94 5.04   angry
+    3  4.86  4.20                       Oh Venpura Ondru                    Deva, Karthik, Jeevarikha 4.55 3.40 neutral
+    4  5.29  3.72                            Kannukkulle                       Ilaiyaraaja, S. Janaki 4.67 3.40 neutral
+    5  5.71  3.24                  Oru Maalai Chandhiran Ilaiyaraaja, S. P. Balasubrahmanyam, Minmini 5.73 3.32 neutral
+
+== FEAR: start (3.54, 4.78), target neutral
+ step  wp_V  wp_A                      title                                            artist    V    A  bucket
+    1  3.54  4.78                 Chengaluva Anirudh Ravichander, Abby V, Shruthika Samudhrala 3.61 4.86    fear
+    2  4.08  4.40      Mesmerized Over Angle                                Yuvan Shankar Raja 3.97 4.37    fear
+    3  4.62  4.01                Kannukkulle                            Ilaiyaraaja, S. Janaki 4.67 3.40 neutral
+    4  5.17  3.63            Kan Paarum Devi                                       Ilaiyaraaja 4.60 3.39 neutral
+    5  5.71  3.24 Thenpaandi Thamizhe - Male                        Ilaiyaraaja, K. J. Yesudas 5.79 3.25 neutral
+
+== DISGUST: start (2.99, 3.72), target neutral
+ step  wp_V  wp_A                                  title                                                      artist    V    A  bucket
+    1  2.99  3.72       Vennilavu Saaral (From "Amaran") Kapil Kapilan, Rakshita Suresh, G. V. Prakash, Yugabharathi 3.02 3.70 disgust
+    2  3.67  3.60           Thoovaanam - Karaoke Version                                                    D. Imman 3.35 3.78 disgust
+    3  4.35  3.48                          Minnaminungum                                  Ilaiyaraaja, K. J. Yesudas 4.49 3.40 neutral
+    4  5.03  3.36 Mayakiriye Sirikiriye - Orchestral EDM                    Anirudh Ravichander, Anivee, Alvin Bruno 4.62 3.32 neutral
+    5  5.71  3.24                             Muthu Mani       Ilaiyaraaja, S. Janaki, Vaali, S. P. Balasubrahmanyam 5.70 3.32 neutral
+
+== MIXED: SAD 45%, ANGRY 30%, NEUTRAL 25%: start (4.19, 3.94), target neutral -> happy
+ step  wp_V  wp_A                                  title                                   artist    V    A  bucket
+    1  4.19  3.94                          Minnaminungum               Ilaiyaraaja, K. J. Yesudas 4.49 3.40 neutral
+    2  4.95  3.59 Mayakiriye Sirikiriye - Orchestral EDM Anirudh Ravichander, Anivee, Alvin Bruno 4.62 3.32 neutral
+    3  5.71  3.24                        Naan Oru Sindhu               Ilaiyaraaja, K. S. Chithra 4.68 3.40 neutral
+    4  6.52  4.23                        Mothu Mothuunnu                   Ilaiyaraaja, S. Janaki 6.62 4.22   happy
+    5  7.32  5.23                     Naadodi Paattukkal      Ilaiyaraaja, S. P. Balasubrahmanyam 7.26 5.18   happy
+
+== 500 PLAYLISTS PER CASE
+
+-- sad
+playlists with all 5 songs:               100.0%
+valence rises at every step (all 4):   96.6%
+valence rises at 3 or more of 4 steps: 100.0%
+last song more positive than first:    100.0%
+single steps that rise:                99.2%
+mean valence by song 1..5: 3.45  4.58  5.41  6.55  7.33
+mean arousal by song 1..5: 3.51  3.38  3.31  4.26  5.22
+song 1 bucket: {'sad': 1.0} | song 5 bucket: {'happy': 1.0}
+
+-- angry
+playlists with all 5 songs:               100.0%
+valence rises at every step (all 4):   13.4%
+valence rises at 3 or more of 4 steps: 65.2%
+last song more positive than first:    100.0%
+single steps that rise:                69.3%
+mean valence by song 1..5: 3.97  3.95  4.60  5.07  5.38
+mean arousal by song 1..5: 5.15  5.07  3.40  3.37  3.31
+song 1 bucket: {'angry': 1.0} | song 5 bucket: {'neutral': 1.0}
+
+-- fear
+playlists with all 5 songs:               100.0%
+valence rises at every step (all 4):   46.8%
+valence rises at 3 or more of 4 steps: 97.6%
+last song more positive than first:    100.0%
+single steps that rise:                86.1%
+mean valence by song 1..5: 3.45  3.86  4.25  4.72  5.42
+mean arousal by song 1..5: 4.83  4.52  3.98  3.39  3.31
+song 1 bucket: {'fear': 1.0} | song 5 bucket: {'neutral': 1.0}
+
+-- disgust
+playlists with all 5 songs:               100.0%
+valence rises at every step (all 4):   76.8%
+valence rises at 3 or more of 4 steps: 99.4%
+last song more positive than first:    100.0%
+single steps that rise:                94.0%
+mean valence by song 1..5: 3.00  3.19  4.56  4.63  5.43
+mean arousal by song 1..5: 3.72  3.74  3.38  3.37  3.31
+song 1 bucket: {'disgust': 1.0} | song 5 bucket: {'neutral': 1.0}
+
+-- mixed: sad 45%, angry 30%, neutral 25%
+playlists with all 5 songs:               100.0%
+valence rises at every step (all 4):   85.4%
+valence rises at 3 or more of 4 steps: 100.0%
+last song more positive than first:    100.0%
+single steps that rise:                96.4%
+mean valence by song 1..5: 3.92  4.62  5.44  6.55  7.33
+mean arousal by song 1..5: 3.50  3.39  3.31  4.26  5.22
+song 1 bucket: {'sad': 0.6, 'neutral': 0.4} | song 5 bucket: {'happy': 1.0}
