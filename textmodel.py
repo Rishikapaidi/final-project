@@ -11,6 +11,10 @@ import os
 import threading
 
 _lock = threading.Lock()
+# warm_up() has its own lock: _lock is held for the whole load, and a rerun
+# calling warm_up() must not wait for that (the page would stay "running" and
+# a replaced player would keep playing until the model had loaded).
+_start_lock = threading.Lock()
 _model = None          # (tokenizer, model) once loaded; False if the model folder is missing
 _warm_up_started = False
 loads = 0              # how many times the model was actually loaded (for tests)
@@ -43,7 +47,7 @@ def warm_up(model_dir):
     Returns True if a thread was started.
     """
     global _warm_up_started
-    with _lock:
+    with _start_lock:
         if _warm_up_started or _model is not None or not os.path.isdir(model_dir):
             return False
         _warm_up_started = True
