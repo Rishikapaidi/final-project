@@ -54,6 +54,20 @@ def bucket_centres(songs):
     return {bucket: row.values for bucket, row in means.iterrows()}
 
 
+def reference_songs(songs):
+    """The songs bucket centres and the distance scale come from: the English (Muse) ones.
+
+    Their buckets come from listeners' mood words; the other languages' songs
+    were placed by distance to these same centres (scripts/prepare_songs.py).
+    """
+    return songs[songs.language == "English"] if "language" in songs else songs
+
+
+def reference_scale(songs):
+    """(valence std, arousal std) of the reference songs."""
+    return reference_songs(songs)[["valence_tags", "arousal_tags"]].values.std(axis=0)
+
+
 def plan_journey(fused, emotions, centres, scale):
     """Work out the start point, targets and waypoints.
 
@@ -84,7 +98,8 @@ def build_playlist(songs, fused, emotions, rng=None, playable=None, pool=None):
     and the waypoint each song was picked for.
 
     pool: optional boolean array, one per row of `songs`; only True rows may be
-    picked. The start point, targets and waypoints still come from all songs.
+    picked. The start point, targets and waypoints still come from the
+    reference (English) songs, whatever the pool.
 
     playable: optional function that takes row positions in `songs` and returns
     the ones that can be played. Each waypoint then gets a song from the
@@ -96,8 +111,8 @@ def build_playlist(songs, fused, emotions, rng=None, playable=None, pool=None):
     rng = rng or np.random.default_rng()
 
     points = songs[["valence_tags", "arousal_tags"]].values
-    scale = points.std(axis=0)
-    journey = plan_journey(fused, emotions, bucket_centres(songs), scale)
+    scale = reference_scale(songs)
+    journey = plan_journey(fused, emotions, bucket_centres(reference_songs(songs)), scale)
 
     allowed = np.ones(len(songs), dtype=bool)
     if RESTRICT_TO_JOURNEY_BUCKETS:

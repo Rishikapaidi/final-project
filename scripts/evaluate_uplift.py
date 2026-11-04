@@ -5,12 +5,17 @@ playlist with its waypoints, then builds RUNS playlists and reports how the
 songs' valence and arousal change from song 1 to song 5.
 
 Usage (from the project root):
-    python scripts/evaluate_uplift.py             # all songs
+    python scripts/evaluate_uplift.py             # all English songs
     python scripts/evaluate_uplift.py --previews  # only songs with a saved preview,
                                                   # which is what the app can play
+    python scripts/evaluate_uplift.py --language Hindi [--previews]
+
+Songs are drawn from one language (default English). Bucket centres and the
+distance scale always come from the English (Muse) songs, as in the app.
 
 Reads   data/songs/songs_clean.csv  (and data/songs/previews.csv with --previews)
-Writes  models/uplift/report.txt    (report_previews.txt with --previews)
+Writes  models/uplift/report.txt    (report_previews.txt with --previews);
+        for another language report_<language>.txt / report_previews_<language>.txt
 """
 import argparse
 import os
@@ -40,27 +45,28 @@ def run_many(songs, fused, emotions, rng, pool=None):
     return pd.DataFrame(rows)
 
 
-def preview_coverage(songs, pool, log):
+def preview_coverage(songs, in_language, pool, log):
     """How many songs per bucket can be played, and how well each waypoint is served."""
     import previews
-    checked = songs.lastfm_url.map(lambda url: previews.cached(url) is not None)
-    table = pd.DataFrame({"songs": songs.groupby("bucket").size(),
-                          "checked": checked.groupby(songs.bucket).sum(),
-                          "with_preview": pd.Series(pool, index=songs.index).groupby(songs.bucket).sum()})
+    language = songs[in_language]
+    checked = language.lastfm_url.map(lambda url: previews.cached(url) is not None)
+    table = pd.DataFrame({"songs": language.groupby("bucket").size(),
+                          "checked": checked.groupby(language.bucket).sum(),
+                          "with_preview": pd.Series(pool[in_language], index=language.index).groupby(language.bucket).sum()})
     table["hit_rate"] = (table.with_preview / table.checked.where(table.checked > 0)).map(
         lambda x: "-" if pd.isna(x) else f"{x:.0%}")
     log("SONGS WITH A SAVED PREVIEW, BY BUCKET")
     log(table.to_string())
-    log(f"total: {int(pool.sum()):,} of {len(songs):,} songs have a preview; {int(checked.sum()):,} have been checked")
+    log(f"total: {int(pool.sum()):,} of {len(language):,} songs have a preview; {int(checked.sum()):,} have been checked")
 
     points = songs[["valence_tags", "arousal_tags"]].values
-    scale = points.std(axis=0)
-    centres = uplift.bucket_centres(songs)
+    scale = uplift.reference_scale(songs)
+    centres = uplift.bucket_centres(uplift.reference_songs(songs))
     log(f"\nCANDIDATES PER WAYPOINT (journey buckets only). 'd10' is the distance to the 10th-nearest candidate in\n"
         f"standard deviations; a waypoint is thin if it has fewer than {uplift.NEAREST_K} candidates or d10 > {THIN_DISTANCE}.")
     for emotion in uplift.NEGATIVE_EMOTIONS:
         journey = uplift.plan_journey({emotion: 1.0}, [emotion], centres, scale)
-        in_buckets = songs.bucket.isin({emotion, *journey["targets"]}).values
+        in_buckets = songs.bucket.isin({emotion, *journey["targets"]}).values & in_language
         log(f"-- {emotion} -> {' -> '.join(journey['targets'])}")
         for step, waypoint in enumerate(journey["waypoints"], 1):
             cells = []
@@ -78,6 +84,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--previews", action="store_true",
                         help="only use songs that have a saved preview (data/songs/previews.csv)")
+    parser.add_argument("--language", default="English", help="language to draw songs from (default English)")
     args = parser.parse_args()
 
     songs = pd.read_csv(os.path.join("data", "songs", "songs_clean.csv"), keep_default_na=False)
@@ -87,14 +94,20 @@ def main():
         print(s)
         lines.append(s)
 
-    pool = None
+    # All songs stay in `songs` so the centres come from the English ones; the pool limits the picks.
+    in_language = (songs.language == args.language).values
+    if not in_language.any():
+        parser.error(f"no songs in language {args.language!r}")
+    pool = in_language
+    if args.language != "English":
+        log(f"LANGUAGE: {args.language} ({int(in_language.sum()):,} songs)\n")
     if args.previews:
         import previews
-        pool = songs.lastfm_url.isin(previews.playable_urls()).values
-        preview_coverage(songs, pool, log)
+        pool = in_language & songs.lastfm_url.isin(previews.playable_urls()).values
+        preview_coverage(songs, in_language, pool, log)
         log()
 
-    centres = uplift.bucket_centres(songs)
+    centres = uplift.bucket_centres(uplift.reference_songs(songs))
     log("BUCKET CENTRES (valence, arousal)")
     for bucket, (v, a) in sorted(centres.items()):
         log(f"  {bucket:9} {v:.2f}, {a:.2f}")
@@ -118,7 +131,7 @@ def main():
         runs = run_many(songs, fused, emotions, np.random.default_rng(SEED), pool)
         log(f"\n-- {name}")
         full = runs[runs.valence.map(len) == uplift.N_SONGS]
-        if pool is not None:
+        if args.previews:
             log(f"playlists with all {uplift.N_SONGS} songs:               {len(full) / len(runs):.1%}")
         if full.empty:
             log("no complete playlists: not enough songs with previews along this path")
@@ -134,15 +147,16 @@ def main():
         log(f"song 1 bucket: {full.first_bucket.value_counts(normalize=True).round(2).to_dict()} | "
             f"song 5 bucket: {full.last_bucket.value_counts(normalize=True).round(2).to_dict()}")
 
-    if pool is None:
+    if not args.previews:
         log("\n== WHY THE SONG POOL IS RESTRICTED: bucket of song 1 without the restriction")
         uplift.RESTRICT_TO_JOURNEY_BUCKETS = False
         for name, fused, emotions in cases[:4]:
-            runs = run_many(songs, fused, emotions, np.random.default_rng(SEED))
+            runs = run_many(songs, fused, emotions, np.random.default_rng(SEED), pool)
             log(f"{name:8} {runs.first_bucket.value_counts(normalize=True).round(2).to_dict()}")
         uplift.RESTRICT_TO_JOURNEY_BUCKETS = True
 
-    report = "report_previews.txt" if args.previews else "report.txt"
+    report = "report_previews" if args.previews else "report"
+    report += ".txt" if args.language == "English" else f"_{args.language.lower()}.txt"
     with open(os.path.join("models", "uplift", report), "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
 

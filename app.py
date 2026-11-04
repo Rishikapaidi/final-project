@@ -86,8 +86,12 @@ READING_HTML = '<div class="reading"><span class="dot"></span>Reading your text.
 # otherwise print "Running <function name>()" on the page.
 @st.cache_data(show_spinner=False)
 def load_songs():
-    """Songs with one emotion bucket each, built by scripts/prepare_songs.py (see data/README.md)."""
-    return pd.read_csv(SONGS_FILE, keep_default_na=False)
+    """Songs with one emotion bucket each, built by scripts/prepare_songs.py (see data/README.md).
+
+    Only the English songs for now: the other languages arrive with a language selector.
+    """
+    songs = pd.read_csv(SONGS_FILE, keep_default_na=False)
+    return songs[songs.language == "English"].reset_index(drop=True)
 
 
 @st.cache_resource(show_spinner=False)
