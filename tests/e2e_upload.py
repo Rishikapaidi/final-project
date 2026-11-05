@@ -72,6 +72,8 @@ try:
         page.screenshot(path=f"{S}/page_7_tile_upload.png")
         close_popover()
         log(f"after uploading a happy face: {describe()} | camera opened {opened()} time(s)")
+        gap = page.evaluate("document.querySelector('.st-key-rescan').getBoundingClientRect().top - document.querySelector('.tile-note').getBoundingClientRect().bottom")
+        log(f"space between the photo note and the buttons: {gap:.0f} px")
         full_shot(page, f"{S}/page_7_uploaded_photo.png")
         bar = bar_frame(page); path = path_frame(page); path.locator(".row").nth(0).click(); time.sleep(2.5)
         s1 = player_state(bar)["time"]

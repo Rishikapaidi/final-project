@@ -68,7 +68,8 @@ PAGE_CSS = """
   .scanimg { width:100%; max-height:280px; object-fit:contain; border-radius:14px; display:block; background:#1f1c3d; }
   .scan-empty { height:200px; border-radius:14px; background:#25224a; display:flex; align-items:center; justify-content:center;
                 color:#cfc8ef; font-size:14px; text-align:center; padding:0 20px; }
-  .tile-note { color:#e3def7; font-size:13px !important; line-height:1.45; margin:10px 0 0 !important; }
+  /* the bottom margin keeps the note clear of "Tap to scan again" (markdown blocks pull up by 1rem) */
+  .tile-note { color:#e3def7; font-size:13px !important; line-height:1.45; margin:10px 0 22px !important; }
   .listening { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; height:220px;
                border-radius:14px; background:#25224a; color:#f1edfb; font-size:17px; }
   .pulse { width:58px; height:58px; border-radius:50%; background:var(--lavender); animation:pulse 1.3s ease-in-out infinite; }
