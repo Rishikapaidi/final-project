@@ -6,38 +6,38 @@ bucket
 angry       220       30            25      83%
 disgust    1026       30            26      87%
 fear        538       30            28      93%
-happy       697       30            22      73%
-neutral    1107       30            26      87%
+happy       697       45            33      73%
+neutral    1107      215           183      85%
 sad         951       30            17      57%
 surprise   1196       30            25      83%
-total: 169 of 5,735 songs have a preview; 210 have been checked
+total: 337 of 5,735 songs have a preview; 410 have been checked
 
 CANDIDATES PER WAYPOINT (journey buckets only). 'd10' is the distance to the 10th-nearest candidate in
 standard deviations; a waypoint is thin if it has fewer than 10 candidates or d10 > 0.5.
 -- sad -> neutral -> happy
    waypoint 1 (3.45, 3.52): all songs: 603 within 0.5, d10 0.03 | with preview: 13 within 0.5, d10 0.28
-   waypoint 2 (4.58, 3.38): all songs: 490 within 0.5, d10 0.05 | with preview: 18 within 0.5, d10 0.05
-   waypoint 3 (5.71, 3.24): all songs: 151 within 0.5, d10 0.15 | with preview: 8 within 0.5, d10 0.59   <-- THIN
-   waypoint 4 (6.52, 4.23): all songs: 259 within 0.5, d10 0.03 | with preview: 5 within 0.5, d10 0.90   <-- THIN
+   waypoint 2 (4.58, 3.38): all songs: 490 within 0.5, d10 0.05 | with preview: 39 within 0.5, d10 0.05
+   waypoint 3 (5.71, 3.24): all songs: 151 within 0.5, d10 0.15 | with preview: 41 within 0.5, d10 0.16
+   waypoint 4 (6.52, 4.23): all songs: 259 within 0.5, d10 0.03 | with preview: 34 within 0.5, d10 0.07
    waypoint 5 (7.32, 5.23): all songs: 385 within 0.5, d10 0.07 | with preview: 16 within 0.5, d10 0.12
 -- angry -> neutral
-   waypoint 1 (4.01, 5.16): all songs: 104 within 0.5, d10 0.06 | with preview: 23 within 0.5, d10 0.09
-   waypoint 2 (4.44, 4.68): all songs: 242 within 0.5, d10 0.12 | with preview: 5 within 0.5, d10 0.54   <-- THIN
-   waypoint 3 (4.86, 4.20): all songs: 420 within 0.5, d10 0.08 | with preview: 0 within 0.5, d10 0.78   <-- THIN
-   waypoint 4 (5.29, 3.72): all songs: 302 within 0.5, d10 0.06 | with preview: 18 within 0.5, d10 0.48
-   waypoint 5 (5.71, 3.24): all songs: 151 within 0.5, d10 0.15 | with preview: 8 within 0.5, d10 0.59   <-- THIN
+   waypoint 1 (4.01, 5.16): all songs: 104 within 0.5, d10 0.06 | with preview: 26 within 0.5, d10 0.09
+   waypoint 2 (4.44, 4.68): all songs: 242 within 0.5, d10 0.12 | with preview: 67 within 0.5, d10 0.15
+   waypoint 3 (4.86, 4.20): all songs: 420 within 0.5, d10 0.08 | with preview: 103 within 0.5, d10 0.10
+   waypoint 4 (5.29, 3.72): all songs: 302 within 0.5, d10 0.06 | with preview: 61 within 0.5, d10 0.31
+   waypoint 5 (5.71, 3.24): all songs: 151 within 0.5, d10 0.15 | with preview: 41 within 0.5, d10 0.16
 -- fear -> neutral
-   waypoint 1 (3.54, 4.78): all songs: 440 within 0.5, d10 0.08 | with preview: 28 within 0.5, d10 0.09
-   waypoint 2 (4.08, 4.40): all songs: 426 within 0.5, d10 0.04 | with preview: 16 within 0.5, d10 0.39
-   waypoint 3 (4.62, 4.01): all songs: 475 within 0.5, d10 0.10 | with preview: 4 within 0.5, d10 0.54   <-- THIN
-   waypoint 4 (5.17, 3.63): all songs: 338 within 0.5, d10 0.11 | with preview: 26 within 0.5, d10 0.39
-   waypoint 5 (5.71, 3.24): all songs: 151 within 0.5, d10 0.15 | with preview: 8 within 0.5, d10 0.59   <-- THIN
+   waypoint 1 (3.54, 4.78): all songs: 440 within 0.5, d10 0.08 | with preview: 38 within 0.5, d10 0.09
+   waypoint 2 (4.08, 4.40): all songs: 426 within 0.5, d10 0.04 | with preview: 100 within 0.5, d10 0.10
+   waypoint 3 (4.62, 4.01): all songs: 475 within 0.5, d10 0.10 | with preview: 101 within 0.5, d10 0.11
+   waypoint 4 (5.17, 3.63): all songs: 338 within 0.5, d10 0.11 | with preview: 69 within 0.5, d10 0.28
+   waypoint 5 (5.71, 3.24): all songs: 151 within 0.5, d10 0.15 | with preview: 41 within 0.5, d10 0.16
 -- disgust -> neutral
    waypoint 1 (2.99, 3.72): all songs: 777 within 0.5, d10 0.06 | with preview: 26 within 0.5, d10 0.07
-   waypoint 2 (3.67, 3.60): all songs: 420 within 0.5, d10 0.26 | with preview: 26 within 0.5, d10 0.38
-   waypoint 3 (4.35, 3.48): all songs: 394 within 0.5, d10 0.06 | with preview: 18 within 0.5, d10 0.20
-   waypoint 4 (5.03, 3.36): all songs: 351 within 0.5, d10 0.06 | with preview: 26 within 0.5, d10 0.24
-   waypoint 5 (5.71, 3.24): all songs: 151 within 0.5, d10 0.15 | with preview: 8 within 0.5, d10 0.59   <-- THIN
+   waypoint 2 (3.67, 3.60): all songs: 420 within 0.5, d10 0.26 | with preview: 31 within 0.5, d10 0.38
+   waypoint 3 (4.35, 3.48): all songs: 394 within 0.5, d10 0.06 | with preview: 35 within 0.5, d10 0.20
+   waypoint 4 (5.03, 3.36): all songs: 351 within 0.5, d10 0.06 | with preview: 49 within 0.5, d10 0.20
+   waypoint 5 (5.71, 3.24): all songs: 151 within 0.5, d10 0.15 | with preview: 41 within 0.5, d10 0.16
 
 BUCKET CENTRES (valence, arousal)
   angry     4.01, 5.16
@@ -49,93 +49,93 @@ BUCKET CENTRES (valence, arousal)
   surprise  6.40, 5.61
 
 == SAD: start (3.45, 3.52), target neutral -> happy
- step  wp_V  wp_A                          title                                                     artist    V    A  bucket
-    1  3.45  3.52                   Apna Bana Le           Sachin-Jigar, Arijit Singh, Amitabh Bhattacharya 3.40 3.53     sad
-    2  4.58  3.38         Tumhare Hi Rahenge Hum Varun Jain, Shilpa Rao, Sachin-Jigar, Amitabh Bhattacharya 4.66 3.35 neutral
-    3  5.71  3.24                     Mind Games                                         Vicky, Karan Aujla 4.67 3.32 neutral
-    4  6.52  4.23 Pehli Baar (From "Pehli Baar")                                                  Javed Ali 6.54 4.26   happy
-    5  7.32  5.23                Yaar Rab (Sufi)                                                  Javed Ali 7.32 5.19   happy
+ step  wp_V  wp_A                                                            title                     artist    V    A  bucket
+    1  3.45  3.52                                           Bhini Bhini - Original              Javed Ali, NA 3.44 3.53     sad
+    2  4.58  3.38                                                     Akkad Bakkad              Mohit Chauhan 4.58 3.32 neutral
+    3  5.71  3.24                                                Thakita Thakajham                  Javed Ali 5.59 3.32 neutral
+    4  6.52  4.23                                   Pehli Baar (From "Pehli Baar")                  Javed Ali 6.54 4.26   happy
+    5  7.32  5.23 Aum Mangalam Singlem (Title Track) - From "Aum Mangalam Singlem" Aghori Muzik, Sachin-Jigar 7.26 5.19   happy
 
 == ANGRY: start (4.01, 5.16), target neutral
- step  wp_V  wp_A                                     title                                                     artist    V    A  bucket
-    1  4.01  5.16                       Aise Nahi Jiya Lage                                  Shreya Ghoshal, Javed Ali 3.91 5.19   angry
-    2  4.44  4.68                Saj Ke Chali Hai Bharat Ma                                                  Javed Ali 3.97 5.09   angry
-    3  4.86  4.20                    Tumhare Hi Rahenge Hum Varun Jain, Shilpa Rao, Sachin-Jigar, Amitabh Bhattacharya 4.66 3.35 neutral
-    4  5.29  3.72                             Chalte Chalte                                               Arijit Singh 5.68 3.32 neutral
-    5  5.71  3.24 Chalte Chalte (From "Tutak Tutak Tutiya")                                               Arijit Singh 5.68 3.32 neutral
+ step  wp_V  wp_A                                      title                                                           artist    V    A  bucket
+    1  4.01  5.16                              What Jhumka ? Arijit Singh, Jonita Gandhi, Ranveer Singh, Amitabh Bhattacharya 3.90 5.24   angry
+    2  4.44  4.68                                 Dahyo Babo                       Sachin-Jigar, Sachin Sanghvi, Aariz Saiyed 4.63 4.58 neutral
+    3  4.86  4.20                                    Bairiya                 Arijit Singh, Amitabh Bhattacharya, Goldie Sohel 4.88 4.10 neutral
+    4  5.29  3.72   Firecracker (From "Jayeshbhai Jordaar'')   Vishal-Shekhar, Vishal Dadlani, Shekhar Ravjiani, Kumaar, Vayu 4.99 3.95 neutral
+    5  5.71  3.24 Mubarak Ho Mubarak Ho Huwi Ramazan Ki Amad                                         Muhammad Javed Ali Qadri 5.63 3.32 neutral
 
 == FEAR: start (3.54, 4.78), target neutral
- step  wp_V  wp_A                                   title                                                     artist    V    A  bucket
-    1  3.54  4.78 Saavariya - From "Aum Mangalam Singlem"                      Varun Jain, Niren Bhatt, Sachin-Jigar 3.44 4.73    fear
-    2  4.08  4.40             Pachtaoge (From "Jaani Ve")                               Arijit Singh, B Praak, Jaani 3.94 4.37    fear
-    3  4.62  4.01                         Jaaga Hindustan                                  Sachin-Jigar, Divya Kumar 3.99 4.39    fear
-    4  5.17  3.63                  Tumhare Hi Rahenge Hum Varun Jain, Shilpa Rao, Sachin-Jigar, Amitabh Bhattacharya 4.66 3.35 neutral
-    5  5.71  3.24                       Thakita Thakajham                                                  Javed Ali 5.59 3.32 neutral
+ step  wp_V  wp_A                                                      title                                                                   artist    V    A  bucket
+    1  3.54  4.78 Nadiyon Paar (Let The Music Play Again) - Tech House Remix Deepanshu Ruhela, Priyank, Sachin-Jigar, Rashmeet Kaur, Shamur, IP Singh 3.40 4.73    fear
+    2  4.08  4.40                                            Jaaga Hindustan                                                Sachin-Jigar, Divya Kumar 3.99 4.39    fear
+    3  4.62  4.01                                                 Don't Like                                                       Goldy, Karan Aujla 4.51 4.02 neutral
+    4  5.17  3.63                Har Bachcha Hai Rocket - From "Rocket Gang"                                                             Amit Trivedi 4.90 3.87 neutral
+    5  5.71  3.24                  Chalte Chalte (From "Tutak Tutak Tutiya")                                                             Arijit Singh 5.68 3.32 neutral
 
 == DISGUST: start (2.99, 3.72), target neutral
- step  wp_V  wp_A                                                    title                        artist    V    A  bucket
-    1  2.99  3.72                                                  Banjara                     Javed Ali 3.00 3.67 disgust
-    2  3.67  3.60 Tu Jo Mila (Dekhna Na Mud Ke) [From "Bajrangi Bhaijaan"]                     Javed Ali 3.15 3.72 disgust
-    3  4.35  3.48     Warna Cinta (Gerua - Malay Version) [From "Dilwale"] Pritam, Aliff Aziz, Kilafairy 4.60 3.32 neutral
-    4  5.03  3.36                                               Mind Games            Vicky, Karan Aujla 4.67 3.32 neutral
-    5  5.71  3.24                                            Chalte Chalte                  Arijit Singh 5.68 3.32 neutral
+ step  wp_V  wp_A                                                title                        artist    V    A  bucket
+    1  2.99  3.72                                                Dikri                     Javed Ali 2.90 3.67 disgust
+    2  3.67  3.60                             Benche Theke Labh Ki Bol                  Arijit Singh 3.00 3.65 disgust
+    3  4.35  3.48 Warna Cinta (Gerua - Malay Version) [From "Dilwale"] Pritam, Aliff Aziz, Kilafairy 4.60 3.32 neutral
+    4  5.03  3.36                                      Main Kya Karoon    Pritam, Nikhil Paul George 5.37 3.32 neutral
+    5  5.71  3.24           Mubarak Ho Mubarak Ho Huwi Ramazan Ki Amad      Muhammad Javed Ali Qadri 5.63 3.32 neutral
 
 == MIXED: SAD 45%, ANGRY 30%, NEUTRAL 25%: start (4.19, 3.94), target neutral -> happy
- step  wp_V  wp_A                                            title                                                                            artist    V    A  bucket
-    1  4.19  3.94       Phir Aur Kya Chahiye - Super Jhankar Beats Arijit Singh, Sachin-Jigar, Amitabh Bhattacharya, Hero And King Of Jhankar Studio 4.58 3.40 neutral
-    2  4.95  3.59                                       Mind Games                                                                Vicky, Karan Aujla 4.67 3.32 neutral
-    3  5.71  3.24                                    Chalte Chalte                                                                      Arijit Singh 5.68 3.32 neutral
-    4  6.52  4.23 I'm Sorry Par Tumse Pyaar Ho Gaya (The Hey Song)                                Pritam, Nikhil Paul George, Neeti Mohan, Mili Nair 8.02 3.94   happy
-    5  7.32  5.23                             Tu Ki Sei Sapan Pari                                                                         Javed Ali 7.44 5.19   happy
+ step  wp_V  wp_A                         title                                artist    V    A  bucket
+    1  4.19  3.94 Tension Thai Gayu Title Track                             Javed Ali 4.30 3.92 neutral
+    2  4.95  3.59          Mahi Aaja - Solo Mix                          Arijit Singh 4.62 3.78 neutral
+    3  5.71  3.24     Bachke Bachke - Unplugged                           Karan Aujla 5.89 3.32 neutral
+    4  6.52  4.23                    I Love You      Pritam, Ash King, Clinton Cerejo 6.44 4.28   happy
+    5  7.32  5.23                         Bijli Sachin-Jigar, Mika Singh, Neha Kakkar 7.51 5.19   happy
 
 == 500 PLAYLISTS PER CASE
 
 -- sad
 playlists with all 5 songs:               100.0%
-valence rises at every step (all 4):   81.8%
-valence rises at 3 or more of 4 steps: 99.8%
+valence rises at every step (all 4):   100.0%
+valence rises at 3 or more of 4 steps: 100.0%
 last song more positive than first:    100.0%
-single steps that rise:                95.4%
-mean valence by song 1..5: 3.39  4.60  5.52  6.44  7.41
-mean arousal by song 1..5: 3.55  3.36  3.34  3.97  5.21
+single steps that rise:                100.0%
+mean valence by song 1..5: 3.39  4.61  5.75  6.46  7.41
+mean arousal by song 1..5: 3.55  3.36  3.32  4.25  5.21
 song 1 bucket: {'sad': 1.0} | song 5 bucket: {'happy': 1.0}
 
 -- angry
 playlists with all 5 songs:               100.0%
-valence rises at every step (all 4):   21.0%
-valence rises at 3 or more of 4 steps: 73.8%
+valence rises at every step (all 4):   85.4%
+valence rises at 3 or more of 4 steps: 100.0%
 last song more positive than first:    100.0%
-single steps that rise:                73.7%
-mean valence by song 1..5: 3.93  3.92  4.63  5.25  5.49
-mean arousal by song 1..5: 5.19  5.13  3.38  3.36  3.34
+single steps that rise:                96.4%
+mean valence by song 1..5: 3.93  4.37  4.88  5.21  5.75
+mean arousal by song 1..5: 5.19  4.59  4.18  3.71  3.31
 song 1 bucket: {'angry': 1.0} | song 5 bucket: {'neutral': 1.0}
 
 -- fear
 playlists with all 5 songs:               100.0%
-valence rises at every step (all 4):   35.4%
-valence rises at 3 or more of 4 steps: 92.6%
+valence rises at every step (all 4):   97.2%
+valence rises at 3 or more of 4 steps: 100.0%
 last song more positive than first:    100.0%
-single steps that rise:                82.0%
-mean valence by song 1..5: 3.48  3.92  4.22  4.92  5.49
-mean arousal by song 1..5: 4.76  4.51  4.03  3.37  3.34
+single steps that rise:                99.3%
+mean valence by song 1..5: 3.48  4.02  4.62  5.38  5.75
+mean arousal by song 1..5: 4.76  4.43  4.04  3.44  3.32
 song 1 bucket: {'fear': 1.0} | song 5 bucket: {'neutral': 1.0}
 
 -- disgust
 playlists with all 5 songs:               100.0%
-valence rises at every step (all 4):   49.8%
-valence rises at 3 or more of 4 steps: 90.6%
+valence rises at every step (all 4):   60.4%
+valence rises at 3 or more of 4 steps: 98.4%
 last song more positive than first:    100.0%
-single steps that rise:                85.0%
-mean valence by song 1..5: 2.96  3.07  4.59  4.66  5.51
-mean arousal by song 1..5: 3.68  3.67  3.36  3.35  3.34
+single steps that rise:                89.7%
+mean valence by song 1..5: 2.96  3.07  4.60  5.17  5.75
+mean arousal by song 1..5: 3.68  3.67  3.36  3.37  3.31
 song 1 bucket: {'disgust': 1.0} | song 5 bucket: {'neutral': 1.0}
 
 -- mixed: sad 45%, angry 30%, neutral 25%
 playlists with all 5 songs:               100.0%
-valence rises at every step (all 4):   66.2%
-valence rises at 3 or more of 4 steps: 95.4%
+valence rises at every step (all 4):   100.0%
+valence rises at 3 or more of 4 steps: 100.0%
 last song more positive than first:    100.0%
-single steps that rise:                90.4%
-mean valence by song 1..5: 4.06  4.65  5.55  6.43  7.41
-mean arousal by song 1..5: 3.51  3.37  3.34  3.95  5.21
-song 1 bucket: {'neutral': 0.52, 'sad': 0.48} | song 5 bucket: {'happy': 1.0}
+single steps that rise:                100.0%
+mean valence by song 1..5: 4.39  4.74  5.75  6.46  7.41
+mean arousal by song 1..5: 3.94  3.53  3.32  4.25  5.21
+song 1 bucket: {'neutral': 1.0} | song 5 bucket: {'happy': 1.0}

@@ -7,37 +7,37 @@ angry      1007       30            27      90%
 disgust     723       30            23      77%
 fear        815       30            18      60%
 happy       775       30            25      83%
-neutral     739       30            25      83%
+neutral     739      190           153      81%
 sad         471       30            24      80%
 surprise   2343       30            24      80%
-total: 166 of 6,873 songs have a preview; 210 have been checked
+total: 294 of 6,873 songs have a preview; 370 have been checked
 
 CANDIDATES PER WAYPOINT (journey buckets only). 'd10' is the distance to the 10th-nearest candidate in
 standard deviations; a waypoint is thin if it has fewer than 10 candidates or d10 > 0.5.
 -- sad -> neutral -> happy
    waypoint 1 (3.45, 3.52): all songs: 310 within 0.5, d10 0.05 | with preview: 22 within 0.5, d10 0.09
-   waypoint 2 (4.58, 3.38): all songs: 245 within 0.5, d10 0.06 | with preview: 23 within 0.5, d10 0.06
-   waypoint 3 (5.71, 3.24): all songs: 86 within 0.5, d10 0.14 | with preview: 2 within 0.5, d10 0.64   <-- THIN
+   waypoint 2 (4.58, 3.38): all songs: 245 within 0.5, d10 0.06 | with preview: 46 within 0.5, d10 0.06
+   waypoint 3 (5.71, 3.24): all songs: 86 within 0.5, d10 0.14 | with preview: 28 within 0.5, d10 0.20
    waypoint 4 (6.52, 4.23): all songs: 222 within 0.5, d10 0.09 | with preview: 15 within 0.5, d10 0.13
    waypoint 5 (7.32, 5.23): all songs: 433 within 0.5, d10 0.08 | with preview: 10 within 0.5, d10 0.09
 -- angry -> neutral
-   waypoint 1 (4.01, 5.16): all songs: 277 within 0.5, d10 0.04 | with preview: 24 within 0.5, d10 0.05
-   waypoint 2 (4.44, 4.68): all songs: 214 within 0.5, d10 0.11 | with preview: 9 within 0.5, d10 0.52   <-- THIN
-   waypoint 3 (4.86, 4.20): all songs: 331 within 0.5, d10 0.11 | with preview: 0 within 0.5, d10 0.75   <-- THIN
-   waypoint 4 (5.29, 3.72): all songs: 166 within 0.5, d10 0.19 | with preview: 10 within 0.5, d10 0.50
-   waypoint 5 (5.71, 3.24): all songs: 86 within 0.5, d10 0.14 | with preview: 2 within 0.5, d10 0.64   <-- THIN
+   waypoint 1 (4.01, 5.16): all songs: 277 within 0.5, d10 0.04 | with preview: 25 within 0.5, d10 0.05
+   waypoint 2 (4.44, 4.68): all songs: 214 within 0.5, d10 0.11 | with preview: 72 within 0.5, d10 0.11
+   waypoint 3 (4.86, 4.20): all songs: 331 within 0.5, d10 0.11 | with preview: 101 within 0.5, d10 0.13
+   waypoint 4 (5.29, 3.72): all songs: 166 within 0.5, d10 0.19 | with preview: 56 within 0.5, d10 0.34
+   waypoint 5 (5.71, 3.24): all songs: 86 within 0.5, d10 0.14 | with preview: 28 within 0.5, d10 0.20
 -- fear -> neutral
-   waypoint 1 (3.54, 4.78): all songs: 542 within 0.5, d10 0.08 | with preview: 18 within 0.5, d10 0.08
-   waypoint 2 (4.08, 4.40): all songs: 387 within 0.5, d10 0.08 | with preview: 12 within 0.5, d10 0.49
-   waypoint 3 (4.62, 4.01): all songs: 341 within 0.5, d10 0.08 | with preview: 3 within 0.5, d10 0.54   <-- THIN
-   waypoint 4 (5.17, 3.63): all songs: 174 within 0.5, d10 0.13 | with preview: 23 within 0.5, d10 0.40
-   waypoint 5 (5.71, 3.24): all songs: 86 within 0.5, d10 0.14 | with preview: 2 within 0.5, d10 0.64   <-- THIN
+   waypoint 1 (3.54, 4.78): all songs: 542 within 0.5, d10 0.08 | with preview: 28 within 0.5, d10 0.08
+   waypoint 2 (4.08, 4.40): all songs: 387 within 0.5, d10 0.08 | with preview: 95 within 0.5, d10 0.19
+   waypoint 3 (4.62, 4.01): all songs: 341 within 0.5, d10 0.08 | with preview: 90 within 0.5, d10 0.08
+   waypoint 4 (5.17, 3.63): all songs: 174 within 0.5, d10 0.13 | with preview: 69 within 0.5, d10 0.29
+   waypoint 5 (5.71, 3.24): all songs: 86 within 0.5, d10 0.14 | with preview: 28 within 0.5, d10 0.20
 -- disgust -> neutral
    waypoint 1 (2.99, 3.72): all songs: 534 within 0.5, d10 0.05 | with preview: 23 within 0.5, d10 0.05
-   waypoint 2 (3.67, 3.60): all songs: 272 within 0.5, d10 0.25 | with preview: 32 within 0.5, d10 0.38
-   waypoint 3 (4.35, 3.48): all songs: 209 within 0.5, d10 0.08 | with preview: 23 within 0.5, d10 0.14
-   waypoint 4 (5.03, 3.36): all songs: 158 within 0.5, d10 0.14 | with preview: 25 within 0.5, d10 0.28
-   waypoint 5 (5.71, 3.24): all songs: 86 within 0.5, d10 0.14 | with preview: 2 within 0.5, d10 0.64   <-- THIN
+   waypoint 2 (3.67, 3.60): all songs: 272 within 0.5, d10 0.25 | with preview: 35 within 0.5, d10 0.38
+   waypoint 3 (4.35, 3.48): all songs: 209 within 0.5, d10 0.08 | with preview: 47 within 0.5, d10 0.14
+   waypoint 4 (5.03, 3.36): all songs: 158 within 0.5, d10 0.14 | with preview: 48 within 0.5, d10 0.19
+   waypoint 5 (5.71, 3.24): all songs: 86 within 0.5, d10 0.14 | with preview: 28 within 0.5, d10 0.20
 
 BUCKET CENTRES (valence, arousal)
   angry     4.01, 5.16
@@ -49,93 +49,93 @@ BUCKET CENTRES (valence, arousal)
   surprise  6.40, 5.61
 
 == SAD: start (3.45, 3.52), target neutral -> happy
- step  wp_V  wp_A                                   title   artist    V    A  bucket
-    1  3.45  3.52                 YOU CAN'T HOLD MY HEART MONSTA X 3.40 3.61     sad
-    2  4.58  3.38                Welcome To My Playground  NCT 127 4.63 3.32 neutral
-    3  5.71  3.24 부나비 (The Tiger Moth) [Acoustic Version] MONSTA X 4.76 3.32 neutral
-    4  6.52  4.23                                 Penalty THE BOYZ 6.62 4.22   happy
-    5  7.32  5.23                                RUN AWAY     GOT7 7.38 5.19   happy
+ step  wp_V  wp_A                                                                      title   artist    V    A  bucket
+    1  3.45  3.52 HaruHaru - Japanese Version (BIGBANG WORLD TOUR 2015〜2016 [MADE] IN JAPAN)  BIGBANG 3.38 3.54     sad
+    2  4.58  3.38                                                     Hope You're Doing Fine     BTOB 4.48 3.40 neutral
+    3  5.71  3.24                                                                 Senior Men The Boyz 5.82 3.13 neutral
+    4  6.52  4.23                                                                    Penalty THE BOYZ 6.62 4.22   happy
+    5  7.32  5.23                                                  KeePer (Prod. PARK KYUNG) THE BOYZ 7.41 5.19   happy
 
 == ANGRY: start (4.01, 5.16), target neutral
- step  wp_V  wp_A                       title              artist    V    A  bucket
-    1  4.01  5.16                Dear Sputnik TOMORROW X TOGETHER 3.96 5.19   angry
-    2  4.44  4.68                       Salty            THE BOYZ 3.98 5.09   angry
-    3  4.86  4.20                   Your Eyes          Stray Kids 4.52 3.40 neutral
-    4  5.29  3.72 Our Love - Rearranged, Live        SUPER JUNIOR 4.75 3.32 neutral
-    5  5.71  3.24                 Hongdae R&B                BIBI 5.80 3.25 neutral
+ step  wp_V  wp_A             title              artist    V    A  bucket
+    1  4.01  5.16 Kiss Me - DK SOLO                iKON 3.94 5.19   angry
+    2  4.44  4.68     LOVE SCENARIO                iKON 4.37 4.59 neutral
+    3  4.86  4.20 Sorry, I Love You          Stray Kids 4.66 4.18 neutral
+    4  5.29  3.72         HANDLE IT               TWICE 5.76 3.61 neutral
+    5  5.71  3.24         Ice Cream TOMORROW X TOGETHER 5.90 3.40 neutral
 
 == FEAR: start (3.54, 4.78), target neutral
- step  wp_V  wp_A                                   title       artist    V    A  bucket
-    1  3.54  4.78                                 SOMEDAY         BTOB 3.40 4.79    fear
-    2  4.08  4.40                                 Callin' SUPER JUNIOR 3.44 4.72    fear
-    3  4.62  4.01                              One For Me       SHINee 4.60 3.40 neutral
-    4  5.17  3.63 부나비 (The Tiger Moth) [Acoustic Version]     MONSTA X 4.76 3.32 neutral
-    5  5.71  3.24             Our Love - Rearranged, Live SUPER JUNIOR 4.75 3.32 neutral
+ step  wp_V  wp_A             title       artist    V    A  bucket
+    1  3.54  4.78 Feels Good - Live SUPER JUNIOR 3.60 4.86    fear
+    2  4.08  4.40      Girl in Oslo      Bigbang 4.40 4.48 neutral
+    3  4.62  4.01       北京北京 - Live         iKON 4.65 4.02 neutral
+    4  5.17  3.63          CAROLINE      Bigbang 5.37 3.40 neutral
+    5  5.71  3.24        Senior Men     The Boyz 5.82 3.13 neutral
 
 == DISGUST: start (2.99, 3.72), target neutral
- step  wp_V  wp_A               title       artist    V    A  bucket
-    1  2.99  3.72 Nu Te Mai Vrea Fata         BiBi 3.04 3.73 disgust
-    2  3.67  3.60            Our Love SUPER JUNIOR 3.15 3.70 disgust
-    3  4.35  3.48             I Can't          2PM 4.40 3.37 neutral
-    4  5.03  3.36      Fly To My Room          BTS 4.54 3.40 neutral
-    5  5.71  3.24    Keep Me Dreaming         Bibi 4.68 3.40 neutral
+ step  wp_V  wp_A                      title     artist    V    A  bucket
+    1  2.99  3.72                  Tricolour       Ikon 3.00 3.78 disgust
+    2  3.67  3.60 Be as ONE (Korean Version)      TWICE 3.15 3.70 disgust
+    3  4.35  3.48                  Your Eyes Stray Kids 4.52 3.40 neutral
+    4  5.03  3.36                      Aruba      Twice 5.37 3.32 neutral
+    5  5.71  3.24                 Senior Men   The Boyz 5.82 3.13 neutral
 
 == MIXED: SAD 45%, ANGRY 30%, NEUTRAL 25%: start (4.19, 3.94), target neutral -> happy
- step  wp_V  wp_A                              title   artist    V    A  bucket
-    1  4.19  3.94            Commercial Interruption Infinite 3.66 3.56     sad
-    2  4.95  3.59 Arcturian Ascension (Instrumental)     Ikon 4.56 3.43 neutral
-    3  5.71  3.24              When you love someone     DAY6 4.60 3.32 neutral
-    4  6.52  4.23                   Breath to Breath THE BOYZ 6.45 4.37   happy
-    5  7.32  5.23                      WHAT'S WRONG?     iKON 7.37 5.33   happy
+ step  wp_V  wp_A                     title       artist    V    A  bucket
+    1  4.19  3.94            Like A Crystal         BTOB 4.40 3.93 neutral
+    2  4.95  3.59             시간 차 Too Late SUPER JUNIOR 4.94 3.88 neutral
+    3  5.71  3.24                  My Heart          2PM 5.37 3.32 neutral
+    4  6.52  4.23                STRAWBERRY        TWICE 6.65 4.22   happy
+    5  7.32  5.23 KeePer (Prod. PARK KYUNG)     THE BOYZ 7.41 5.19   happy
 
 == 500 PLAYLISTS PER CASE
 
 -- sad
 playlists with all 5 songs:               100.0%
-valence rises at every step (all 4):   83.2%
+valence rises at every step (all 4):   100.0%
 valence rises at 3 or more of 4 steps: 100.0%
 last song more positive than first:    100.0%
-single steps that rise:                95.8%
-mean valence by song 1..5: 3.43  4.57  4.87  6.51  7.35
-mean arousal by song 1..5: 3.52  3.37  3.34  4.30  5.23
+single steps that rise:                100.0%
+mean valence by song 1..5: 3.42  4.58  5.66  6.51  7.35
+mean arousal by song 1..5: 3.53  3.37  3.27  4.30  5.23
 song 1 bucket: {'sad': 1.0} | song 5 bucket: {'happy': 1.0}
 
 -- angry
 playlists with all 5 songs:               100.0%
-valence rises at every step (all 4):   19.4%
-valence rises at 3 or more of 4 steps: 71.0%
+valence rises at every step (all 4):   72.4%
+valence rises at 3 or more of 4 steps: 100.0%
 last song more positive than first:    100.0%
-single steps that rise:                72.4%
-mean valence by song 1..5: 3.96  3.96  4.53  4.85  4.86
-mean arousal by song 1..5: 5.19  5.10  3.43  3.38  3.34
+single steps that rise:                93.1%
+mean valence by song 1..5: 3.96  4.42  4.82  5.18  5.66
+mean arousal by song 1..5: 5.19  4.58  4.20  3.66  3.26
 song 1 bucket: {'angry': 1.0} | song 5 bucket: {'neutral': 1.0}
 
 -- fear
 playlists with all 5 songs:               100.0%
-valence rises at every step (all 4):   22.0%
-valence rises at 3 or more of 4 steps: 72.4%
+valence rises at every step (all 4):   90.4%
+valence rises at 3 or more of 4 steps: 100.0%
 last song more positive than first:    100.0%
-single steps that rise:                73.5%
-mean valence by song 1..5: 3.47  3.55  4.43  4.63  4.90
-mean arousal by song 1..5: 4.79  4.68  3.61  3.39  3.34
+single steps that rise:                97.6%
+mean valence by song 1..5: 3.47  4.23  4.60  5.18  5.66
+mean arousal by song 1..5: 4.78  4.51  3.99  3.57  3.28
 song 1 bucket: {'fear': 1.0} | song 5 bucket: {'neutral': 1.0}
 
 -- disgust
 playlists with all 5 songs:               100.0%
-valence rises at every step (all 4):   45.8%
-valence rises at 3 or more of 4 steps: 88.6%
+valence rises at every step (all 4):   73.6%
+valence rises at 3 or more of 4 steps: 97.8%
 last song more positive than first:    100.0%
-single steps that rise:                83.6%
-mean valence by song 1..5: 2.97  3.13  4.48  4.63  4.90
-mean arousal by song 1..5: 3.73  3.71  3.41  3.36  3.34
+single steps that rise:                92.8%
+mean valence by song 1..5: 2.98  3.14  4.48  5.22  5.67
+mean arousal by song 1..5: 3.73  3.71  3.41  3.35  3.28
 song 1 bucket: {'disgust': 1.0} | song 5 bucket: {'neutral': 1.0}
 
 -- mixed: sad 45%, angry 30%, neutral 25%
 playlists with all 5 songs:               100.0%
-valence rises at every step (all 4):   59.8%
+valence rises at every step (all 4):   100.0%
 valence rises at 3 or more of 4 steps: 100.0%
 last song more positive than first:    100.0%
-single steps that rise:                90.0%
-mean valence by song 1..5: 4.34  4.64  4.88  6.50  7.35
-mean arousal by song 1..5: 3.46  3.38  3.34  4.30  5.23
-song 1 bucket: {'neutral': 0.82, 'sad': 0.18} | song 5 bucket: {'happy': 1.0}
+single steps that rise:                100.0%
+mean valence by song 1..5: 4.39  4.74  5.67  6.51  7.35
+mean arousal by song 1..5: 3.99  3.60  3.27  4.30  5.23
+song 1 bucket: {'neutral': 1.0} | song 5 bucket: {'happy': 1.0}
