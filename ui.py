@@ -95,10 +95,28 @@ PAGE_CSS = """
   .st-key-moodcard, .st-key-choice { background:var(--card); border:1px solid var(--line); border-radius:24px; padding:28px;
        box-shadow:0 1px 2px rgba(45,42,82,.05), 0 8px 26px rgba(45,42,82,.07); margin-top:10px; }
   .card-kicker { font-size:12px !important; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:600; margin:0 0 6px !important; }
-  .mood-head { display:flex; align-items:center; gap:16px; }
+  .mood-head { display:flex; align-items:center; gap:16px; min-width:0; }
+  .mood-head h2 { min-width:0; overflow-wrap:anywhere; }
   .mood-head .emoji { font-size:50px; line-height:1; }
   .mood-head h2 { font-size:30px; font-weight:600; margin:0; padding:0; color:var(--ink); line-height:1.15; }
   .mood-head h2 b { font-weight:700; }
+  .mood-grid { display:grid; grid-template-columns:230px minmax(0,1fr); gap:34px; align-items:center; margin:6px 0 18px; }
+  .gauge-box { position:relative; text-align:center; }
+  .gauge { width:100%; display:block; }
+  .gauge-num { position:absolute; left:0; right:0; top:34%; font-size:15px; color:var(--muted); line-height:1.2; }
+  .mood-main { min-width:0; }
+  .gauge-num span { display:block; font-family:var(--serif); font-size:40px; font-weight:600; color:var(--ink); line-height:1; }
+  .band { display:inline-block; margin-top:16px; font-size:13px; font-weight:600; border-radius:999px; padding:4px 14px; }
+  .band-light { background:#e7f3ea; color:#2c5e3a; } .band-mixed { background:var(--lav-soft); color:var(--purple); }
+  .band-low { background:var(--terra-soft); color:var(--terra-ink); }
+  .mood-sentence { font-size:15.5px !important; color:var(--ink); margin:10px 0 16px !important; }
+  .leans { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:14px 26px; max-width:560px; }
+  .lean-top { display:flex; justify-content:space-between; font-size:13.5px; color:var(--muted); margin-bottom:6px; }
+  .lean-top b { color:var(--ink); font-variant-numeric:tabular-nums; }
+  .lean .rail { background:#eeeaf6; border-radius:4px; height:8px; overflow:hidden; }
+  .lean .fill { height:100%; border-radius:4px; background:#7b6fd0; }
+  .lean[data-source="face"] .fill { background:#8d88a6; }
+  .blend { font-size:13px !important; color:var(--muted); margin:12px 0 0 !important; }
   .st-key-moodcard [data-testid="stExpander"] details { border:1px solid var(--line); border-radius:14px; background:#fcfbf8; }
   .st-key-moodcard [data-testid="stExpander"] summary p { font-weight:600; color:var(--purple); }
   .legend { display:flex; gap:16px; font-size:12.5px; color:var(--muted); margin:2px 0 14px; flex-wrap:wrap; }
@@ -152,6 +170,7 @@ PAGE_CSS = """
     .st-key-hero h2 { font-size:30px; }
     .st-key-moodcard, .st-key-choice { padding:20px 16px; border-radius:20px; }
     .mood-head h2 { font-size:25px; } .mood-head .emoji { font-size:42px; }
+    .mood-grid { grid-template-columns:minmax(0,1fr); gap:18px; } .gauge-box { max-width:230px; margin:0 auto; }
     .app-tagline { display:none; }
   }
 </style>
@@ -224,10 +243,55 @@ def headline_html(card):
             f'<b style="color:{card["second_colour"]}">{html.escape(second)}</b>')
 
 
-def mood_card_html(card):
+# The gauge's bands, by the share of sad + angry + fear + disgust (uplift.negative_share).
+BANDS = [(0.25, "Light", "Lighter feelings lead in this reading."),
+         (0.50, "Mixed", "There's a mix of lighter and heavier feelings in this reading."),
+         (1.01, "Low", "Heavier feelings lead in this reading right now.")]
+
+
+def band(share):
+    """(label, sentence) for a negative share: under 25% Light, 25-50% Mixed, 50% or more Low."""
+    return next((label, sentence) for limit, label, sentence in BANDS if share < limit)
+
+
+def percent(share):
+    """Whole percent, rounded down, so the number shown never crosses a band edge the share hasn't."""
+    return int(share * 100 + 1e-9)
+
+
+def gauge_svg(share):
+    """A half-circle gauge filled to `share`."""
+    return ('<svg class="gauge" viewBox="0 0 200 112" role="img" aria-hidden="true">'
+            '<path d="M18 100 A82 82 0 0 1 182 100" pathLength="100" fill="none" stroke="#eeebfa" stroke-width="16" stroke-linecap="round"/>'
+            f'<path d="M18 100 A82 82 0 0 1 182 100" pathLength="100" fill="none" stroke="#2d2a52" stroke-width="16" '
+            f'stroke-linecap="round" stroke-dasharray="{max(share * 100, 0.01):.2f} 200"/></svg>')
+
+
+def lean_html(key, name, share):
+    return (f'<div class="lean" data-source="{key}" data-share="{share:.6f}"><div class="lean-top"><span>{name} leans low</span>'
+            f'<b>{percent(share)}%</b></div><div class="rail"><div class="fill" style="width:{share * 100:.1f}%"></div></div></div>')
+
+
+def mood_card_html(card, low):
+    """The mood reading: the "X% low" gauge with its band, the headline, and how low each source leans.
+
+    low: {"combined": share, "face": share or None, "text": share or None},
+    each the negative share of that source's calibrated probabilities.
+    """
+    share = low["combined"]
+    label, sentence = band(share)
+    sources = [(k, n, low[k]) for k, n in (("face", "Face"), ("text", "Text")) if low.get(k) is not None]
+    leans = "".join(lean_html(k, n, v) for k, n, v in sources)
+    blend = '<p class="blend">Your result blends both signals.</p>' if len(sources) == 2 else ""
     return (f'<p class="card-kicker">Your mood reading</p>'
-            f'<div class="mood-head"><span class="emoji" id="moodemoji">{card["emoji"]}</span>'
-            f'<h2 id="moodhead">{headline_html(card)}</h2></div>')
+            f'<div class="mood-grid">'
+            f'<div class="gauge-box" id="gauge" data-share="{share:.6f}" role="img" aria-label="{percent(share)}% low, {label}">'
+            f'{gauge_svg(share)}<div class="gauge-num"><span id="gaugepct">{percent(share)}%</span> low</div>'
+            f'<div class="band band-{label.lower()}" id="band">{label}</div></div>'
+            f'<div class="mood-main"><div class="mood-head"><span class="emoji" id="moodemoji">{card["emoji"]}</span>'
+            f'<h2 id="moodhead">{headline_html(card)}</h2></div>'
+            f'<p class="mood-sentence" id="bandtext">{sentence}</p>'
+            f'<div class="leans">{leans}</div>{blend}</div></div>')
 
 
 def bars_html(bars):

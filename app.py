@@ -254,7 +254,7 @@ def requested_mode(mode_choice, fused):
 
 
 def build_view(face_probs, text_probs, fused, queue):
-    """What the mood card and the "See all 7 emotions" bars show."""
+    """What the mood card (gauge, headline, how low each source leans) and the "See all 7 emotions" bars show."""
     order = mood.ranked(fused)
     groups = []
     if face_probs is not None:
@@ -270,7 +270,12 @@ def build_view(face_probs, text_probs, fused, queue):
         caption = "Only your face was read, so Combined is the same as Face."
     else:
         caption = "Only your text was read, so Combined is the same as Text."
-    return {"bars": {"emotions": order, "groups": groups, "caption": caption},
+    # How low each source leans: the share of sad + angry + fear + disgust in its
+    # own calibrated probabilities. "combined" is the number Auto mode uses.
+    low = {"combined": uplift.negative_share(fused),
+           "face": uplift.negative_share(dict(zip(EMOTIONS, face_view(face_probs)))) if face_probs is not None else None,
+           "text": uplift.negative_share(dict(zip(EMOTIONS, text_view(text_probs)))) if text_probs is not None else None}
+    return {"bars": {"emotions": order, "groups": groups, "caption": caption}, "low": low,
             "card": mood.card(fused, queue["mode"], queue["journey"])}
 
 
@@ -408,9 +413,9 @@ if previews.rate_limited():
     notices.caption("The preview service is limiting requests right now, so some songs could not be checked. "
                     "Scan again in a minute for a fuller list.")
 
-# 3. Mood reading.
+# 3. Mood reading: "X% low" (the share Auto mode uses), and the same for face and text.
 with st.container(key="moodcard"):
-    st.markdown(ui.mood_card_html(view["card"]), unsafe_allow_html=True)
+    st.markdown(ui.mood_card_html(view["card"], view["low"]), unsafe_allow_html=True)
     with st.expander("See all 7 emotions"):
         st.markdown(ui.bars_html(view["bars"]), unsafe_allow_html=True)
 
