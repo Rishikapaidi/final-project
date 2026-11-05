@@ -1,12 +1,19 @@
-"""Build the play queue and render the page as one HTML/JS component.
+"""Build the play queue and render the two HTML/JS components that play it.
 
 The queue is a list of tracks with a playable 30-second preview (see
-previews.py). Everything below the header (the scan picture, the emotion bars,
-the mood card, the track list and the player bar) is one self-contained
-HTML/JS page shown with st.components.v1.html: Streamlit reruns the script on
-every interaction, which would stop the music, so play, pause, next/previous
-and "play the next song when this one ends" all happen in the browser's
-<audio> element.
+previews.py). Streamlit reruns the script on every interaction, which would
+stop any music started from a Streamlit widget, so playback lives in the
+browser:
+
+- render_path(): the path card (Uplift) or the track list (Resonance), with a
+  Play pill and a link per song, and the mood-journey chart.
+- render_bar(): the player bar pinned to the bottom of the window, which holds
+  the page's only <audio> element: play, pause, next/previous, volume and
+  "play the next song when this one ends".
+
+Both are st.components.v1.html iframes. The list sends commands to the bar,
+and the bar sends back what is playing, over a BroadcastChannel named after
+the queue's id, so a new queue never talks to an old player.
 """
 import json
 
@@ -128,212 +135,196 @@ def journey_summary(journey):
             "waypoints": [[round(float(v), 2), round(float(a), 2)] for v, a in journey["waypoints"]]}
 
 
-def render(tracks, subtitle, journey=None, loop_from=0, view=None):
-    """The whole page below the header as one HTML string.
 
-    view holds what the panels show: {"scan": {"image", "note"}, "bars":
-    {"emotions", "groups", "caption"}, "card": mood.card(...), "note"}.
-    All text is inserted as text, never as HTML.
+
+# The journey's start and end, in words, for the Uplift card's title.
+START_WORDS = {"sad": "heavy", "angry": "tense", "fear": "uneasy", "disgust": "unsettled"}
+END_WORDS = {"happy": "hopeful", "neutral": "calm"}
+
+
+def path_title(journey):
+    """"From heavy to hopeful", from an Uplift journey's start emotion and last target."""
+    start = START_WORDS.get(journey["start"], journey["start"])
+    end = END_WORDS.get(journey["targets"][-1], journey["targets"][-1])
+    return f"From {start} to {end}"
+
+
+def _payload(queue, **extra):
+    data = {"id": queue["id"], "tracks": queue["tracks"], "loopFrom": queue["loop_from"], **extra}
+    return json.dumps(data, ensure_ascii=True).replace("</", "<\\/")
+
+
+def render_path(queue, message):
+    """The path card (Uplift) or the track list (Resonance), as one HTML page.
+
+    queue: from app.build_queue; message: the mood card's sentence about the
+    playlist. All text is inserted as text, never as HTML. The page plays
+    nothing itself: rows and Play pills send commands to the player bar
+    (render_bar) over a BroadcastChannel named after the queue id.
     """
-    data = {"tracks": tracks, "subtitle": subtitle, "journey": journey, "loopFrom": loop_from, "view": view or {}}
-    payload = json.dumps(data, ensure_ascii=True).replace("</", "<\\/")
-    return PLAYER_HTML.replace("__DATA__", payload)
+    title = path_title(queue["journey"]) if queue["mode"] == "Uplift" else "Songs for this moment"
+    payload = _payload(queue, mode=queue["mode"], title=title, message=message, subtitle=queue["subtitle"],
+                       note=queue["note"] or "", journey=queue["journey"])
+    return PATH_HTML.replace("__FONTS__", FONT_CSS).replace("__DATA__", payload)
 
 
-PLAYER_HTML = r"""<!DOCTYPE html>
+def render_bar(queue):
+    """The player bar (the only <audio> on the page), as one HTML page.
+
+    app.py pins it to the bottom of the window with CSS. When a song ends the
+    next one starts; at the end of the queue it loops from queue["loop_from"]
+    (after an Uplift journey, the "keep listening" songs).
+    """
+    return BAR_HTML.replace("__FONTS__", FONT_CSS).replace("__DATA__", _payload(queue))
+
+
+# The bundled fonts (static/fonts, served at app/static/). The component pages
+# are srcdoc iframes, so relative URLs resolve against the app's own address.
+FONT_CSS = """
+  @font-face { font-family:"Fraunces"; src:url("app/static/fonts/Fraunces-latin-variable.woff2") format("woff2"); font-weight:100 900; font-display:swap; }
+  @font-face { font-family:"Inter"; src:url("app/static/fonts/Inter-latin-variable.woff2") format("woff2"); font-weight:100 900; font-display:swap; }
+  :root { --cream:#f6f3ee; --card:#ffffff; --ink:#2b2840; --muted:#625e78; --line:#e7e1d8; --purple:#2d2a52;
+          --lavender:#b9b0e8; --lav-soft:#eeebfa; --terra:#b85c38; --terra-soft:#f8e9e1; --terra-ink:#7a3a20;
+          --serif:"Fraunces", Georgia, "Times New Roman", serif;
+          --sans:"Inter", "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif; }
+"""
+
+# Shared by the scripts of both pages.
+COMMON_JS = r"""
+const DATA = __DATA__;
+const tracks = DATA.tracks;
+const channel = new BroadcastChannel("moodtune:" + DATA.id);
+const $ = id => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const PLAY = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 1.8v12.4L14 8z"/></svg>';
+const PAUSE = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 1.8h3.6v12.4H3zM9.4 1.8H13v12.4H9.4z"/></svg>';
+function artNode(track, cls) {
+  if (track.art) { const img = el("img", cls); img.src = track.art; img.alt = ""; img.loading = "lazy"; return img; }
+  const box = el("div", cls + " noart", "♫"); box.setAttribute("aria-hidden", "true"); return box;
+}
+"""
+
+PATH_HTML = r"""<!DOCTYPE html>
 <html><head><meta charset="utf-8">
 <style>
-  :root { --bg:#121212; --panel:#181818; --row:#2a2a2a; --line:#282828; --text:#ffffff; --muted:#b3b3b3; --green:#1db954; }
-  * { box-sizing: border-box; }
-  html, body { margin:0; height:100%; background:var(--bg); color:var(--text);
-               font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-  #main { position:absolute; top:0; left:0; right:0; bottom:88px; display:grid;
-          grid-template-columns:minmax(300px, 360px) minmax(0, 1fr); gap:18px; padding:4px 4px 0; }
-  #left, #picks { overflow-y:auto; padding-bottom:18px; }
-  #left::-webkit-scrollbar, #picks::-webkit-scrollbar { width:10px; }
-  #left::-webkit-scrollbar-thumb, #picks::-webkit-scrollbar-thumb { background:#3a3a3a; border-radius:5px; }
-  .card { background:var(--panel); border-radius:12px; padding:16px; margin-bottom:16px; }
-  .card h3 { margin:0 0 12px; font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:600; }
-  #scanimg { width:100%; border-radius:8px; display:block; background:#000; }
-  .scan-empty { height:150px; border-radius:8px; background:#101010; display:flex; align-items:center; justify-content:center; color:#666; font-size:13px; }
-  .small { color:var(--muted); font-size:12.5px; line-height:1.45; margin:10px 0 0; }
-  .legend { display:flex; gap:14px; font-size:12px; color:var(--muted); margin-bottom:12px; flex-wrap:wrap; }
-  .legend i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; vertical-align:-1px; }
-  .erow { display:grid; grid-template-columns:70px 1fr; gap:10px; align-items:center; margin-bottom:11px; }
-  .ename { font-size:13.5px; text-transform:capitalize; }
-  .ebars { display:flex; flex-direction:column; gap:3px; }
-  .bar { display:grid; grid-template-columns:1fr 38px; gap:8px; align-items:center; }
-  .bar .rail { background:#262626; border-radius:3px; height:6px; overflow:hidden; }
-  .bar .fill { height:100%; border-radius:3px; }
-  .bar .pct { font-size:11px; color:#8c8c8c; text-align:right; font-variant-numeric:tabular-nums; }
-  .bar.face .fill { background:#7d8590; } .bar.text .fill { background:#5b8def; }
-  .bar.combined .rail { height:9px; } .bar.combined .fill { background:var(--green); }
-  .bar.combined .pct { color:#fff; font-weight:600; font-size:12px; }
-  #mood { display:grid; grid-template-columns:auto 1fr; gap:18px; align-items:center; border-left:5px solid var(--mood, #1db954); }
-  #mood .emoji { font-size:58px; line-height:1; }
-  #mood h2 { margin:0; font-size:26px; text-transform:none; } #mood h2 b { color:var(--mood, #1db954); font-weight:700; }
-  #mood .mode { display:inline-block; margin-top:8px; font-size:12.5px; color:#e6e6e6; background:#242424; border:1px solid #333; border-radius:14px; padding:3px 11px; }
-  #mood .msg { margin:10px 0 0; color:#d0d0d0; font-size:14px; line-height:1.5; max-width:70ch; }
-  #mood .note { margin:8px 0 0; color:#9a9a9a; font-size:12.5px; }
-  .picks-head { display:flex; align-items:center; gap:14px; margin:2px 0 10px; }
-  .picks-head h2 { margin:0; font-size:20px; } .picks-head p { margin:2px 0 0; color:var(--muted); font-size:13px; }
-  #bigplay { width:46px; height:46px; border-radius:50%; border:none; background:var(--green); cursor:pointer;
-             display:flex; align-items:center; justify-content:center; flex:none; transition:transform .1s; }
-  #bigplay:hover { transform:scale(1.06); } #bigplay svg { width:20px; height:20px; fill:#000; }
-  details.journey { background:#101010; border-radius:8px; margin:0 0 10px; padding:0 14px; }
-  details.journey summary { cursor:pointer; padding:10px 0; font-size:13.5px; font-weight:600; color:var(--muted); }
-  details.journey[open] summary { color:var(--text); }
-  details.journey .cap { color:var(--muted); font-size:12px; margin:0 0 12px; }
-  .section { color:var(--muted); font-size:12px; letter-spacing:.08em; text-transform:uppercase; margin:14px 4px 6px; }
-  .row { display:grid; grid-template-columns:30px 46px minmax(0,1fr) auto auto auto; align-items:center; gap:13px;
-         padding:7px 12px 7px 4px; border-radius:6px; cursor:pointer; }
-  .row:hover { background:#222; } .row.playing { background:var(--row); }
+__FONTS__
+  * { box-sizing:border-box; }
+  html, body { margin:0; background:transparent; color:var(--ink); font-family:var(--sans); overflow:hidden; }
+  #card { background:var(--card); border:1px solid var(--line); border-radius:22px; padding:26px 26px 18px;
+          box-shadow:0 1px 2px rgba(45,42,82,.05), 0 8px 26px rgba(45,42,82,.07); margin:2px 2px 14px; }
+  .kicker { font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:600; margin:0 0 6px; }
+  .head { display:flex; align-items:flex-start; gap:18px; justify-content:space-between; }
+  h2 { font-family:var(--serif); font-weight:600; font-size:30px; line-height:1.15; margin:0; letter-spacing:-.01em; }
+  .msg { margin:10px 0 0; font-size:15px; line-height:1.55; color:var(--ink); max-width:68ch; }
+  .sub { margin:6px 0 0; font-size:13px; color:var(--muted); }
+  .note { margin:14px 0 0; font-size:13.5px; line-height:1.5; color:var(--ink); background:var(--lav-soft); border-radius:12px; padding:10px 14px; }
+  #bigplay { width:52px; height:52px; border-radius:50%; border:none; background:var(--purple); cursor:pointer; flex:none;
+             display:flex; align-items:center; justify-content:center; box-shadow:0 6px 16px rgba(45,42,82,.25); transition:transform .12s; }
+  #bigplay:hover { transform:scale(1.05); } #bigplay svg { width:20px; height:20px; fill:#fff; }
+  #bigplay:focus-visible, .pill:focus-visible, .lastfm:focus-visible, .row:focus-visible, summary:focus-visible { outline:3px solid var(--lavender); outline-offset:2px; }
+  /* Uplift: the warm terracotta panel holding the journey */
+  .uplift #panel { background:var(--terra-soft); border-radius:18px; padding:22px 22px 12px; margin:-6px -6px 6px; }
+  .uplift .kicker { color:var(--terra-ink); }
+  .uplift h2 { color:var(--terra-ink); }
+  .uplift #bigplay { background:var(--terra); box-shadow:0 6px 16px rgba(184,92,56,.3); }
+  .steps { display:flex; flex-wrap:wrap; gap:6px; margin:12px 0 0; padding:0; list-style:none; }
+  .steps li { font-size:12.5px; color:var(--terra-ink); background:rgba(255,255,255,.7); border-radius:999px; padding:3px 11px; text-transform:capitalize; }
+  .steps li.arrow { background:none; padding:3px 0; }
+  .section { color:var(--muted); font-size:12px; letter-spacing:.1em; text-transform:uppercase; font-weight:600; margin:20px 6px 6px; }
+  .uplift #panel .section { color:var(--terra-ink); margin-top:16px; }
+  .row { display:grid; grid-template-columns:30px 48px minmax(0,1fr) auto auto auto; align-items:center; gap:14px;
+         padding:8px 12px 8px 6px; border-radius:12px; cursor:pointer; }
+  .row:hover { background:#f4f1fb; } .uplift #panel .row:hover { background:rgba(255,255,255,.6); }
+  .row.playing { background:var(--lav-soft); } .uplift #panel .row.playing { background:#fff; }
   .num { text-align:center; color:var(--muted); font-size:14.5px; font-variant-numeric:tabular-nums; }
-  .row.playing .num, .row.playing .title { color:var(--green); }
-  .art { width:46px; height:46px; border-radius:4px; background:#333; object-fit:cover; display:block; }
-  .noart { display:flex; align-items:center; justify-content:center; color:#777; font-size:20px; }
+  .row.playing .num, .row.playing .title { color:var(--purple); font-weight:600; }
+  .uplift #panel .row.playing .title, .uplift #panel .row.playing .num { color:var(--terra-ink); }
+  .art { width:48px; height:48px; border-radius:10px; background:#ebe6dc; object-fit:cover; display:block; }
+  .noart { display:flex; align-items:center; justify-content:center; color:#8f8aa3; font-size:20px; }
   .meta { min-width:0; } .title { font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .artist { font-size:13px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
-  .tag { font-size:11px; color:var(--muted); border:1px solid #3a3a3a; border-radius:10px; padding:2px 8px; white-space:nowrap; }
-  .pill { border:none; background:var(--green); color:#000; font-weight:700; font-size:12px; border-radius:14px;
-          padding:5px 13px; cursor:pointer; white-space:nowrap; min-width:68px; }
-  .pill:hover { filter:brightness(1.1); }
-  .lastfm { font-size:12px; color:var(--muted); text-decoration:none; white-space:nowrap; }
-  .lastfm:hover { color:var(--text); text-decoration:underline; }
+  .tag { font-size:11.5px; color:var(--muted); border:1px solid var(--line); background:#fff; border-radius:999px; padding:2px 9px; white-space:nowrap; text-transform:capitalize; }
+  .pill { border:none; background:var(--purple); color:#fff; font-weight:600; font-size:12.5px; border-radius:999px; font-family:var(--sans);
+          padding:6px 14px; cursor:pointer; white-space:nowrap; min-width:76px; }
+  .pill:hover { background:#433e78; }
+  .uplift #panel .pill { background:var(--terra); } .uplift #panel .pill:hover { background:#a04d2d; }
+  .lastfm { font-size:12.5px; color:var(--muted); text-decoration:none; white-space:nowrap; }
+  .lastfm:hover { color:var(--purple); text-decoration:underline; }
   .eq { display:inline-flex; gap:2px; align-items:flex-end; height:14px; }
-  .eq i { width:3px; background:var(--green); animation:eq 0.9s ease-in-out infinite; }
+  .eq i { width:3px; background:currentColor; animation:eq .9s ease-in-out infinite; }
   .eq i:nth-child(2) { animation-delay:.25s; } .eq i:nth-child(3) { animation-delay:.5s; }
   .paused .eq i { animation-play-state:paused; }
   @keyframes eq { 0%,100% { height:4px; } 50% { height:14px; } }
-  #bar { position:absolute; left:0; right:0; bottom:0; height:88px; background:var(--panel); border-top:1px solid var(--line);
-         display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.5fr) minmax(0,1fr); align-items:center; gap:16px; padding:0 20px; }
-  #now { display:flex; align-items:center; gap:12px; min-width:0; }
-  #now .art { width:54px; height:54px; flex:none; }
-  #center { display:flex; flex-direction:column; align-items:center; gap:7px; }
-  .controls { display:flex; align-items:center; gap:20px; }
-  .controls button { background:none; border:none; cursor:pointer; padding:0; display:flex; }
-  .controls svg { width:20px; height:20px; fill:var(--muted); } .controls button:hover svg { fill:var(--text); }
-  #toggle { width:36px; height:36px; border-radius:50%; background:#fff !important; align-items:center; justify-content:center; }
-  #toggle svg { fill:#000 !important; width:16px; height:16px; }
-  .progress { display:flex; align-items:center; gap:9px; width:100%; font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; }
-  #track { flex:1; height:4px; background:#4d4d4d; border-radius:2px; cursor:pointer; position:relative; }
-  #fill { height:100%; width:0; background:#fff; border-radius:2px; } #track:hover #fill { background:var(--green); }
-  #position { text-align:right; color:var(--muted); font-size:12px; }
+  details.journey { background:rgba(255,255,255,.75); border-radius:12px; margin:14px 0 6px; padding:0 14px; }
+  details.journey summary { cursor:pointer; padding:11px 0; font-size:13.5px; font-weight:600; color:var(--terra-ink); }
+  details.journey .cap { color:var(--muted); font-size:12px; margin:0 0 12px; }
   .empty { color:var(--muted); padding:30px 8px; }
-  @media (max-width: 860px) { #main { grid-template-columns:1fr; overflow-y:auto; } #left, #picks { overflow:visible; } }
+  @media (max-width: 640px) {
+    #card { padding:20px 14px 12px; border-radius:18px; } h2 { font-size:25px; }
+    .uplift #panel { padding:18px 12px 10px; margin:-4px -4px 6px; }
+    .row { grid-template-columns:24px 44px minmax(0,1fr) auto; gap:10px; padding:8px 4px; }
+    .row .tag, .row .lastfm { display:none; } .art { width:44px; height:44px; }
+  }
 </style></head>
 <body>
-<div id="main">
-  <div id="left">
-    <div class="card" id="scan"><h3>Your scan</h3><div id="scanbody"></div></div>
-    <div class="card" id="analysis"><h3>Emotion analysis</h3><div id="legend" class="legend"></div><div id="bars"></div><p class="small" id="barcap"></p></div>
+<div id="card">
+  <div id="panel">
+    <p class="kicker" id="kicker"></p>
+    <div class="head"><div><h2 id="title"></h2><p class="msg" id="msg"></p><p class="sub" id="qsub"></p></div>
+      <button id="bigplay" title="Play" aria-label="Play"></button></div>
+    <p class="note" id="note" hidden></p>
+    <ul class="steps" id="steps" hidden></ul>
+    <div id="journeyrows"></div>
+    <div id="journey"></div>
   </div>
-  <div id="picks">
-    <div class="card" id="mood"><div class="emoji" id="moodemoji"></div>
-      <div><h2 id="moodhead"></h2><span class="mode" id="moodmode"></span><p class="msg" id="moodmsg"></p><p class="note" id="moodnote"></p></div></div>
-    <div class="card" id="list">
-      <div class="picks-head">
-        <button id="bigplay" title="Play" aria-label="Play"></button>
-        <div><h2>Top Picks For You</h2><p id="qsub"></p></div>
-      </div>
-      <div id="journey"></div>
-      <div id="rows"></div>
-    </div>
-  </div>
-</div>
-<div id="bar">
-  <div id="now"><div class="art noart" id="nowart">&#9835;</div>
-    <div class="meta"><div class="title" id="nowtitle">Nothing playing</div><div class="artist" id="nowartist">Press play or pick a song</div></div></div>
-  <div id="center">
-    <div class="controls">
-      <button id="prev" title="Previous" aria-label="Previous"><svg viewBox="0 0 16 16"><path d="M3 2h2v12H3zM14 2v12L6 8z"/></svg></button>
-      <button id="toggle" title="Play / pause" aria-label="Play / pause"></button>
-      <button id="next" title="Next" aria-label="Next"><svg viewBox="0 0 16 16"><path d="M11 2h2v12h-2zM2 2l8 6-8 6z"/></svg></button>
-    </div>
-    <div class="progress"><span id="tcur">0:00</span><div id="track"><div id="fill"></div></div><span id="tdur">0:30</span></div>
-  </div>
-  <div id="position"></div>
+  <div id="rows"></div>
 </div>
 <script>
-const DATA = __DATA__;
-const tracks = DATA.tracks, VIEW = DATA.view || {};
-const PLAY = '<svg viewBox="0 0 16 16"><path d="M3 1.5v13l11-6.5z"/></svg>';
-const PAUSE = '<svg viewBox="0 0 16 16"><path d="M3 1.5h3.5v13H3zM9.5 1.5H13v13H9.5z"/></svg>';
-const SECTIONS = { journey: "Your journey, in play order", more: "Keep listening", mood: "" };
-const audio = new Audio();
-audio.preload = "auto";
-let current = -1, failures = 0;
-const $ = id => document.getElementById(id);
-const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-const fmt = s => { s = Math.max(0, Math.floor(s || 0)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
-const pct = p => Math.round(p * 100) + "%";
+__COMMON__
+const SECTIONS = { journey: "Your path, in play order", more: "Keep listening", mood: "" };
+let current = -1, paused = true;
+const send = msg => channel.postMessage(msg);
 
-function artNode(track, cls) {
-  if (track.art) { const img = el("img", cls); img.src = track.art; img.alt = ""; img.loading = "lazy"; return img; }
-  return el("div", cls + " noart", "♫");
+function row(t, i) {
+  const r = el("div", "row"); r.dataset.index = i; r.tabIndex = 0; r.setAttribute("role", "button");
+  r.setAttribute("aria-label", "Play " + t.title + " by " + t.artist);
+  r.appendChild(el("div", "num", String(t.number)));
+  r.appendChild(artNode(t, "art"));
+  const meta = el("div", "meta"); meta.appendChild(el("div", "title", t.title)); meta.appendChild(el("div", "artist", t.artist)); r.appendChild(meta);
+  r.appendChild(el("span", "tag", t.bucket));
+  const pill = el("button", "pill", "▶ Play"); pill.title = "Play this song";
+  pill.addEventListener("click", e => { e.stopPropagation(); send(i === current ? { type: "toggle" } : { type: "play", index: i }); }); r.appendChild(pill);
+  const link = el("a", "lastfm", t.link_label || "Last.fm"); link.href = t.lastfm; link.target = "_blank"; link.rel = "noopener noreferrer";
+  link.title = "Open on " + (t.link_label || "Last.fm"); link.addEventListener("click", e => e.stopPropagation()); r.appendChild(link);
+  r.addEventListener("click", () => send({ type: "play", index: i }));
+  r.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); send({ type: "play", index: i }); } });
+  return r;
 }
 
-function buildScan() {
-  const scan = VIEW.scan || {}, body = $("scanbody");
-  if (scan.image) { const img = el("img"); img.id = "scanimg"; img.src = scan.image; img.alt = "The frame used for your scan"; body.appendChild(img); }
-  else body.appendChild(el("div", "scan-empty", "No picture for this scan"));
-  if (scan.note) body.appendChild(el("p", "small", scan.note));
-}
-
-function buildBars() {
-  const bars = VIEW.bars; if (!bars) return;
-  const names = { face: "Face", text: "Text", combined: "Combined" }, colours = { face: "#7d8590", text: "#5b8def", combined: "#1db954" };
-  bars.groups.forEach(g => { const item = el("span", null, names[g.key]); const sw = el("i"); sw.style.background = colours[g.key]; item.prepend(sw); $("legend").appendChild(item); });
-  bars.emotions.forEach((emotion, k) => {
-    const row = el("div", "erow"); row.dataset.emotion = emotion; row.appendChild(el("div", "ename", emotion));
-    const stack = el("div", "ebars");
-    bars.groups.forEach(g => {
-      const bar = el("div", "bar " + g.key); bar.dataset.group = g.key; bar.dataset.value = g.values[k];
-      const rail = el("div", "rail"), fill = el("div", "fill"); fill.style.width = (g.values[k] * 100).toFixed(1) + "%"; rail.appendChild(fill);
-      bar.appendChild(rail); bar.appendChild(el("span", "pct", pct(g.values[k]))); stack.appendChild(bar);
-    });
-    row.appendChild(stack); $("bars").appendChild(row);
-  });
-  $("barcap").textContent = bars.caption || "";
-}
-
-function buildMood() {
-  const c = VIEW.card; if (!c) { $("mood").style.display = "none"; return; }
-  $("mood").style.setProperty("--mood", c.colour);
-  $("moodemoji").textContent = c.emoji;
-  const parts = c.headline.split(/(: | and )/), head = $("moodhead");
-  if (c.headline.startsWith("Mostly ")) { head.appendChild(document.createTextNode("Mostly ")); head.appendChild(el("b", null, c.headline.slice(7))); }
-  else parts.forEach((p, i) => {
-    if (i !== 2 && i !== 4) return head.appendChild(document.createTextNode(p));
-    const word = el("b", null, p); if (i === 4) word.style.color = c.second_colour; head.appendChild(word);
-  });
-  $("moodmode").textContent = c.mode_line; $("moodmsg").textContent = c.message; $("moodnote").textContent = VIEW.note || "";
-}
-
-function buildRows() {
-  $("qsub").textContent = DATA.subtitle;
-  const rows = $("rows");
-  if (!tracks.length) { rows.appendChild(el("div", "empty", "No playable songs were found for this mood.")); return; }
+function build() {
+  const uplift = DATA.mode === "Uplift";
+  document.body.classList.toggle("uplift", uplift);
+  $("kicker").textContent = uplift ? "Your path" : "Your songs";
+  $("title").textContent = DATA.title; $("msg").textContent = DATA.message || ""; $("qsub").textContent = DATA.subtitle;
+  if (DATA.note) { $("note").textContent = DATA.note; $("note").hidden = false; }
+  if (!tracks.length) { $("rows").appendChild(el("div", "empty", "No playable songs were found for this mood.")); $("bigplay").hidden = true; return; }
+  if (uplift && DATA.journey) {
+    const steps = [DATA.journey.start].concat(DATA.journey.targets);
+    steps.forEach((s, k) => { if (k) { const a = el("li", "arrow", "→"); a.setAttribute("aria-hidden", "true"); $("steps").appendChild(a); } $("steps").appendChild(el("li", null, s)); });
+    $("steps").hidden = false;
+  }
   let section = null;
   tracks.forEach((t, i) => {
+    const target = uplift && t.section === "journey" ? $("journeyrows") : $("rows");
     if (t.section !== section) {
       section = t.section;
       let label = SECTIONS[section];
       if (section === "more") label += " · " + t.bucket;
-      if (label) rows.appendChild(el("div", "section", label));
+      if (label) target.appendChild(el("div", "section", label));
     }
-    const row = el("div", "row"); row.dataset.index = i;
-    row.appendChild(el("div", "num", String(t.number)));
-    row.appendChild(artNode(t, "art"));
-    const meta = el("div", "meta"); meta.appendChild(el("div", "title", t.title)); meta.appendChild(el("div", "artist", t.artist)); row.appendChild(meta);
-    row.appendChild(el("span", "tag", t.bucket));
-    const pill = el("button", "pill", "▶ Play"); pill.title = "Play this song";
-    pill.addEventListener("click", e => { e.stopPropagation(); if (i === current) toggle(); else play(i); }); row.appendChild(pill);
-    const link = el("a", "lastfm", t.link_label || "Last.fm"); link.href = t.lastfm; link.target = "_blank"; link.rel = "noopener noreferrer";
-    link.addEventListener("click", e => e.stopPropagation()); row.appendChild(link);
-    row.addEventListener("click", () => play(i));
-    rows.appendChild(row);
+    target.appendChild(row(t, i));
   });
+  buildJourney();
 }
 
 function buildJourney() {
@@ -348,45 +339,126 @@ function buildJourney() {
   const X = v => P.l + (v - x0) / (x1 - x0) * (W - P.l - P.r), Y = a => H - P.b - (a - y0) / (y1 - y0) * (H - P.t - P.b);
   const NS = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(NS, "svg"); svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("width", "100%"); svg.style.maxWidth = W + "px"; svg.id = "chart";
+  svg.setAttribute("role", "img"); svg.setAttribute("aria-label", "Chart of the planned mood path and the songs picked along it");
   const add = (tag, attrs, text) => { const n = document.createElementNS(NS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); if (text != null) n.textContent = text; svg.appendChild(n); return n; };
-  add("line", { x1: P.l, y1: H - P.b, x2: W - P.r, y2: H - P.b, stroke: "#444" }); add("line", { x1: P.l, y1: P.t, x2: P.l, y2: H - P.b, stroke: "#444" });
-  add("text", { x: (P.l + W - P.r) / 2, y: H - 8, fill: "#b3b3b3", "font-size": 12, "text-anchor": "middle" }, "valence (negative → positive)");
-  add("text", { x: 14, y: (P.t + H - P.b) / 2, fill: "#b3b3b3", "font-size": 12, "text-anchor": "middle", transform: `rotate(-90 14 ${(P.t + H - P.b) / 2})` }, "arousal (calm → energetic)");
-  [x0, x1].forEach((v, k) => add("text", { x: k ? W - P.r : P.l, y: H - P.b + 15, fill: "#777", "font-size": 10, "text-anchor": k ? "end" : "start" }, v.toFixed(1)));
-  [y0, y1].forEach((v, k) => add("text", { x: P.l - 6, y: k ? P.t + 9 : H - P.b, fill: "#777", "font-size": 10, "text-anchor": "end" }, v.toFixed(1)));
-  add("polyline", { points: j.waypoints.map(p => X(p[0]) + "," + Y(p[1])).join(" "), fill: "none", stroke: "#777", "stroke-dasharray": "5 4", "stroke-width": 1.5 });
-  add("polyline", { points: songs.map(s => X(s.valence) + "," + Y(s.arousal)).join(" "), fill: "none", stroke: "#1db954", "stroke-width": 2 });
-  songs.forEach(s => { add("circle", { cx: X(s.valence), cy: Y(s.arousal), r: 11, fill: "#1db954" }); add("text", { x: X(s.valence), y: Y(s.arousal) + 4, fill: "#000", "font-size": 12, "font-weight": 700, "text-anchor": "middle" }, String(s.number)); });
+  add("line", { x1: P.l, y1: H - P.b, x2: W - P.r, y2: H - P.b, stroke: "#d9d1c5" }); add("line", { x1: P.l, y1: P.t, x2: P.l, y2: H - P.b, stroke: "#d9d1c5" });
+  add("text", { x: (P.l + W - P.r) / 2, y: H - 8, fill: "#625e78", "font-size": 12, "text-anchor": "middle" }, "valence (negative → positive)");
+  add("text", { x: 14, y: (P.t + H - P.b) / 2, fill: "#625e78", "font-size": 12, "text-anchor": "middle", transform: `rotate(-90 14 ${(P.t + H - P.b) / 2})` }, "arousal (calm → energetic)");
+  [x0, x1].forEach((v, k) => add("text", { x: k ? W - P.r : P.l, y: H - P.b + 15, fill: "#8a8599", "font-size": 10, "text-anchor": k ? "end" : "start" }, v.toFixed(1)));
+  [y0, y1].forEach((v, k) => add("text", { x: P.l - 6, y: k ? P.t + 9 : H - P.b, fill: "#8a8599", "font-size": 10, "text-anchor": "end" }, v.toFixed(1)));
+  add("polyline", { points: j.waypoints.map(p => X(p[0]) + "," + Y(p[1])).join(" "), fill: "none", stroke: "#a39cc4", "stroke-dasharray": "5 4", "stroke-width": 1.5 });
+  add("polyline", { points: songs.map(s => X(s.valence) + "," + Y(s.arousal)).join(" "), fill: "none", stroke: "#b85c38", "stroke-width": 2 });
+  songs.forEach(s => { add("circle", { cx: X(s.valence), cy: Y(s.arousal), r: 11, fill: "#b85c38" }); add("text", { x: X(s.valence), y: Y(s.arousal) + 4, fill: "#fff", "font-size": 12, "font-weight": 700, "text-anchor": "middle" }, String(s.number)); });
   box.appendChild(svg);
-  box.appendChild(el("p", "cap", "Dashed line: the planned path. Green: the songs picked, in play order. Values come from listeners' mood tags."));
+  box.appendChild(el("p", "cap", "Dashed line: the planned path. Solid line: the songs picked, in play order. Values come from listeners' mood tags."));
   $("journey").appendChild(box);
 }
 
 function refresh() {
-  const playing = current >= 0 && !audio.paused;
+  const playing = current >= 0 && !paused;
   document.querySelectorAll(".row").forEach(r => {
     const i = +r.dataset.index, on = i === current;
-    r.classList.toggle("playing", on); r.classList.toggle("paused", on && audio.paused);
+    r.classList.toggle("playing", on); r.classList.toggle("paused", on && paused);
     const num = r.querySelector(".num");
-    if (on) num.innerHTML = '<span class="eq"><i></i><i></i><i></i></span>'; else num.textContent = String(tracks[i].number);
+    if (on) num.innerHTML = '<span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>'; else num.textContent = String(tracks[i].number);
     r.querySelector(".pill").textContent = on && playing ? "❚❚ Pause" : "▶ Play";
   });
-  $("toggle").innerHTML = playing ? PAUSE : PLAY; $("bigplay").innerHTML = playing ? PAUSE : PLAY;
+  $("bigplay").innerHTML = playing ? PAUSE : PLAY;
+  $("bigplay").title = $("bigplay").ariaLabel = playing ? "Pause" : "Play";
+}
+
+// Grow the iframe to fit its content, so the page scrolls instead of the card.
+function fit() { if (window.frameElement) window.frameElement.style.height = Math.ceil(document.documentElement.scrollHeight) + "px"; }
+new ResizeObserver(fit).observe(document.body);
+
+channel.onmessage = e => { if (e.data.type === "state") { current = e.data.current; paused = e.data.paused; refresh(); } };
+$("bigplay").addEventListener("click", () => send({ type: "toggle" }));
+build(); refresh(); fit();
+send({ type: "hello" });
+window.playlist = { state: () => ({ current, paused }) };
+</script>
+</body></html>
+""".replace("__COMMON__", COMMON_JS)
+
+BAR_HTML = r"""<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+__FONTS__
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; overflow:hidden; background:transparent; color:var(--ink); font-family:var(--sans); }
+  #bar { position:absolute; inset:0; background:rgba(255,253,249,.97); border-top:1px solid var(--line);
+         box-shadow:0 -6px 24px rgba(45,42,82,.08); display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) minmax(0,1fr);
+         align-items:center; gap:18px; padding:0 22px; }
+  #now { display:flex; align-items:center; gap:12px; min-width:0; }
+  .art { width:52px; height:52px; border-radius:10px; background:#ebe6dc; object-fit:cover; flex:none; display:block; }
+  .noart { display:flex; align-items:center; justify-content:center; color:#8f8aa3; font-size:20px; }
+  .meta { min-width:0; } .title { font-size:14.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .artist { font-size:12.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
+  #center { display:flex; flex-direction:column; align-items:center; gap:7px; min-width:0; }
+  .controls { display:flex; align-items:center; gap:22px; }
+  button { background:none; border:none; cursor:pointer; padding:4px; display:flex; border-radius:999px; }
+  button svg { width:18px; height:18px; fill:var(--muted); } button:hover svg { fill:var(--purple); }
+  button:focus-visible, input:focus-visible { outline:3px solid var(--lavender); outline-offset:2px; }
+  #toggle { width:42px; height:42px; background:var(--purple); align-items:center; justify-content:center; }
+  #toggle svg { fill:#fff !important; width:16px; height:16px; } #toggle:hover { background:#433e78; }
+  .progress { display:flex; align-items:center; gap:10px; width:100%; font-size:11.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  #track { flex:1; height:5px; background:#e5e0f2; border-radius:3px; cursor:pointer; position:relative; }
+  #fill { height:100%; width:0; background:var(--purple); border-radius:3px; }
+  #right { display:flex; align-items:center; justify-content:flex-end; gap:10px; color:var(--muted); font-size:12px; }
+  #volume { width:110px; accent-color:var(--purple); }
+  #right svg { width:18px; height:18px; fill:var(--muted); flex:none; }
+  @media (max-width: 760px) {
+    #bar { grid-template-columns:minmax(0,1fr) auto; gap:10px; padding:0 12px; }
+    #center { flex-direction:row; } .progress, #right { display:none; } .controls { gap:12px; }
+    .art { width:44px; height:44px; }
+  }
+</style></head>
+<body>
+<div id="bar">
+  <div id="now"><div class="art noart" id="nowart" aria-hidden="true">&#9835;</div>
+    <div class="meta"><div class="title" id="nowtitle">Nothing playing</div><div class="artist" id="nowartist">Press play or pick a song</div></div></div>
+  <div id="center">
+    <div class="controls">
+      <button id="prev" title="Previous" aria-label="Previous"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2h2v12H3zM14 2v12L6 8z"/></svg></button>
+      <button id="toggle" title="Play" aria-label="Play"></button>
+      <button id="next" title="Next" aria-label="Next"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11 2h2v12h-2zM2 2l8 6-8 6z"/></svg></button>
+    </div>
+    <div class="progress"><span id="tcur">0:00</span><div id="track" role="slider" aria-label="Position in the song" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0"><div id="fill"></div></div><span id="tdur">0:30</span></div>
+  </div>
+  <div id="right"><span id="position"></span>
+    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6h3l4-3v10l-4-3H2zM11 5.2a4 4 0 0 1 0 5.6l-.8-.8a2.9 2.9 0 0 0 0-4z"/></svg>
+    <input id="volume" type="range" min="0" max="1" step="0.05" value="0.8" aria-label="Volume"></div>
+</div>
+<script>
+__COMMON__
+const audio = new Audio();
+audio.preload = "auto";
+let current = -1, failures = 0;
+const fmt = s => { s = Math.max(0, Math.floor(s || 0)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+
+// The volume is a per-browser convenience; the page works without storage.
+try { const v = parseFloat(localStorage.getItem("moodtune.volume")); if (v >= 0 && v <= 1) $("volume").value = v; } catch (e) {}
+audio.volume = +$("volume").value;
+$("volume").addEventListener("input", () => { audio.volume = +$("volume").value; try { localStorage.setItem("moodtune.volume", $("volume").value); } catch (e) {} });
+
+function announce() { channel.postMessage({ type: "state", current, paused: audio.paused }); }
+function refresh() {
+  const playing = current >= 0 && !audio.paused;
+  $("toggle").innerHTML = playing ? PAUSE : PLAY;
+  $("toggle").title = $("toggle").ariaLabel = playing ? "Pause" : "Play";
   if (current >= 0) {
     const t = tracks[current];
     $("nowtitle").textContent = t.title; $("nowartist").textContent = t.artist;
     const old = $("nowart"), art = artNode(t, "art"); art.id = "nowart"; old.replaceWith(art);
     $("position").textContent = (current + 1) + " of " + tracks.length;
   }
+  announce();
 }
-
 function play(i) {
   if (!tracks.length) return;
   current = (i + tracks.length) % tracks.length;
   audio.src = tracks[current].preview;
   audio.play().catch(() => {});
-  const row = document.querySelector('.row[data-index="' + current + '"]');
-  if (row) row.scrollIntoView({ block: "nearest", behavior: "smooth" });
   refresh();
 }
 function next() { play(current + 1 >= tracks.length ? DATA.loopFrom : current + 1); }
@@ -398,16 +470,20 @@ audio.addEventListener("error", () => { if (current >= 0 && ++failures < tracks.
 audio.addEventListener("playing", () => { failures = 0; refresh(); });
 audio.addEventListener("pause", refresh);
 audio.addEventListener("timeupdate", () => {
-  const d = audio.duration || 30;
-  $("fill").style.width = Math.min(100, audio.currentTime / d * 100) + "%";
+  const d = audio.duration || 30, p = Math.min(100, audio.currentTime / d * 100);
+  $("fill").style.width = p + "%"; $("track").setAttribute("aria-valuenow", Math.round(p));
   $("tcur").textContent = fmt(audio.currentTime); $("tdur").textContent = fmt(d);
 });
 $("track").addEventListener("click", e => { if (current < 0 || !audio.duration) return; const r = $("track").getBoundingClientRect(); audio.currentTime = (e.clientX - r.left) / r.width * audio.duration; });
-$("toggle").addEventListener("click", toggle); $("bigplay").addEventListener("click", toggle);
+$("track").addEventListener("keydown", e => { if (current < 0 || !audio.duration) return; if (e.key === "ArrowRight") audio.currentTime += 5; if (e.key === "ArrowLeft") audio.currentTime -= 5; });
+$("toggle").addEventListener("click", toggle);
 $("next").addEventListener("click", next); $("prev").addEventListener("click", prev);
-
-buildScan(); buildBars(); buildMood(); buildRows(); buildJourney(); refresh();
-window.player = { audio, state: () => ({ current, paused: audio.paused, time: audio.currentTime, src: audio.src }) };
+channel.onmessage = e => {
+  const m = e.data;
+  if (m.type === "play") play(m.index); else if (m.type === "toggle") toggle(); else if (m.type === "hello") announce();
+};
+refresh();
+window.player = { audio, play, toggle, next, state: () => ({ current, paused: audio.paused, time: audio.currentTime, src: audio.src }) };
 </script>
 </body></html>
-"""
+""".replace("__COMMON__", COMMON_JS)
