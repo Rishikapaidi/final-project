@@ -290,17 +290,16 @@ def choose(mode):
     st.session_state["mode_choice"] = mode
 
 
-def read_photo(photo, key):
+def read_photo(photo):
     """Use a newly uploaded photo as the scan; False if it isn't a picture.
 
     It is read from memory with the same face detection as the webcam frames,
     and the webcam is not opened for it.
     """
     photo_id = hashlib.md5(photo.getvalue()).hexdigest()
-    seen = state.setdefault("photo_ids", {})
-    if seen.get(key) == photo_id:
+    if state.get("photo_id") == photo_id:
         return True
-    seen[key] = photo_id
+    state["photo_id"] = photo_id
     frame = photo_frame(photo.getvalue())
     if frame is None:
         return False
@@ -329,10 +328,6 @@ with st.container(key="topbar"):
     with controls, st.container(horizontal=True, horizontal_alignment="right", vertical_alignment="center",
                                 wrap=False, key="topcontrols"):
         language = st.selectbox("Songs in", LANGUAGES, key="language", width=250)
-        with st.popover("⚙", help="Settings"):
-            settings_photo = st.file_uploader("Upload a photo", type=PHOTO_TYPES, key="photo_settings",
-                                              help="A backup if the webcam doesn't work.")
-            st.caption("A photo is read once, in memory, to find a face. It is never saved.")
 local = ui.local_now(st.context.timezone, st.context.timezone_offset)
 st.markdown(ui.greeting_html(local), unsafe_allow_html=True)
 
@@ -361,9 +356,8 @@ with st.container(key="hero"):
                     'for this visit.</p>', unsafe_allow_html=True)
 notices = st.container(key="notices")
 
-for key, photo in (("photo", tile_photo), ("photo_settings", settings_photo)):
-    if photo is not None and not read_photo(photo, key):
-        notices.warning("That file couldn't be read as a picture. Try a JPEG or PNG.")
+if tile_photo is not None and not read_photo(tile_photo):
+    notices.warning("That file couldn't be read as a picture. Try a JPEG or PNG.")
 
 # The webcam is only opened on first load and on "Tap to scan again"; anything
 # else reuses the cached scan (face result and picture, both kept in memory only).

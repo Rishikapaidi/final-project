@@ -1,4 +1,4 @@
-"""Headless-Edge test of "Upload a photo instead" (in the face tile) and the upload in the settings."""
+"""Headless-Edge test of "Upload a photo instead" in the face tile (the page's only uploader)."""
 import io, os, subprocess, sys, time, urllib.request, tempfile
 import numpy as np, pandas as pd, cv2
 from PIL import Image
@@ -58,9 +58,8 @@ try:
         log(f"webcam sees no face: {page.locator('[data-testid=stAlert]').first.inner_text()!r} | tile {page.locator('.st-key-facetile').inner_text()[:60]!r} | camera opened {opened()} time(s)")
         def close_popover():
             page.keyboard.press("Escape"); time.sleep(0.3); page.locator(".greeting h1").click(); time.sleep(0.4)
-        def upload(name, where="tile", wait=14):
-            """"tile" = "Upload a photo instead" in the face tile; "settings" = the ⚙ popover in the top bar."""
-            page.get_by_role("button", name="Upload a photo instead" if where == "tile" else "⚙").click(); time.sleep(0.8)
+        def upload(name, wait=14):
+            page.get_by_role("button", name="Upload a photo instead").click(); time.sleep(0.8)
             page.locator("[data-testid=stPopoverBody] input[type=file]").set_input_files(f"{assets}/{name}")
             time.sleep(wait)
         def describe():
@@ -79,8 +78,8 @@ try:
         page.get_by_role("button", name="Upload a photo instead").click(); time.sleep(1.5); close_popover()
         s2 = player_state(bar)
         log(f"music keeps playing while the upload popover opens: time {s1:.1f} -> {s2['time']:.1f}, paused {s2['paused']}")
-        upload("sad_sideways.jpg", where="settings"); close_popover()
-        log(f"after a sideways phone-style photo through the settings (EXIF rotation): {describe()} | camera opened {opened()} time(s)")
+        upload("sad_sideways.jpg"); close_popover()
+        log(f"after a sideways phone-style photo (EXIF rotation): {describe()} | camera opened {opened()} time(s)")
         page.screenshot(path=f"{S}/page_9_uploaded_sideways.png")
         upload("not_a_picture.png", wait=8)
         log(f"after a file that isn't a picture: alerts {page.locator('[data-testid=stAlert]').all_inner_texts()} | page still shows {read_card(page)['headline']!r}")
