@@ -33,6 +33,8 @@ PAGE_CSS = """
   .stApp { background:var(--cream); }
   [data-testid="stMainBlockContainer"] { max-width:1180px; padding:18px 28px 132px; }
   h1, h2, h3 { font-family:var(--serif) !important; }
+  /* no anchor-link icons next to the page's headings */
+  [data-testid="stHeaderActionElements"] { display:none !important; }
 
   /* 1. top bar and greeting */
   .st-key-topbar { border-bottom:1px solid var(--line); padding-bottom:12px; }
@@ -96,10 +98,10 @@ PAGE_CSS = """
        box-shadow:0 1px 2px rgba(45,42,82,.05), 0 8px 26px rgba(45,42,82,.07); margin-top:10px; }
   .card-kicker { font-size:12px !important; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:600; margin:0 0 6px !important; }
   .mood-head { display:flex; align-items:center; gap:16px; min-width:0; }
-  .mood-head h2 { min-width:0; overflow-wrap:anywhere; }
+  .mood-title { min-width:0; overflow-wrap:anywhere; }
   .mood-head .emoji { font-size:50px; line-height:1; }
-  .mood-head h2 { font-size:30px; font-weight:600; margin:0; padding:0; color:var(--ink); line-height:1.15; }
-  .mood-head h2 b { font-weight:700; }
+  .mood-title { font-family:var(--serif); font-size:30px; font-weight:600; color:var(--ink); line-height:1.15; }
+  .mood-title b { font-weight:700; }
   .mood-grid { display:grid; grid-template-columns:230px minmax(0,1fr); gap:34px; align-items:center; margin:6px 0 18px; }
   .gauge-box { position:relative; text-align:center; }
   .gauge { width:100%; display:block; }
@@ -148,9 +150,13 @@ PAGE_CSS = """
   .choice-card .check { display:none; font-size:12.5px; font-weight:600; margin-top:10px; }
   .choice-card.on .check { display:block; } .choice-card.uplift .check { color:var(--terra-ink); } .choice-card.resonance .check { color:var(--purple); }
   .st-key-choice_uplift:hover .choice-card:not(.on), .st-key-choice_resonance:hover .choice-card:not(.on) { border-color:#cfc8ef; }
-  .st-key-choice_uplift .stButton, .st-key-choice_resonance .stButton { position:absolute; inset:0; z-index:2; }
-  .st-key-choice_uplift .stButton button, .st-key-choice_resonance .stButton button {
-       width:100%; height:100%; opacity:0; cursor:pointer; }
+  .st-key-choice_uplift [data-testid="stElementContainer"]:has(.stButton),
+  .st-key-choice_resonance [data-testid="stElementContainer"]:has(.stButton) { position:absolute; inset:0; z-index:2; margin:0; }
+  .st-key-choice_uplift .stButton, .st-key-choice_resonance .stButton,
+  .st-key-choice_uplift .stButton button, .st-key-choice_resonance .stButton button { width:100%; height:100%; }
+  .st-key-choice_uplift .stButton button, .st-key-choice_resonance .stButton button { opacity:0; cursor:pointer; }
+  .st-key-choice_uplift [data-testid="stMarkdown"], .st-key-choice_resonance [data-testid="stMarkdown"],
+  .st-key-choice_uplift [data-testid="stMarkdownContainer"], .st-key-choice_resonance [data-testid="stMarkdownContainer"] { margin-bottom:0 !important; }
   .st-key-choice_uplift:has(button:focus-visible) .choice-card, .st-key-choice_resonance:has(button:focus-visible) .choice-card {
        outline:3px solid var(--lavender); outline-offset:3px; }
   .st-key-choose_auto button { background:none; border:none; color:var(--purple); text-decoration:underline; padding:0; min-height:0; }
@@ -158,6 +164,8 @@ PAGE_CSS = """
   /* 5-6. the path card iframe grows to fit; the player bar iframe is pinned to the bottom */
   .st-key-path iframe { display:block; width:100%; border:none; }
   .st-key-playerbar { position:fixed; left:0; right:0; bottom:0; z-index:999; }
+  /* keep things scrolled to (or focused with the keyboard) clear of the player bar */
+  [data-testid="stMain"] { scroll-padding-bottom:110px; scroll-padding-top:16px; }
   .st-key-playerbar iframe { display:block; width:100%; height:86px; border:none; }
 
   /* alerts */
@@ -169,7 +177,7 @@ PAGE_CSS = """
     .st-key-hero { padding:22px 16px; border-radius:22px; }
     .st-key-hero h2 { font-size:30px; }
     .st-key-moodcard, .st-key-choice { padding:20px 16px; border-radius:20px; }
-    .mood-head h2 { font-size:25px; } .mood-head .emoji { font-size:42px; }
+    .mood-title { font-size:25px; } .mood-head .emoji { font-size:42px; }
     .mood-grid { grid-template-columns:minmax(0,1fr); gap:18px; } .gauge-box { max-width:230px; margin:0 auto; }
     .app-tagline { display:none; }
   }
@@ -289,7 +297,7 @@ def mood_card_html(card, low):
             f'{gauge_svg(share)}<div class="gauge-num"><span id="gaugepct">{percent(share)}%</span> low</div>'
             f'<div class="band band-{label.lower()}" id="band">{label}</div></div>'
             f'<div class="mood-main"><div class="mood-head"><span class="emoji" id="moodemoji">{card["emoji"]}</span>'
-            f'<h2 id="moodhead">{headline_html(card)}</h2></div>'
+            f'<div class="mood-title" id="moodhead" role="heading" aria-level="2">{headline_html(card)}</div></div>'
             f'<p class="mood-sentence" id="bandtext">{sentence}</p>'
             f'<div class="leans">{leans}</div>{blend}</div></div>')
 
