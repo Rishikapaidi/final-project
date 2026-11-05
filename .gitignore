@@ -18,3 +18,6 @@ data/songs/raw/
 # scripts/train_text_emotion_distilbert.py (their reports stay tracked)
 models/**/*.joblib
 models/**/model/
+
+# Output of the browser tests in tests/ (logs, screenshots, generated test pictures)
+tests/output/

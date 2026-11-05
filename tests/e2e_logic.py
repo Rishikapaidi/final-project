@@ -1,0 +1,170 @@
+"""Logic end-to-end test of the redesigned app with a fake camera and a fake preview service."""
+import hashlib, io, os, sys, tempfile
+import numpy as np, pandas as pd, cv2
+from PIL import Image
+from streamlit.testing.v1 import AppTest
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
+import previews, json
+
+# Optional: make the app's unseeded random picks repeatable (each call gets the next seed),
+# so two versions of the code can be compared on the same scenarios.
+if os.environ.get("TEST_SEED"):
+    _real_rng, _seed = np.random.default_rng, [int(os.environ["TEST_SEED"])]
+    def _seeded_rng(*args, **kw):
+        if args or kw: return _real_rng(*args, **kw)
+        _seed[0] += 1; return _real_rng(_seed[0])
+    np.random.default_rng = _seeded_rng
+
+# fake preview service: ~70% of songs have a preview, decided by a hash of the title
+lookups = []
+def fake_search(title, artist):
+    lookups.append(title)
+    if int(hashlib.md5(f"{title}|{artist}".encode()).hexdigest(), 16) % 10 < 7:
+        return {"preview_url": "https://example.test/preview.m4a", "artwork_url": "https://example.test/art.jpg",
+                "itunes_title": title, "itunes_artist": artist}
+    return None
+previews.search_itunes = fake_search
+previews.CACHE_PATH = os.path.join(tempfile.mkdtemp(), "previews.csv")
+previews._cache = None
+
+EMO = ["angry", "disgust", "fear", "happy", "sad", "surprise", "neutral"]
+songs = pd.read_csv(f"{ROOT}/data/songs/songs_clean.csv", keep_default_na=False)
+z = np.load(f"{ROOT}/data/fusion/text_test.npz"); probs, labels = z["probs"], z["labels"].astype(str)
+tp = pd.read_csv(f"{ROOT}/models/text_emotion_distilbert/test_predictions.csv", keep_default_na=False)
+texts = {}
+for k, e in enumerate(EMO):
+    ok = (labels == e) & (probs.argmax(1) == k) & (tp.text.str.len().between(25, 110).values) & ~tp.text.str.contains(r"\[NAME\]").values
+    texts[e] = tp.text[np.flatnonzero(ok)[probs[ok, k].argmax()]]
+
+p = pd.read_parquet(f"{ROOT}/data/face_emotion/raw/privateTest-0000.parquet")
+fz = np.load(f"{ROOT}/data/fusion/face_test.npz"); fprobs, flabels = fz["probs"], fz["labels"].astype(str)
+haar = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+def frame_for(img48):
+    canvas = np.full((480, 640), 128, np.uint8); canvas[120:360, 200:440] = cv2.resize(img48, (240, 240), interpolation=cv2.INTER_CUBIC)
+    return cv2.cvtColor(canvas, cv2.COLOR_GRAY2BGR)
+def face_frame(emotion):
+    k = EMO.index(emotion)
+    for i in np.argsort(-fprobs[:, k]):
+        if flabels[i] != emotion: continue
+        f = frame_for(np.asarray(Image.open(io.BytesIO(p.image.iloc[i]["bytes"])).convert("L")))
+        if len(haar.detectMultiScale(cv2.cvtColor(f, cv2.COLOR_BGR2GRAY), scaleFactor=1.3, minNeighbors=5)) == 1:
+            return f
+happy_frame, sad_frame = face_frame("happy"), face_frame("sad")
+blank = np.full((480, 640, 3), 128, np.uint8)
+
+class FakeCap:
+    frame, opened = None, 0
+    def __init__(self, *a): FakeCap.opened += 1
+    def read(self): return True, FakeCap.frame.copy()
+    def release(self): pass
+    def isOpened(self): return True
+cv2.VideoCapture = FakeCap
+
+def start(frame):
+    FakeCap.frame = frame
+    at = AppTest.from_file(f"{ROOT}/app.py", default_timeout=600).run()
+    assert not at.exception, [e.value for e in at.exception]
+    return at
+
+def describe(at):
+    if "queue" not in at.session_state:
+        return "NO QUEUE | " + " | ".join(w.value for w in at.warning)
+    q = at.session_state["queue"]; t = q["tracks"]
+    chip = next((m.value for m in at.markdown if "Feeling:" in m.value), "")
+    import re
+    chip = re.sub("<.*?>", " ", chip); chip = re.sub(r"\s+", " ", chip).strip()
+    sections = pd.Series([x["section"] for x in t]).value_counts().to_dict()
+    journey = [x for x in t if x["section"] == "journey"]
+    out = f"{q['mode']:9} | tracks {len(t)} {sections} | all have preview: {all(x['preview'] for x in t)}"
+    if journey:
+        v = [x["valence"] for x in journey]
+        out += f" | journey buckets {[x['bucket'] for x in journey]} numbers {[x['number'] for x in journey]} valence {v} rising {all(b > a for a, b in zip(v, v[1:]))}"
+        more = [x["bucket"] for x in t if x["section"] == "more"]
+        if more: out += f" | then {len(more)} more from {sorted(set(more))}"
+    else:
+        out += f" | buckets {pd.Series([x['bucket'] for x in t]).value_counts().to_dict()}"
+    has_player = sum(getattr(c, "type", "") == "iframe" for c in at.main.children.values())
+    out += f" | player iframes {has_player} | note: {q['note']!r} | chip: {chip!r}"
+    return out
+
+def set_text(at, text):
+    at.text_input[0].set_value(text).run(); assert not at.exception, [e.value for e in at.exception]
+def set_mode(at, mode):
+    at.radio[0].set_value(mode).run(); assert not at.exception, [e.value for e in at.exception]
+
+lang_of = dict(zip(songs.lastfm_url, songs.language))
+dump = {}
+def record(name, at):
+    dump[name] = [t["lastfm"] for t in at.session_state["queue"]["tracks"]] if "queue" in at.session_state else None
+
+def set_language(at, language):
+    at.selectbox(key="language").set_value(language).run(); assert not at.exception, [e.value for e in at.exception]
+
+def languages_of(at):
+    return pd.Series([lang_of[t["lastfm"]] for t in at.session_state["queue"]["tracks"]]).value_counts().to_dict()
+
+print("RESULT == AUTO MODE, text only (no face)")
+for e in EMO:
+    at = start(blank); set_text(at, texts[e])
+    print(f"RESULT [{e:8}] {describe(at)}"); record(f"text {e}", at)
+
+print("RESULT == FORCED MODES")
+at = start(blank); set_text(at, texts["sad"]); set_mode(at, "Resonance")
+print(f"RESULT [sad text, Resonance forced] {describe(at)}"); record("sad text resonance", at)
+at = start(blank); set_text(at, texts["happy"]); set_mode(at, "Uplift")
+print(f"RESULT [happy text, Uplift forced ] {describe(at)}"); record("happy text uplift", at)
+
+print("RESULT == FACES")
+at = start(sad_frame);  print(f"RESULT [sad face only, auto        ] {describe(at)}"); record("sad face", at)
+at = start(happy_frame); print(f"RESULT [happy face only, auto      ] {describe(at)}"); record("happy face", at)
+at = start(happy_frame); set_text(at, "I miss her so much, everything feels empty and pointless now.")
+print(f"RESULT [happy face + sad text, auto] {describe(at)}"); record("happy face sad text", at)
+at = start(sad_frame); set_text(at, "This is absolutely infuriating, they lied to us again!")
+print(f"RESULT [sad face + angry text, auto] {describe(at)}"); record("sad face angry text", at)
+at = start(blank); print(f"RESULT [no face, no text           ] {describe(at)}")
+
+if os.environ.get("TEST_DUMP"):
+    json.dump(dump, open(os.environ["TEST_DUMP"], "w"), indent=0)
+    print(f"RESULT English queues written to {os.environ['TEST_DUMP']}")
+if os.environ.get("TEST_ENGLISH_ONLY"):
+    sys.exit(0)
+
+print("RESULT == LANGUAGES")
+for language in ["English", "Hindi", "Tamil", "Telugu", "Malayalam", "Korean"]:
+    for label, frame, text, mode in [("sad face, auto", sad_frame, "", None), ("happy face, auto", happy_frame, "", None),
+                                     ("happy text, Uplift forced", blank, texts["happy"], "Uplift")]:
+        at = start(frame)
+        if text: set_text(at, text)
+        if mode: set_mode(at, mode)
+        set_language(at, language)
+        q = at.session_state["queue"]
+        langs = languages_of(at)
+        print(f"RESULT [{language:9} {label:26}] {q['mode']:9} | tracks {len(q['tracks'])} | languages {langs} "
+              f"| only {language}: {set(langs) == {language}} | subtitle {q['subtitle']!r} | note: {q['note']!r}")
+
+print("RESULT == CHANGING THE LANGUAGE REBUILDS THE QUEUE WITHOUT THE CAMERA")
+FakeCap.opened = 0
+at = start(sad_frame); a = FakeCap.opened; scan_id = at.session_state["scan_id"]
+seen = []
+for language in ["Hindi", "Telugu", "Korean", "English"]:
+    before = [t["lastfm"] for t in at.session_state["queue"]["tracks"]]
+    set_language(at, language)
+    after = [t["lastfm"] for t in at.session_state["queue"]["tracks"]]
+    seen.append(f"{language}: rebuilt {before != after}, {at.session_state['queue']['mode']}, languages {languages_of(at)}")
+print(f"RESULT camera opened after load {a}, after 4 language changes {FakeCap.opened} | same scan: {at.session_state['scan_id'] == scan_id}")
+for line in seen: print(f"RESULT    {line}")
+
+print("RESULT == CAMERA IS ONLY OPENED ON LOAD AND RE-SCAN")
+FakeCap.opened = 0
+at = start(sad_frame); a = FakeCap.opened
+key1 = at.session_state["queue_key"]; q1 = [t["lastfm"] for t in at.session_state["queue"]["tracks"]]
+set_mode(at, "Resonance"); set_mode(at, "Uplift"); set_text(at, "I feel awful today"); b = FakeCap.opened
+set_mode(at, "Auto"); set_text(at, ""); c = FakeCap.opened
+q2 = [t["lastfm"] for t in at.session_state["queue"]["tracks"]]
+at.run(); q3 = [t["lastfm"] for t in at.session_state["queue"]["tracks"]]
+at.button[0].click().run(); d = FakeCap.opened
+print(f"RESULT camera opened: after load {a}, after 3 setting changes {b}, after 2 more {c}, after Re-scan {d}")
+print(f"RESULT queue unchanged by a plain rerun: {q2 == q3} | queue rebuilt after settings round-trip (new random picks): {q1 != q2}")
+print(f"RESULT fake preview lookups made in total: {len(lookups)} | distinct songs cached: {len(previews._cache)}")
