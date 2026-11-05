@@ -1,6 +1,7 @@
 """Cold start with the background text-model warm-up: page timing, then text timing (after 30 s, or straight away)."""
 import os, subprocess, sys, time, urllib.request
 from playwright.sync_api import sync_playwright
+from pagekit import legend, read_card
 HERE = os.path.dirname(os.path.abspath(__file__)); S = os.path.join(HERE, "output"); os.makedirs(S, exist_ok=True); ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); PY = sys.executable
 CASE = sys.argv[1]; PORT = {"wait30": "8561", "immediate": "8562"}[CASE]
 TEXT = "I miss her so much, everything feels empty and pointless now."
@@ -30,12 +31,12 @@ try:
         b = pw.chromium.launch(channel="msedge", headless=True); ctx = b.new_context(viewport={"width": 1440, "height": 900}); ctx.add_init_script(WATCH); page = ctx.new_page()
         t0 = time.time(); page.goto(f"http://localhost:{PORT}", wait_until="commit")
         page.wait_for_selector(".listening", timeout=120000); t_listen = time.time()
-        page.wait_for_selector("iframe", timeout=180000)
+        page.wait_for_selector(".st-key-playerbar iframe", timeout=180000)
         def player(need_text=False):
-            for f in page.frames:
-                try:
-                    if f != page.main_frame and f.evaluate("typeof window.player") == "object" and (not need_text or "Text" in f.locator("#legend").inner_text()): return f
-                except Exception: pass
+            """The page once its player bar is up (and, with need_text, once the bars include Text)."""
+            try:
+                if page.locator(".st-key-playerbar iframe").count() and (not need_text or "Text" in legend(page)): return page
+            except Exception: pass
         while player() is None: time.sleep(0.1)
         t_full = time.time()
         log(f"[{CASE}] listening screen {t_listen - t0:.1f}s | full page {t_full - t0:.1f}s after opening")
@@ -43,23 +44,21 @@ try:
             time.sleep(30)
             t_ready = when(lambda m: m["ready"] == "1")
             log(f"[{CASE}] warm-up: torch imported {when(lambda m: m['torch'] == '1') - t_full:+.1f}s and model ready {t_ready - t_full:+.1f}s after the page appeared" if t_ready else f"[{CASE}] model not ready after 30 s?!")
-        page.get_by_role("button", name="⚙").click(); time.sleep(0.5)
-        box = page.get_by_label("Tell me how you feel (optional)"); box.fill(TEXT)
+        box = page.get_by_label("How was your day?"); box.fill(TEXT)
         t_type = time.time(); box.press("Enter")
         while (fr := player(True)) is None:
             time.sleep(0.05)
             if time.time() - t_type > 120: raise RuntimeError("no text result")
         t_text = time.time()
-        page.keyboard.press("Escape"); time.sleep(0.3)
         last = mods()[-1][1]
         log(f"[{CASE}] text result {t_text - t_type:.1f}s after pressing Enter | 'Reading your text...' shown: {page.evaluate('window.__seen')} | model loads in this server process: {last['loads']}")
-        log(f"[{CASE}] result: {fr.locator('#moodhead').inner_text()!r} | bars {fr.locator('#legend span').all_inner_texts()} | text bar for sad {fr.locator('.erow[data-emotion=sad] .bar.text .pct').inner_text()} | combined sad {fr.locator('.erow[data-emotion=sad] .bar.combined .pct').inner_text()}")
-        page.get_by_role("button", name="⚙").click(); time.sleep(0.5)
+        pct = lambda emotion, group: page.locator(f'.erow[data-emotion={emotion}] .bar.{group} .pct').text_content()
+        log(f"[{CASE}] result: {read_card(page)['headline']!r} | bars {legend(page)} | text bar for sad {pct('sad', 'text')} | combined sad {pct('sad', 'combined')}")
         box.fill("Finally finished my exams, can't wait for the weekend!"); t2 = time.time(); box.press("Enter")
-        while (fr := player(True)) is None or int(fr.locator('.erow[data-emotion=happy] .bar.text .pct').inner_text().rstrip('%')) < 50:
+        while player(True) is None or int(pct('happy', 'text').rstrip('%')) < 50:
             time.sleep(0.05)
             if time.time() - t2 > 60: break
-        log(f"[{CASE}] a second, different sentence: result {time.time() - t2:.1f}s after Enter -> text bar happy {fr.locator('.erow[data-emotion=happy] .bar.text .pct').inner_text()}, page {fr.locator('#moodhead').inner_text()!r} (the sad face outweighs it) | model loads: {mods()[-1][1]['loads']}")
+        log(f"[{CASE}] a second, different sentence: result {time.time() - t2:.1f}s after Enter -> text bar happy {pct('happy', 'text')}, page {read_card(page)['headline']!r} (the sad face outweighs it) | model loads: {mods()[-1][1]['loads']}")
         log(f"[{CASE}] 'Running' or a function name on the page: {len(page.evaluate('window.__flagged'))} time(s) {page.evaluate('window.__flagged')[:2]}")
         b.close()
 finally:

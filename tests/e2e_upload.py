@@ -1,8 +1,9 @@
-"""Headless-Edge test of "Upload a photo instead"."""
+"""Headless-Edge test of "Upload a photo instead" (in the face tile) and the upload in the settings."""
 import io, os, subprocess, sys, time, urllib.request, tempfile
 import numpy as np, pandas as pd, cv2
 from PIL import Image
 from playwright.sync_api import sync_playwright
+from pagekit import bar_frame, full_shot, legend, path_frame, player_state, read_card, wait_for_text_bars
 
 HERE = os.path.dirname(os.path.abspath(__file__)); S = os.path.join(HERE, "output"); os.makedirs(S, exist_ok=True); ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); PY = sys.executable; PORT = "8586"
 def log(*a): print("RESULT", *a, flush=True)
@@ -54,47 +55,43 @@ try:
         b = pw.chromium.launch(channel="msedge", headless=True); page = b.new_page(viewport={"width": 1440, "height": 900})
         errors = []; page.on("pageerror", lambda e: errors.append(str(e)))
         page.goto(f"http://localhost:{PORT}"); page.wait_for_selector("[data-testid=stAlert]", timeout=180000)
-        log(f"webcam sees no face: {page.locator('[data-testid=stAlert]').first.inner_text()!r} | camera opened {opened()} time(s)")
-        def frame_():
-            for _ in range(300):
-                for f in page.frames:
-                    try:
-                        if f != page.main_frame and f.evaluate("typeof window.player") == "object": return f
-                    except Exception: pass
-                time.sleep(0.2)
-        def upload(name, wait=14):
-            page.get_by_role("button", name="⚙").click(); time.sleep(0.8)
+        log(f"webcam sees no face: {page.locator('[data-testid=stAlert]').first.inner_text()!r} | tile {page.locator('.st-key-facetile').inner_text()[:60]!r} | camera opened {opened()} time(s)")
+        def close_popover():
+            page.keyboard.press("Escape"); time.sleep(0.3); page.locator(".greeting h1").click(); time.sleep(0.4)
+        def upload(name, where="tile", wait=14):
+            """"tile" = "Upload a photo instead" in the face tile; "settings" = the ⚙ popover in the top bar."""
+            page.get_by_role("button", name="Upload a photo instead" if where == "tile" else "⚙").click(); time.sleep(0.8)
             page.locator("[data-testid=stPopoverBody] input[type=file]").set_input_files(f"{assets}/{name}")
             time.sleep(wait)
         def describe():
-            fr = frame_()
-            return (f"{fr.locator('#moodhead').inner_text()!r} | mode {fr.locator('#moodmode').inner_text()!r} | bars {fr.locator('#legend span').all_inner_texts()} | "
-                    f"scan picture {fr.locator('#scanimg').evaluate(SIZE_JS)} | note {fr.locator('#scanbody .small').all_inner_texts()} | rows {fr.locator('.row').count()}")
+            card = read_card(page); path = path_frame(page)
+            return (f"{card['headline']!r} gauge {card['pct']} {card['band']} | path {path.locator('#title').inner_text()!r} | bars {legend(page)} | "
+                    f"scan picture {page.locator('.scanimg').evaluate(SIZE_JS)} | note {page.locator('.tile-note').all_inner_texts()} | rows {path.locator('.row').count()}")
         upload("happy.png")
-        log(f"uploader label in settings: {page.locator('[data-testid=stPopoverBody] [data-testid=stFileUploader] label').first.inner_text()!r}")
-        page.screenshot(path=f"{S}/page_7_settings_upload.png")
-        page.keyboard.press("Escape"); page.locator(".app-tagline").click(); time.sleep(0.5)
+        log(f"uploader label in the tile: {page.locator('[data-testid=stPopoverBody] [data-testid=stFileUploader] label').first.inner_text()!r} | "
+            f"note {page.locator('[data-testid=stPopoverBody] [data-testid=stCaptionContainer]').first.inner_text()!r}")
+        page.screenshot(path=f"{S}/page_7_tile_upload.png")
+        close_popover()
         log(f"after uploading a happy face: {describe()} | camera opened {opened()} time(s)")
-        page.screenshot(path=f"{S}/page_8_uploaded_photo.png")
-        fr = frame_(); fr.locator(".row").nth(0).click(); time.sleep(2.5)
-        s1 = fr.evaluate("window.player.state().time")
-        page.get_by_role("button", name="⚙").click(); time.sleep(1.5); page.keyboard.press("Escape"); time.sleep(0.5)
-        s2 = fr.evaluate("window.player.state()")
-        log(f"music keeps playing with the uploader in settings: time {s1:.1f} -> {s2['time']:.1f}, paused {s2['paused']}")
-        upload("sad_sideways.jpg"); page.keyboard.press("Escape"); page.locator(".app-tagline").click(); time.sleep(0.5)
-        log(f"after a sideways phone-style photo (EXIF rotation): {describe()} | camera opened {opened()} time(s)")
+        full_shot(page, f"{S}/page_7_uploaded_photo.png")
+        bar = bar_frame(page); path = path_frame(page); path.locator(".row").nth(0).click(); time.sleep(2.5)
+        s1 = player_state(bar)["time"]
+        page.get_by_role("button", name="Upload a photo instead").click(); time.sleep(1.5); close_popover()
+        s2 = player_state(bar)
+        log(f"music keeps playing while the upload popover opens: time {s1:.1f} -> {s2['time']:.1f}, paused {s2['paused']}")
+        upload("sad_sideways.jpg", where="settings"); close_popover()
+        log(f"after a sideways phone-style photo through the settings (EXIF rotation): {describe()} | camera opened {opened()} time(s)")
         page.screenshot(path=f"{S}/page_9_uploaded_sideways.png")
         upload("not_a_picture.png", wait=8)
-        log(f"after a file that isn't a picture: alerts {page.locator('[data-testid=stAlert]').all_inner_texts()} | page still shows {frame_().locator('#moodhead').inner_text()!r}")
-        page.keyboard.press("Escape"); time.sleep(0.3)
-        upload("no_face.png"); page.keyboard.press("Escape"); time.sleep(0.5)
-        log(f"after a photo with no face (and no text): alerts {[a[:70] for a in page.locator('[data-testid=stAlert]').all_inner_texts()]} | camera opened {opened()} time(s)")
-        page.get_by_role("button", name="⚙").click(); time.sleep(0.6)
-        box = page.get_by_label("Tell me how you feel (optional)"); box.fill("I miss her so much, everything feels empty and pointless now."); box.press("Enter"); time.sleep(6)
-        page.keyboard.press("Escape"); page.locator(".app-tagline").click(); time.sleep(0.5)
+        log(f"after a file that isn't a picture: alerts {page.locator('[data-testid=stAlert]').all_inner_texts()} | page still shows {read_card(page)['headline']!r}")
+        close_popover()
+        upload("no_face.png"); close_popover()
+        log(f"after a photo with no face (and no text): alerts {[a[:80] for a in page.locator('[data-testid=stAlert]').all_inner_texts()]} | camera opened {opened()} time(s)")
+        box = page.get_by_label("How was your day?"); box.fill("I miss her so much, everything feels empty and pointless now."); box.press("Enter")
+        wait_for_text_bars(page); time.sleep(2)
         log(f"then with a sad sentence: {describe()} | camera opened {opened()} time(s)")
-        page.get_by_role("button", name="Re-scan").click(); time.sleep(6)
-        log(f"after Re-scan: camera opened {opened()} time(s) | {describe()}")
+        page.get_by_role("button", name="Tap to scan again").click(); time.sleep(8)
+        log(f"after 'Tap to scan again': camera opened {opened()} time(s) | {describe()}")
         log(f"page errors: {errors}")
         b.close()
 finally:

@@ -17,6 +17,23 @@ To run the app, type the following command in the terminal.
   streamlit run app.py
 ```
 
+### Streamlit version
+
+`requirements.txt` pins Streamlit to **1.64.0**. The page's song list and
+player bar are two `st.components.v1.html` components (see `player.py`), and
+Streamlit has announced that `st.components.v1.html` will be removed in a
+later version (1.64 already logs a warning suggesting `st.iframe`). Moving to
+a newer Streamlit means porting those two components first; until then, keep
+the pin.
+
+### Page design
+
+A light theme (`.streamlit/config.toml`) with bundled Fraunces and Inter fonts
+in `static/fonts/` (SIL Open Font License, licence files in the same folder),
+served through Streamlit's static file serving, so the page looks the same
+offline. The page's CSS and HTML pieces are in `ui.py`. Screenshots are in
+`docs/screenshots/`.
+
 ## Libraries
 
 - Streamlit

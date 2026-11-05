@@ -1,10 +1,14 @@
-"""Headless-Edge checks and screenshots of the new page layout, with real cached previews."""
-import os, subprocess, sys, time, urllib.request, tempfile, glob
-from playwright.sync_api import sync_playwright
+"""Headless-Edge checks and screenshots of the page, with real cached previews.
 
-HERE = os.path.dirname(os.path.abspath(__file__)); S = os.path.join(HERE, "output"); os.makedirs(S, exist_ok=True)
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PY = sys.executable
+Scenarios: sad face (Uplift), happy face (Resonance), a happy face with a sad
+sentence (Mixed), and no face with a sad sentence. The first one also checks
+playback, the expander, the settings, the choice cards and the narrow layout.
+"""
+import os, sys, time
+from playwright.sync_api import sync_playwright
+from pagekit import (OUT, bar_frame, describe_card, full_shot, image_files, log, new_images, path_frame,
+                     player_state, players, read_card, set_bars_open, start_server, stop, wait_for_text_bars)
+
 SAD_TEXT = "I miss her so much, everything feels empty and pointless now."
 SCENARIOS = [  # name, frame, text, extra playback checks
     ("1_sad_face_uplift", "sad", "", True),
@@ -13,127 +17,127 @@ SCENARIOS = [  # name, frame, text, extra playback checks
     ("4_no_face_text_only", "blank", SAD_TEXT, False),
 ]
 ONLY = sys.argv[1:]  # optional scenario name filter
-IMAGE_EXT = (".jpg", ".jpeg", ".png", ".bmp", ".webp", ".gif")
-def log(*a): print("RESULT", *a, flush=True)
+# Text that must never appear on the page: Streamlit's "Running <function>()" and the app's function names.
+FLAG = r"Running|load_songs|load_face_model|load_text_model|summarise_scan|text_probabilities|build_queue|build_view|cache_resource|cache_data"
+WATCH = """
+window.__flagged = [];
+const FLAG = new RegExp(%s);
+const check = () => { const t = document.body ? document.body.innerText : ""; const m = t.match(FLAG);
+  if (m) window.__flagged.push(t.slice(Math.max(0, m.index - 30), m.index + 50)); };
+new MutationObserver(check).observe(document, { subtree: true, childList: true, characterData: true }); setInterval(check, 100);
+""" % repr(FLAG)
 
-def image_files():
-    found = {}
-    for base in [ROOT, tempfile.gettempdir()]:
-        for dirpath, dirnames, filenames in os.walk(base):
-            dirnames[:] = [d for d in dirnames if d not in ("venv", ".git", "node_modules") and os.path.join(dirpath, d) != S and not d.startswith("playwright")]
-            if dirpath.count(os.sep) - base.count(os.sep) > 4: dirnames[:] = []
-            for f in filenames:
-                if f.lower().endswith(IMAGE_EXT):
-                    try: found[os.path.join(dirpath, f)] = os.path.getmtime(os.path.join(dirpath, f))
-                    except OSError: pass
-    return found
-
-def player_frame(page):
-    t_start = time.time()
-    for n in range(450):   # up to 90 s: with no face, the first sentence also loads the text model
-        seen = []
-        for f in page.frames:
-            try:
-                kind = "main" if f == page.main_frame else f.evaluate("typeof window.player")
-                seen.append(kind)
-                if kind == "object":
-                    if n > 25: print(f"RESULT    (player found after {time.time() - t_start:.1f}s)", flush=True)
-                    return f
-            except Exception as e: seen.append("ERR " + type(e).__name__ + " " + str(e)[:80])
-        if n % 50 == 0: print(f"RESULT    waiting {time.time() - t_start:4.1f}s: frames {seen} | iframes {page.locator('iframe').count()} | state {page.locator('[data-testid=stApp]').get_attribute('data-test-script-state')}", flush=True)
-        time.sleep(0.2)
-    raise RuntimeError("player frame not found")
-
-before = image_files(); started = time.time()
+before = image_files()
 with sync_playwright() as pw:
     browser = pw.chromium.launch(channel="msedge", headless=True)
     for n, (name, frame, text, playback) in enumerate(SCENARIOS):
         if ONLY and not any(o in name for o in ONLY): continue
-        port = str(8590 + n)
-        server = subprocess.Popen([PY, f"{HERE}/fake_camera_server.py"], env={**os.environ, "TEST_PORT": port, "TEST_FRAME": frame, "TEST_PREVIEWS": "real"},
-                                  stdout=open(f"{S}/server_{name}.log", "w"), stderr=subprocess.STDOUT)
+        cam_log = os.path.join(OUT, f"cam_{name}.log")
+        if os.path.exists(cam_log): os.remove(cam_log)
+        server = start_server(8590 + n, frame, name, TEST_CAM_LOG=cam_log)
+        opened = lambda: open(cam_log).read().count("opened") if os.path.exists(cam_log) else 0
         try:
-            for _ in range(90):
-                try:
-                    if b"ok" in urllib.request.urlopen(f"http://localhost:{port}/_stcore/health", timeout=2).read(): break
-                except Exception: time.sleep(1)
-            page = browser.new_page(viewport={"width": 1440, "height": 900})
+            ctx = browser.new_context(viewport={"width": 1440, "height": 900}); ctx.add_init_script(WATCH)
+            page = ctx.new_page()
             errors = []; page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(f"http://localhost:{port}")
+            page.goto(f"http://localhost:{8590 + n}")
             log(f"=== {name}")
             if frame == "blank":
                 page.wait_for_selector("[data-testid=stAlert]", timeout=180000)
-                log("before any text:", page.locator("[data-testid=stAlert]").first.inner_text()[:90])
+                log("before any text:", page.locator("[data-testid=stAlert]").first.inner_text()[:100])
             else:
-                page.wait_for_selector("iframe", timeout=180000)
-            log(f"header: {page.locator('.app-name').inner_text()!r} | tagline: {page.locator('.app-tagline').inner_text()!r} | logo svg: {page.locator('.app-head svg.logo').count()} | tab title: {page.title()!r}")
+                page.wait_for_selector(".st-key-playerbar iframe", timeout=180000)
+            log(f"top bar: {page.locator('.app-name').inner_text()!r} / {page.locator('.app-tagline').inner_text()!r} | logo {page.locator('.app-head svg.logo').count()} "
+                f"| date {page.locator('.greeting .date').inner_text()!r} | greeting {page.locator('.greeting h1').inner_text()!r} | tab {page.title()!r}")
+            log(f"hero: {page.locator('.st-key-hero h2').first.inner_text()!r} / {page.locator('.hero-sub').inner_text()!r} | "
+                f"buttons {list(dict.fromkeys(b.replace('expand_more', '').strip() for b in page.locator('.st-key-hero button').all_inner_texts()))}")
+            fonts = page.evaluate("[document.fonts.check('16px Fraunces'), document.fonts.check('16px Inter'), getComputedStyle(document.querySelector('.greeting h1')).fontFamily.split(',')[0]]")
+            log(f"fonts loaded: Fraunces {fonts[0]}, Inter {fonts[1]} | heading font {fonts[2]}")
             if text:
-                page.get_by_role("button", name="⚙").click(); time.sleep(0.6)
-                box = page.get_by_label("Tell me how you feel (optional)")
-                box.fill(text); box.press("Enter"); time.sleep(5); page.keyboard.press("Escape"); time.sleep(0.5)
-            fr = player_frame(page)
-            if text:
-                # The first sentence can also load the text model: wait up to 60 s for a player showing Text bars.
-                t0 = time.time()
-                while time.time() - t0 < 60:
-                    fr = player_frame(page)
-                    try:
-                        if any(g["key"] == "text" for g in fr.evaluate("DATA.view.bars.groups")): break
-                    except Exception: pass
-                    time.sleep(0.5)
-                log(f"   text bars appeared after {time.time() - t0:.1f}s" if any(g["key"] == "text" for g in fr.evaluate("DATA.view.bars.groups")) else "   NO text bars after 60 s")
-            time.sleep(1.5)
-            view = fr.evaluate("DATA.view")
-            card, bars = view["card"], view["bars"]
-            combined = dict(zip(bars["emotions"], next(g["values"] for g in bars["groups"] if g["key"] == "combined")))
-            top, second = bars["emotions"][0], bars["emotions"][1]
-            expected_head = f"Mostly {top}" if combined[top] >= 0.5 else f"Mixed: {top} and {second}"
-            log(f"mood card: {fr.locator('#moodemoji').inner_text()} {fr.locator('#moodhead').inner_text()!r} | mode: {fr.locator('#moodmode').inner_text()!r} | colour {card['colour']}")
-            log(f"   message: {fr.locator('#moodmsg').inner_text()!r}")
-            if fr.locator('#moodnote').inner_text(): log(f"   note: {fr.locator('#moodnote').inner_text()!r}")
-            log(f"   headline matches the rule for combined top {top} {combined[top]:.3f}: {fr.locator('#moodhead').inner_text() == expected_head} (expected {expected_head!r})")
-            groups = [g["key"] for g in bars["groups"]]
-            shown = {g: [fr.locator(f'.erow[data-emotion="{e}"] .bar.{g} .pct').inner_text() for e in bars["emotions"]] for g in groups}
-            want = {g["key"]: [f"{round(v * 100)}%" for v in g["values"]] for g in bars["groups"]}
-            widths_ok = all(abs(float(fr.locator(f'.erow[data-emotion="{e}"] .bar.combined .fill').evaluate("e => e.style.width").rstrip('%')) - combined[e] * 100) < 0.06 for e in bars["emotions"])
-            log(f"bars: groups {groups} | legend {fr.locator('#legend span').all_inner_texts()} | caption {fr.locator('#barcap').inner_text()!r}")
-            log(f"   combined: " + ", ".join(f"{e} {p}" for e, p in zip(bars['emotions'], shown['combined'])) + f" | sums to {sum(combined.values()):.3f}")
-            for g in groups:
-                if g != "combined": log(f"   {g:8}: " + ", ".join(f"{e} {p}" for e, p in zip(bars['emotions'], shown[g])))
-            log(f"   bar labels match the probabilities: {shown == want} | combined bar widths match: {widths_ok} | emotions sorted by combined: {list(combined.values()) == sorted(combined.values(), reverse=True)}")
-            has_img = fr.locator("#scanimg").count()
-            if has_img:
-                size = fr.locator("#scanimg").evaluate("e => [e.naturalWidth, e.naturalHeight, e.src.slice(0, 23), Math.round(e.src.length / 1024)]")
-                log(f"scan picture: {size[0]}x{size[1]}, src starts {size[2]!r}, {size[3]} KB in the page | note: {fr.locator('#scanbody .small').all_inner_texts()}")
+                box = page.get_by_label("How was your day?")
+                box.click(); page.keyboard.type("x" * 200); time.sleep(0.3)
+                too_long = len(box.input_value())
+                box.fill(text); time.sleep(0.3)
+                counter = page.locator(".st-key-user_text [data-testid=InputInstructions]").inner_text().replace(chr(10), " ")
+                log(f"text box: typing 200 characters keeps {too_long} | counter {counter!r} | placeholder {box.get_attribute('placeholder')!r}")
+                box.press("Enter")
+                waited = wait_for_text_bars(page)
+                log(f"   Text bars appeared {waited:.1f}s after Enter" if waited is not None else "   NO Text bars after 60 s")
+            bar = bar_frame(page); path = path_frame(page); time.sleep(1.5)
+            card = read_card(page)
+            log(f"mood card: {describe_card(card)}")
+            log(f"   sentence {card['sentence']!r}")
+            combined = card["groups"]["combined"]
+            log(f"   combined: " + ", ".join(f"{e} {combined[e]['pct']}" for e in card["emotions"]) + f" | caption {card['caption']!r}")
+            for g in card["groups"]:
+                if g != "combined": log(f"   {g:8}: " + ", ".join(f"{e} {card['groups'][g][e]['pct']}" for e in card["emotions"]))
+            img = page.locator(".scanimg")
+            if img.count():
+                size = img.evaluate("e => [e.naturalWidth, e.naturalHeight, e.src.slice(0, 23), Math.round(e.src.length / 1024)]")
+                log(f"scan picture: {size[0]}x{size[1]}, src starts {size[2]!r}, {size[3]} KB in the page | note {page.locator('.tile-note').all_inner_texts()}")
             else:
-                log(f"scan picture: none | {fr.locator('#scanbody').inner_text()!r}")
-            rows = fr.locator(".row").count()
-            log(f"top picks: {fr.locator('.picks-head h2').inner_text()!r} / {fr.locator('#qsub').inner_text()!r} | rows {rows} | play pills {fr.locator('.row .pill').count()} | last.fm links {fr.locator('a.lastfm').count()} | sections {fr.locator('.section').all_inner_texts()} | journey chart {fr.locator('details.journey').count()}")
-            page.screenshot(path=f"{S}/page_{name}.png")
+                log(f"scan picture: none | {page.locator('.st-key-facetile').inner_text()[:80]!r}")
+            choice = page.locator(".choice-card")
+            log(f"choice cards: selected {page.locator('.choice-card.on h3').all_inner_texts()} | recommended {[c.locator('h3').inner_text() for c in choice.all() if c.locator('.tag').count()]}")
+            log(f"path card: {path.locator('#kicker').inner_text()!r} {path.locator('#title').inner_text()!r} / {path.locator('#qsub').inner_text()!r} | steps {path.locator('#steps li:not(.arrow)').all_inner_texts()} "
+                f"| rows {path.locator('.row').count()} | pills {path.locator('.row .pill').count()} | links {path.locator('a.lastfm').count()} | sections {path.locator('.section').all_inner_texts()} | journey chart {path.locator('details.journey').count()}")
+            log(f"   message {path.locator('#msg').inner_text()!r}" + (f" | note {path.locator('#note').inner_text()!r}" if path.locator('#note').is_visible() else ""))
+            log(f"player bar: {bar.locator('#nowtitle').inner_text()!r} | buttons {bar.locator('button').evaluate_all('bs => bs.map(b => b.ariaLabel)')} | volume {bar.locator('#volume').count()} "
+                f"| pinned to the bottom: {page.locator('.st-key-playerbar').evaluate('e => getComputedStyle(e).position + \" bottom=\" + (innerHeight - e.getBoundingClientRect().bottom)')}")
+            set_bars_open(page, bool(text))  # the screenshots with a sentence show the Face / Text / Combined bars
+            full_shot(page, os.path.join(OUT, f"page_{name}.png"))
 
             if playback:
-                state = lambda: fr.evaluate("(() => { const s = window.player.state(); return {current: s.current, paused: s.paused, time: +s.time.toFixed(1)}; })()")
-                fr.locator(".row").nth(2).locator(".meta").click(); time.sleep(2.5); a = state()
-                log(f"click on row 3: {a} | pill now says {fr.locator('.row').nth(2).locator('.pill').inner_text()!r} | bar: {fr.locator('#nowtitle').inner_text()!r}")
-                fr.locator(".row").nth(0).locator(".pill").click(); time.sleep(2.5); b = state()
-                log(f"click on row 1's Play pill: {b} | highlighted {fr.locator('.row.playing .title').inner_text()!r}")
-                fr.locator(".row").nth(0).locator(".pill").click(); time.sleep(0.5); c = state()
-                fr.locator(".row").nth(0).locator(".pill").click(); time.sleep(1.0)
+                state = lambda: player_state(bar)
+                path.locator(".row").nth(2).locator(".meta").click(); time.sleep(2.5); a = state()
+                log(f"click on row 3: {a} | pill now says {path.locator('.row').nth(2).locator('.pill').inner_text()!r} | bar: {bar.locator('#nowtitle').inner_text()!r}")
+                path.locator(".row").nth(0).locator(".pill").click(); time.sleep(2.5); b = state()
+                log(f"click on row 1's Play pill: {b} | highlighted {path.locator('.row.playing .title').inner_text()!r}")
+                path.locator(".row").nth(0).locator(".pill").click(); time.sleep(0.5); c = state()
+                path.locator(".row").nth(0).locator(".pill").click(); time.sleep(1.0)
                 log(f"same pill again pauses: {c['paused']} | and again resumes: {not state()['paused']}")
+                bar.locator("#toggle").click(); time.sleep(0.5); c2 = state(); bar.locator("#toggle").click(); time.sleep(1)
+                log(f"bar play/pause: pauses {c2['paused']}, resumes {not state()['paused']}")
+                details = page.locator(".st-key-moodcard details")
+                was_open = details.get_attribute("open") is not None
+                page.get_by_text("See all 7 emotions").click(); time.sleep(1.5); d1 = state(); time.sleep(2); d2 = state()
+                log(f"expander {'closed' if was_open else 'opened'}: still playing {not d2['paused']}, same track {d2['current'] == d1['current']}, time {d1['time']} -> {d2['time']} | open now {details.get_attribute('open') is not None}")
+                page.get_by_text("See all 7 emotions").click(); time.sleep(0.5)
                 page.get_by_role("button", name="⚙").click(); time.sleep(1.5); d1 = state(); time.sleep(2); d2 = state()
-                page.screenshot(path=f"{S}/page_5_settings_open.png")
-                log(f"settings open: still playing {not d2['paused']}, same track {d2['current'] == d1['current']}, time {d1['time']} -> {d2['time']} | options {page.locator('[data-testid=stPopoverBody] label').all_inner_texts()[:6]}")
+                page.screenshot(path=os.path.join(OUT, "page_5_settings_while_playing.png"))
+                log(f"settings open: still playing {not d2['paused']}, same track {d2['current'] == d1['current']}, time {d1['time']} -> {d2['time']} | contents {page.locator('[data-testid=stPopoverBody]').inner_text()[:90]!r}")
                 page.keyboard.press("Escape"); time.sleep(0.4)
-                fr.evaluate("window.player.audio.currentTime = window.player.audio.duration - 1.5"); time.sleep(4.5); e = state()
-                log(f"near the end of track 1 -> {e} (next song started on its own: {e['current'] == 1 and not e['paused']})")
-                fr.locator("details.journey summary").click(); time.sleep(0.5)
-                page.screenshot(path=f"{S}/page_6_playing_with_journey.png")
+                bar.evaluate("window.player.audio.currentTime = window.player.audio.duration - 1.5"); time.sleep(4.5); e = state()
+                log(f"near the end of track 1 -> {e} (next song started on its own: {e['current'] == 1 and not e['paused']}) | path highlights row {path.evaluate('window.playlist.state().current') + 1}")
+                path.locator("details.journey summary").click(); time.sleep(0.8)
+                page.locator(".st-key-path").scroll_into_view_if_needed(); time.sleep(0.5)
+                page.evaluate("document.querySelector('[data-testid=stMain]').scrollBy(0, 330)"); time.sleep(0.8)
+                page.screenshot(path=os.path.join(OUT, "page_6_playing_with_mood_journey.png"))
+                log(f"journey chart open: {path.locator('#chart').is_visible()} | path card grew to {path.evaluate('window.frameElement.style.height')}")
+                # A choice card rebuilds the queue without opening the camera again.
+                cam_before, tracks_before = opened(), path.evaluate("DATA.tracks.map(t => t.lastfm)")
+                # click the middle of the visible card with the mouse, the way a person would
+                card = page.locator(".choice-card.resonance"); card.scroll_into_view_if_needed(); time.sleep(0.5)
+                box = card.bounding_box(); page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+                path = path_frame(page, not_tracks=tracks_before); time.sleep(2); bar = bar_frame(page)
+                count, sounding = players(page)
+                log(f"'Meet me here' card clicked (middle of the card): list rebuilt True | {path.locator('#title').inner_text()!r} | selected {page.locator('.choice-card.on h3').all_inner_texts()} "
+                    f"| players {count}, still playing {sounding} | camera opened {cam_before} -> {opened()} time(s) | 'Let MOOD TUNE choose' {page.get_by_role('button', name='Let MOOD TUNE choose').count()}")
+                tracks_before = path.evaluate("DATA.tracks.map(t => t.lastfm)")
+                page.get_by_role("button", name="Let MOOD TUNE choose").click()
+                path = path_frame(page, not_tracks=tracks_before); time.sleep(1.5)
+                log(f"'Let MOOD TUNE choose': {path.locator('#title').inner_text()!r} | selected {page.locator('.choice-card.on h3').all_inner_texts()} | camera opened {opened()} time(s)")
+                full_shot(page, os.path.join(OUT, "page_12_narrow_screen.png"), width=390)
+                page.set_viewport_size({"width": 390, "height": 844}); time.sleep(1.5)
+                widths = page.evaluate("[document.documentElement.scrollWidth, document.querySelector('[data-testid=stMain]').scrollWidth, innerWidth]")
+                cols = page.evaluate("[...document.querySelectorAll('.st-key-hero [data-testid=stColumn]')].map(c => Math.round(c.getBoundingClientRect().width))")
+                log(f"narrow screen (390 px): page width {widths[0]}, content width {widths[1]} (no sideways scroll: {max(widths[:2]) <= widths[2]}) | hero tiles stacked, widths {cols}")
+                page.set_viewport_size({"width": 1440, "height": 900}); time.sleep(0.5)
+            log(f"'Running' or a function name on the page at any point: {page.evaluate('window.__flagged.length')} {page.evaluate('window.__flagged.slice(0, 2)')}")
             log(f"page errors: {errors}")
-            page.close()
+            ctx.close()
         finally:
-            server.terminate(); subprocess.run(["taskkill", "/F", "/T", "/PID", str(server.pid)], capture_output=True)
+            stop(server)
     browser.close()
 
-after = image_files()
-new = [p for p, m in after.items() if p not in before or m > before[p] + 1]
-log(f"=== image files created or changed on disk during the run (outside the test's own screenshots): {new}")
+log(f"=== image files created or changed on disk during the run (outside the test's own screenshots): {new_images(before)}")

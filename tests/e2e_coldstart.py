@@ -1,6 +1,7 @@
 """Cold-start timing and 'no function names on the page' check, in headless Edge."""
 import os, subprocess, sys, time, urllib.request
 from playwright.sync_api import sync_playwright
+from pagekit import legend, read_card
 
 HERE = os.path.dirname(os.path.abspath(__file__)); S = os.path.join(HERE, "output"); os.makedirs(S, exist_ok=True); ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); PY = sys.executable
 RUN = sys.argv[1] if len(sys.argv) > 1 else "1"; PORT = str(8570 + int(RUN))
@@ -45,12 +46,12 @@ try:
         page.wait_for_selector(".app-name", timeout=120000); t_head = time.time() * 1000
         page.wait_for_selector(".listening", timeout=120000); t_listen = time.time() * 1000
         page.screenshot(path=f"{S}/cold_{RUN}_listening.png")
-        page.wait_for_selector("iframe", timeout=180000)
+        page.wait_for_selector(".st-key-playerbar iframe", timeout=180000)
         fr = None
         while fr is None:
             for f in page.frames:
                 try:
-                    if f != page.main_frame and f.evaluate("typeof window.player") == "object": fr = f
+                    if f != page.main_frame and f.evaluate("typeof window.playlist") == "object": fr = f
                 except Exception: pass
             time.sleep(0.1)
         t_full = time.time() * 1000
@@ -58,25 +59,20 @@ try:
         tf = first_import("tensorflow")
         log(f"header (MOOD TUNE) visible:          {(t_head - t0) / 1000:5.1f}s after opening the page")
         log(f"'Listening to your mood...' visible: {(t_listen - t0) / 1000:5.1f}s")
-        log(f"full page with the player:           {(t_full - t0) / 1000:5.1f}s  ({fr.locator('#moodhead').inner_text()!r}, bars {fr.locator('#legend span').all_inner_texts()}, {fr.locator('.row').count()} songs)")
+        log(f"full page with the player:           {(t_full - t0) / 1000:5.1f}s  ({read_card(page)['headline']!r}, bars {legend(page)}, {fr.locator('.row').count()} songs)")
         log(f"tensorflow imported {tf - t0 / 1000:+.1f}s after opening the page, i.e. {'AFTER' if tf * 1000 > t_listen else 'BEFORE'} the listening screen appeared" if tf else "tensorflow never imported?!")
         log(f"before any text: torch imported {first_import('torch') is not None}, transformers imported {first_import('transformers') is not None}")
         page.screenshot(path=f"{S}/cold_{RUN}_loaded.png")
 
-        page.get_by_role("button", name="⚙").click(); time.sleep(0.6)
-        box = page.get_by_label("Tell me how you feel (optional)"); box.fill(TEXT)
+        box = page.get_by_label("How was your day?"); box.fill(TEXT)
         t_type = time.time(); box.press("Enter")
         shot = False
         for _ in range(600):
             if not shot and page.locator(".reading").count():
                 page.screenshot(path=f"{S}/cold_{RUN}_reading.png"); shot = True
-            ok = False
-            for f in page.frames:
-                try:
-                    if f != page.main_frame and f.evaluate("typeof window.player") == "object" and "Text" in f.locator("#legend").inner_text():
-                        fr = f; ok = True
-                except Exception: pass
-            if ok: break
+            try:
+                if "Text" in legend(page): break
+            except Exception: pass
             time.sleep(0.1)
         t_text = time.time()
         seen = page.evaluate("window.__seen")
@@ -84,8 +80,8 @@ try:
         log(f"after typing: text result shown {t_text - t_type:.1f}s after pressing Enter | 'Reading your text...' appeared: {'Reading your text' in seen} ({(seen['Reading your text'] / 1000 - t_type):+.1f}s after Enter)" if "Reading your text" in seen else
             f"after typing: text result shown {t_text - t_type:.1f}s after pressing Enter | 'Reading your text...' appeared: False")
         log(f"   torch imported {torch_t - t_type:+.1f}s and transformers {tr_t - t_type:+.1f}s relative to pressing Enter" if torch_t and tr_t else f"   torch {torch_t} transformers {tr_t}")
-        log(f"   result: {fr.locator('#moodhead').inner_text()!r} | bars {fr.locator('#legend span').all_inner_texts()} | caption {fr.locator('#barcap').inner_text()!r}")
-        page.keyboard.press("Escape"); time.sleep(0.5)
+        card = read_card(page)
+        log(f"   result: {card['headline']!r} | gauge {card['pct']} low | bars {legend(page)} | caption {card['caption']!r}")
         # same text again must not show the message (read once per text)
         n_reading = page.evaluate("window.__seen['Reading your text'] || 0")
         flagged = page.evaluate("window.__flagged")

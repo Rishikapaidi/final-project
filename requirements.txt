@@ -1,4 +1,6 @@
-streamlit
+# Pinned: the page's two players use st.components.v1.html, which later
+# Streamlit versions remove (see README.md).
+streamlit==1.64.0
 numpy
 pandas
 opencv-python<5

@@ -1,17 +1,22 @@
 # Uplift mode
 
 The app has two modes. By default it picks one automatically (Uplift when the
-mood is low, otherwise Resonance); the settings popover can force either:
+mood is low, otherwise Resonance). Under "What do you need from music?" the
+page shows a card for each, tags the one it would pick "Recommended", and
+lets the listener choose either:
 
-- **Resonance (match my mood):** recommends songs from the bucket of the
+- **Meet me here (Resonance):** recommends songs from the bucket of the
   detected emotion. This is the original behaviour.
-- **Uplift (gently lift my mood):** builds a five-song playlist that starts at
-  the detected mood and steps towards a better one.
+- **Lift my mood (Uplift):** builds a five-song playlist that starts at the
+  detected mood and steps towards a better one.
+
+The mood card's "X% low" gauge shows the number this choice is made on: the
+share of sad, angry, fear and disgust in the fused probabilities.
 
 The logic is in `uplift.py` and needs neither the webcam nor Streamlit.
 
-The settings popover also has **Songs in** (English, Hindi, Tamil, Telugu,
-Malayalam, Korean). Uplift is offered for English, Hindi, Tamil and Korean;
+The top bar has **Songs in** (English, Hindi, Tamil, Telugu, Malayalam,
+Korean). Uplift is offered for English, Hindi, Tamil and Korean;
 see "Other languages" below.
 
 ## Design
