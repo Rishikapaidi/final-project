@@ -124,13 +124,13 @@ def expected_card(at):
     share = sum(fused[e] for e in NEGATIVE)
     ranked = sorted(fused, key=fused.get, reverse=True)
     head = f"Mostly {ranked[0]}" if fused[ranked[0]] >= 0.5 else f"Mixed: {ranked[0]} and {ranked[1]}"
-    return {"share": share, "band": "Light" if share < 0.25 else "Mixed" if share < 0.5 else "Low", "head": head,
+    return {"share": share, "band": "Light" if share < 0.25 else "In between" if share < 0.5 else "Low", "head": head,
             "face": None if face_cal is None else negative(face_cal), "text": None if text_cal is None else negative(text_cal), "fused": fused}
 def check_card(at):
     h = card_html(at); want = expected_card(at)
     share = float(re.search(r'id="gauge" data-share="([0-9.]+)"', h).group(1))
     pct = int(re.search(r'id="gaugepct">(\d+)%', h).group(1))
-    band = re.search(r'id="band">(\w+)<', h).group(1)
+    band = re.search(r'id="band">([^<]+)<', h).group(1)
     leans = {k: float(v) for k, v in re.findall(r'class="lean" data-source="(\w+)" data-share="([0-9.]+)"', h)}
     shown = {k: int(v) for k, v in re.findall(r'data-source="(\w+)" data-share="[0-9.]+"><div class="lean-top"><span>\w+ leans low</span><b>(\d+)%', h)}
     blend = "Your result blends both signals" in h

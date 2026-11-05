@@ -145,7 +145,7 @@ def check_card(card):
     comb = {e: v["value"] for e, v in card["groups"]["combined"].items()}
     share = sum(comb[e] for e in NEGATIVE)     # the bars are rounded to 4 decimals
     pct = int(card["share"] * 100 + 1e-9)
-    band = "Light" if card["share"] < 0.25 else "Mixed" if card["share"] < 0.5 else "Low"
+    band = "Light" if card["share"] < 0.25 else "In between" if card["share"] < 0.5 else "Low"
     top, second = card["emotions"][0], card["emotions"][1]
     head = f"Mostly {top}" if comb[top] >= 0.5 else f"Mixed: {top} and {second}"
     leans = {l["source"]: l for l in card["leans"]}

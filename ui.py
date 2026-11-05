@@ -109,7 +109,7 @@ PAGE_CSS = """
   .mood-main { min-width:0; }
   .gauge-num span { display:block; font-family:var(--serif); font-size:40px; font-weight:600; color:var(--ink); line-height:1; }
   .band { display:inline-block; margin-top:16px; font-size:13px; font-weight:600; border-radius:999px; padding:4px 14px; }
-  .band-light { background:#e7f3ea; color:#2c5e3a; } .band-mixed { background:var(--lav-soft); color:var(--purple); }
+  .band-light { background:#e7f3ea; color:#2c5e3a; } .band-in-between { background:var(--lav-soft); color:var(--purple); }
   .band-low { background:var(--terra-soft); color:var(--terra-ink); }
   .mood-sentence { font-size:15.5px !important; color:var(--ink); margin:10px 0 16px !important; }
   .leans { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:14px 26px; max-width:560px; }
@@ -253,12 +253,16 @@ def headline_html(card):
 
 # The gauge's bands, by the share of sad + angry + fear + disgust (uplift.negative_share).
 BANDS = [(0.25, "Light", "Lighter feelings lead in this reading."),
-         (0.50, "Mixed", "There's a mix of lighter and heavier feelings in this reading."),
+         (0.50, "In between", "Lighter and heavier feelings sit side by side in this reading."),
          (1.01, "Low", "Heavier feelings lead in this reading right now.")]
 
 
 def band(share):
-    """(label, sentence) for a negative share: under 25% Light, 25-50% Mixed, 50% or more Low."""
+    """(label, sentence) for a negative share: under 25% Light, 25-50% In between, 50% or more Low.
+
+    The middle band isn't called "Mixed", so it doesn't read like the
+    headline's "Mixed: X and Y" (which is about the top two emotions).
+    """
     return next((label, sentence) for limit, label, sentence in BANDS if share < limit)
 
 
@@ -295,7 +299,7 @@ def mood_card_html(card, low):
             f'<div class="mood-grid">'
             f'<div class="gauge-box" id="gauge" data-share="{share:.6f}" role="img" aria-label="{percent(share)}% low, {label}">'
             f'{gauge_svg(share)}<div class="gauge-num"><span id="gaugepct">{percent(share)}%</span> low</div>'
-            f'<div class="band band-{label.lower()}" id="band">{label}</div></div>'
+            f'<div class="band band-{label.lower().replace(' ', '-')}" id="band">{label}</div></div>'
             f'<div class="mood-main"><div class="mood-head"><span class="emoji" id="moodemoji">{card["emoji"]}</span>'
             f'<div class="mood-title" id="moodhead" role="heading" aria-level="2">{headline_html(card)}</div></div>'
             f'<p class="mood-sentence" id="bandtext">{sentence}</p>'

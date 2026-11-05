@@ -1,8 +1,9 @@
 """Headless-Edge checks and screenshots of the page, with real cached previews.
 
 Scenarios: sad face (Uplift), happy face (Resonance), a happy face with a sad
-sentence (Mixed), and no face with a sad sentence. The first one also checks
-playback, the expander, the settings, the choice cards and the narrow layout.
+sentence (a "Mixed: ..." headline), and no face with a sad sentence. The first
+one also checks playback, the expander, the upload popover, the choice cards and
+the narrow layout.
 """
 import os, sys, time
 from playwright.sync_api import sync_playwright

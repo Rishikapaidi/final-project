@@ -11,7 +11,10 @@ lets the listener choose either:
   detected mood and steps towards a better one.
 
 The mood card's "X% low" gauge shows the number this choice is made on: the
-share of sad, angry, fear and disgust in the fused probabilities.
+share of sad, angry, fear and disgust in the fused probabilities, with a
+band: **Light** under 25%, **In between** from 25% to 50%, **Low** from 50%
+(where Auto picks Uplift). The band is about that share only; the headline's
+"Mixed: X and Y" is about the top two emotions, so the band avoids the word.
 
 The logic is in `uplift.py` and needs neither the webcam nor Streamlit.
 
