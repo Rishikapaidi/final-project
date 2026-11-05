@@ -14,11 +14,18 @@ to PER_BUCKET songs per bucket of each named language are taken in that same
 order, except that every song of a language in LOOK_UP_EVERY_SONG is taken;
 copies of a song already taken (same title and artist) are skipped.
 
+With --thin as well, only the thin Uplift waypoints of each named language are
+served: for every distinct waypoint with fewer than NEAREST_K playable songs within
+THIN_DISTANCE (as scripts/evaluate_uplift.py --previews reports them), up to
+PER_THIN_WAYPOINT of the nearest songs not yet checked, skipping copies of a
+song already checked or taken.
+
 Usage (from the project root):
     python scripts/fetch_previews.py              # every English song (about 9 hours)
     python scripts/fetch_previews.py --limit 1500 # the first 1,500 unchecked songs
     python scripts/fetch_previews.py --bucket angry  # only one bucket
     python scripts/fetch_previews.py --language Hindi Tamil Korean Telugu Malayalam
+    python scripts/fetch_previews.py --language Hindi Tamil Korean --thin
 """
 import argparse
 import os
@@ -41,6 +48,9 @@ NEAR_WAYPOINT = 30
 PER_BUCKET = 30   # with --language: songs per language and bucket
 # Too few songs for Uplift, so every song is looked up for Resonance.
 LOOK_UP_EVERY_SONG = {"Telugu", "Malayalam"}
+# With --thin: the same thin-waypoint rule as scripts/evaluate_uplift.py.
+THIN_DISTANCE = 0.5
+PER_THIN_WAYPOINT = 40
 
 
 def lookup_order(songs, language="English"):
@@ -77,12 +87,48 @@ def language_sample(songs, language):
     return taken
 
 
+def thin_waypoint_songs(songs, language):
+    """Unchecked songs nearest each thin Uplift waypoint of one language (see the module docstring)."""
+    points = songs[["valence_tags", "arousal_tags"]].values
+    scale = uplift.reference_scale(songs)
+    centres = uplift.bucket_centres(uplift.reference_songs(songs))
+    in_language = (songs.language == language).values
+    playable = songs.lastfm_url.isin(previews.playable_urls()).values
+    checked = songs.lastfm_url.map(lambda url: previews.cached(url) is not None).values
+    key = (songs.title.str.strip().str.lower() + "|" + songs.artist.str.strip().str.lower()).values
+    seen = set(key[checked & in_language])
+    taken, served = [], set()
+    for emotion in uplift.NEGATIVE_EMOTIONS:
+        journey = uplift.plan_journey({emotion: 1.0}, [emotion], centres, scale)
+        candidates = songs.bucket.isin({emotion, *journey["targets"]}).values & in_language
+        for step, waypoint in enumerate(journey["waypoints"], 1):
+            distance = np.linalg.norm((points - waypoint) / scale, axis=1)
+            near = candidates & playable & (distance <= THIN_DISTANCE)
+            # Several journeys end at the same point (the neutral centre); serve it once.
+            if near.sum() >= uplift.NEAREST_K or tuple(waypoint.round(4)) in served:
+                continue
+            served.add(tuple(waypoint.round(4)))
+            new = []
+            for i in np.flatnonzero(candidates & ~checked)[np.argsort(distance[candidates & ~checked], kind="stable")]:
+                if key[i] not in seen:
+                    seen.add(key[i]); new.append(i)
+                if len(new) == PER_THIN_WAYPOINT:
+                    break
+            print(f"{language} {emotion} waypoint {step} ({waypoint[0]:.2f}, {waypoint[1]:.2f}): {int(near.sum())} playable "
+                  f"within {THIN_DISTANCE}; looking up {len(new)} more (nearest at {distance[new].min() if new else float('nan'):.2f}"
+                  f"-{distance[new].max() if new else float('nan'):.2f} sd)", flush=True)
+            taken += new
+    return taken
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--limit", type=int, default=None, help="stop after this many lookups")
     parser.add_argument("--bucket", default=None, help="only look up songs from this bucket, e.g. angry")
     parser.add_argument("--language", nargs="+", default=None,
                         help=f"look up a sample of these languages' songs ({PER_BUCKET} per bucket) instead of English")
+    parser.add_argument("--thin", action="store_true",
+                        help=f"with --language: only songs near thin Uplift waypoints ({PER_THIN_WAYPOINT} per waypoint)")
     args = parser.parse_args()
 
     songs = pd.read_csv(os.path.join("data", "songs", "songs_clean.csv"), keep_default_na=False)
@@ -90,7 +136,8 @@ def main():
         missing = set(args.language) - set(songs.language)
         if missing:
             parser.error(f"no songs in {sorted(missing)}")
-        order = [i for language in args.language for i in language_sample(songs, language)]
+        sample = thin_waypoint_songs if args.thin else language_sample
+        order = [i for language in args.language for i in sample(songs, language)]
     else:
         order = lookup_order(songs)
     todo = [i for i in order if previews.cached(songs.lastfm_url[i]) is None]
