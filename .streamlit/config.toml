@@ -1,14 +1,37 @@
 [theme]
-base = "dark"
-primaryColor = "#1db954"
-backgroundColor = "#121212"
-secondaryBackgroundColor = "#181818"
-textColor = "#ffffff"
+# A calm light theme: cream background, deep purple and lavender, with one
+# warm terracotta accent (used for the Uplift card, see app.py).
+base = "light"
+primaryColor = "#2d2a52"
+backgroundColor = "#f6f3ee"
+secondaryBackgroundColor = "#ece8f6"
+textColor = "#2b2840"
+borderColor = "#e3ddd3"
+linkColor = "#4b4485"
+baseRadius = "12px"
+# Fonts are bundled in static/fonts/ (SIL Open Font License, see the licence
+# files there), so the page looks the same offline.
+font = "Inter, 'Segoe UI', system-ui, -apple-system, sans-serif"
+headingFont = "Fraunces, Georgia, 'Times New Roman', serif"
+
+[[theme.fontFaces]]
+family = "Fraunces"
+url = "app/static/fonts/Fraunces-latin-variable.woff2"
+weight = "100 900"
+style = "normal"
+
+[[theme.fontFaces]]
+family = "Inter"
+url = "app/static/fonts/Inter-latin-variable.woff2"
+weight = "100 900"
+style = "normal"
 
 [client]
 toolbarMode = "minimal"
 
 [server]
+# Serves static/ at app/static/ (the bundled fonts).
+enableStaticServing = true
 # Streamlit's file watcher inspects every loaded module on each rerun. Once the
 # text model (transformers) is loaded, that triggers hundreds of lazy imports
 # and made each rerun ~6 s slower. With it off, edit-and-reload needs a
