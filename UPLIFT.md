@@ -141,43 +141,52 @@ another language.
 
 `python scripts/evaluate_uplift.py --language <language> --previews` repeats
 the 500-playlist check and writes `models/uplift/report_previews_<language>.txt`.
-Playable songs are those in the table under "Song previews" in
-`data/README.md` (166–180 per language, about 25 per bucket).
+
+The first lookups (up to 30 songs per bucket; see "Song previews" in
+`data/README.md`) left thin spots: waypoints with fewer than 10 playable songs
+within 0.5 standard deviations, mostly the calm end point every journey but
+sad's shares (the neutral centre, 5.71, 3.24: 8 Hindi, 7 Tamil and 2 Korean
+songs) and the middle of the angry and fear paths (0 songs near the angry
+path's third waypoint in all three languages). `python
+scripts/fetch_previews.py --language Hindi Tamil Korean --thin` then looked up
+up to 40 more songs near each distinct thin waypoint (480 lookups, 398 with a
+preview). Uplift itself and its thresholds were not changed; only the set of
+playable songs grew:
+
+| | Hindi | Tamil | Korean |
+|---|---|---|---|
+| playable songs | 169 → 337 | 180 → 282 | 166 → 294 |
+| thin waypoints | 8 → 0 | 6 → 0 | 7 → 0 |
+| playable songs near the neutral centre | 8 → 41 | 7 → 43 | 2 → 28 |
+| near the angry path's third waypoint | 0 → 103 | 0 → 66 | 0 → 101 |
+
+Results before → after the extra lookups (English for comparison):
 
 | Start | | English | Hindi | Tamil | Korean |
 |---|---|---|---|---|---|
-| sad | rises at every step | 100.0% | 81.8% | 96.6% | 83.2% |
-| | rises at 3 or more of 4 steps | 100% | 99.8% | 100% | 100% |
-| | mean valence, song 1 → 5 | 3.44 → 7.33 | 3.39 → 7.41 | 3.45 → 7.33 | 3.43 → 7.35 |
-| angry | rises at every step | 51.6% | 21.0% | 13.4% | 19.4% |
-| | rises at 3 or more of 4 steps | 99.4% | 73.8% | 65.2% | 71.0% |
-| | mean valence, song 1 → 5 | 4.02 → 5.72 | 3.93 → 5.49 | 3.97 → 5.38 | 3.96 → 4.86 |
-| fear | rises at every step | 100.0% | 35.4% | 46.8% | 22.0% |
-| | rises at 3 or more of 4 steps | 100% | 92.6% | 97.6% | 72.4% |
-| | mean valence, song 1 → 5 | 3.56 → 5.72 | 3.48 → 5.49 | 3.45 → 5.42 | 3.47 → 4.90 |
-| disgust | rises at every step | 100.0% | 49.8% | 76.8% | 45.8% |
-| | rises at 3 or more of 4 steps | 100% | 90.6% | 99.4% | 88.6% |
-| | mean valence, song 1 → 5 | 2.98 → 5.72 | 2.96 → 5.51 | 3.00 → 5.43 | 2.97 → 4.90 |
+| sad | rises at every step | 100.0% | 81.8% → 100.0% | 96.6% → 100.0% | 83.2% → 100.0% |
+| | mean valence, song 1 → 5 | 3.44 → 7.33 | 3.39 → 7.41 (unchanged) | 3.45 → 7.33 (unchanged) | 3.43 → 7.35 (unchanged) |
+| angry | rises at every step | 51.6% | 21.0% → 85.4% | 13.4% → 47.8% | 19.4% → 72.4% |
+| | rises at 3 or more of 4 steps | 99.4% | 73.8% → 100% | 65.2% → 94.0% | 71.0% → 100% |
+| | last song's mean valence | 5.72 | 5.49 → 5.75 | 5.38 → 5.73 | 4.86 → 5.66 |
+| fear | rises at every step | 100.0% | 35.4% → 97.2% | 46.8% → 77.2% | 22.0% → 90.4% |
+| | rises at 3 or more of 4 steps | 100% | 92.6% → 100% | 97.6% → 100% | 72.4% → 100% |
+| | last song's mean valence | 5.72 | 5.49 → 5.75 | 5.42 → 5.73 | 4.90 → 5.66 |
+| disgust | rises at every step | 100.0% | 49.8% → 60.4% | 76.8% → 83.4% | 45.8% → 73.6% |
+| | rises at 3 or more of 4 steps | 100% | 90.6% → 98.4% | 99.4% → 99.6% | 88.6% → 97.8% |
+| | last song's mean valence | 5.72 | 5.51 → 5.75 | 5.43 → 5.74 | 4.90 → 5.67 |
+| mixed (sad 45%, angry 30%, neutral 25%) | rises at every step | 100.0% | 66.2% → 100.0% | 85.4% → 100.0% | 59.8% → 100.0% |
 
-In every language every playlist has all five songs and ends more positive
-than it began (100%). Beyond that the journeys are rougher than in English:
+In every language, before and after, every playlist has all five songs and
+ends more positive than it began (100%). Limits that remain:
 
-- **Few playable songs near the calm end.** Fewer than 10 playable songs sit
-  within 0.5 standard deviations of the neutral centre (5.71, 3.24): 8 in
-  Hindi, 7 in Tamil and 2 in Korean, against 135 in English. Every journey
-  except sad's ends there, so the last songs are the same few, or further
-  away: Korean angry, fear and disgust journeys end at a mean valence of
-  about 4.9 instead of 5.7.
-- **A gap in the middle of the angry path.** No playable Hindi, Tamil or
-  Korean song lies within 0.5 of the angry path's third waypoint
-  (4.86, 4.20), so songs 2 and 3 often do not rise (angry rises at every
-  step in only 13–21% of playlists).
-- **Sad works best** (82–97% rise at every step), because the sad → neutral →
-  happy path passes through the larger sad and happy buckets.
-- These numbers come from about 25 playable songs per bucket. More preview
-  lookups near the waypoints (`scripts/fetch_previews.py --language`) would
-  thicken the thin points; nothing in the algorithm was changed for these
-  languages.
+- **Disgust and Tamil angry still dip more often than in English** (disgust
+  rises at every step in 60–84% of playlists, Tamil angry in 48%). No
+  waypoint is thin any more by the 0.5-sd rule, so this is about where the
+  playable songs sit inside that radius, not how many there are; the overall
+  direction holds (last song's mean valence 5.7 in all three).
+- **About 280–340 playable songs per language**, against 1,180 for English,
+  so the same songs come up more often, especially at the shared calm end.
 - **Telugu and Malayalam are Resonance only** (240 and 193 playable songs in
   all, as few as 6 in a bucket). If Uplift would apply, the app plays
   Resonance and says "Uplift needs more songs than we have in <language>".

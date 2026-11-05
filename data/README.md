@@ -338,6 +338,12 @@ only plays songs in the chosen language, so these are the songs it has to
 work with; a queue is never padded with another language, so it can be
 shorter than 30 (for example 6 Malayalam angry songs).
 
+A second pass, `python scripts/fetch_previews.py --language Hindi Tamil Korean
+--thin`, looked up up to 40 more songs near each Uplift waypoint that still
+had fewer than 10 playable songs close by (480 lookups, 398 with a preview,
+nearly all in neutral). Playable songs now: Hindi 337, Tamil 282, Korean 294;
+see "Other languages" in `UPLIFT.md`.
+
 **The API is rate-limited** to roughly 20 requests a minute, and a burst of
 about 150 requests got this machine's searches refused (HTTP 403) for hours.
 One scan can need 50 or more lookups, so:
