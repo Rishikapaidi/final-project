@@ -236,6 +236,16 @@ at = start(sad_frame); set_language(at, "Telugu")
 print(f"RESULT [sad face, Telugu] {at.session_state['queue']['mode']} | cards {cards(at)}")
 set_mode(at, "Uplift"); print(f"RESULT [sad face, Telugu, Lift my mood clicked] {at.session_state['queue']['mode']} | note {at.session_state['queue']['note']!r} | cards {cards(at)['selected']}")
 
+print("RESULT == A NEW SCAN GOES BACK TO AUTO; TEXT AND LANGUAGE KEEP THE CHOSEN CARD")
+at = start(sad_frame); set_mode(at, "Resonance"); m = [at.session_state["mode_choice"]]
+set_text(at, "I feel awful today"); m.append(at.session_state["mode_choice"])
+set_language(at, "Hindi"); m.append(at.session_state["mode_choice"])
+q_before = at.session_state["queue"]["mode"]
+at.button(key="rescan").click().run(); assert not at.exception
+print(f"RESULT chosen Meet me here -> after text {m[1]}, after language {m[2]} (queue {q_before}) | after Re-scan: "
+      f"choice {at.session_state['mode_choice']}, queue {at.session_state['queue']['mode']}, "
+      f"'Let MOOD TUNE choose' shown {any(b.key == 'choose_auto' for b in at.button)} | text kept {at.session_state['user_text']!r}")
+
 print("RESULT == CAMERA IS ONLY OPENED ON LOAD AND RE-SCAN")
 FakeCap.opened = 0
 at = start(sad_frame); a = FakeCap.opened

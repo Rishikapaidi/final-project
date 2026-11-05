@@ -290,6 +290,15 @@ def choose(mode):
     st.session_state["mode_choice"] = mode
 
 
+def new_scan(scan):
+    """Store a new scan (webcam or photo). A new face reading goes back to Auto,
+    so a card chosen for the old reading doesn't stick; a change of text or
+    language alone keeps the chosen card."""
+    state["scan"] = scan
+    state["scan_id"] = state.get("scan_id", 0) + 1
+    state["mode_choice"] = "Auto"
+
+
 def read_photo(photo):
     """Use a newly uploaded photo as the scan; False if it isn't a picture.
 
@@ -303,8 +312,7 @@ def read_photo(photo):
     frame = photo_frame(photo.getvalue())
     if frame is None:
         return False
-    state["scan"] = {**summarise_scan([frame]), "source": "photo"}
-    state["scan_id"] = state.get("scan_id", 0) + 1
+    new_scan({**summarise_scan([frame]), "source": "photo"})
     return True
 
 
@@ -367,8 +375,7 @@ if "scan" not in state:
     load_face_model()
     frames = guided_webcam_scan(face_slot)
     face_slot.markdown(ui.scan_screen("Listening to your mood...", "Reading your expression"), unsafe_allow_html=True)
-    state["scan"] = {**summarise_scan(frames), "source": "webcam"}
-    state["scan_id"] = state.get("scan_id", 0) + 1
+    new_scan({**summarise_scan(frames), "source": "webcam"})
 scan = state["scan"]
 face_slot.markdown(ui.face_tile_html(scan["image"], scan_note(scan)), unsafe_allow_html=True)
 face_probs = scan["face_probs"]

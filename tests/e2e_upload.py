@@ -78,8 +78,13 @@ try:
         page.get_by_role("button", name="Upload a photo instead").click(); time.sleep(1.5); close_popover()
         s2 = player_state(bar)
         log(f"music keeps playing while the upload popover opens: time {s1:.1f} -> {s2['time']:.1f}, paused {s2['paused']}")
+        selected = lambda: page.locator(".choice-card.on h3").all_inner_texts()
+        page.locator(".st-key-choice_uplift").scroll_into_view_if_needed(); page.locator(".st-key-choice_uplift").click(); time.sleep(6)
+        log(f"chose 'Lift my mood' for the happy photo: selected {selected()} | 'Let MOOD TUNE choose' shown {page.get_by_role('button', name='Let MOOD TUNE choose').count()}")
         upload("sad_sideways.jpg"); close_popover()
         log(f"after a sideways phone-style photo (EXIF rotation): {describe()} | camera opened {opened()} time(s)")
+        log(f"a new photo goes back to Auto: selected {selected()} | recommended {page.locator('.choice-card:has(.tag) h3').all_inner_texts()} | "
+            f"'Let MOOD TUNE choose' shown {page.get_by_role('button', name='Let MOOD TUNE choose').count()}")
         page.screenshot(path=f"{S}/page_9_uploaded_sideways.png")
         upload("not_a_picture.png", wait=8)
         log(f"after a file that isn't a picture: alerts {page.locator('[data-testid=stAlert]').all_inner_texts()} | page still shows {read_card(page)['headline']!r}")
