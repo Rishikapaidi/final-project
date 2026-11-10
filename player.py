@@ -215,6 +215,8 @@ const ICONS = {
   search: '<circle cx="11" cy="11" r="7"/><line x1="20.5" y1="20.5" x2="16" y2="16"/>',
   heart: '<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>',
   play: '<polygon points="7 4 20 12 7 20 7 4"/>',
+  back: '<line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
 };
 const icon = name => '<svg class="s" viewBox="0 0 24 24" aria-hidden="true">' + ICONS[name] + '</svg>';
 function artNode(track, cls) {
@@ -283,8 +285,23 @@ function toggleSaved(t) {
   saveSong(t); toast("Saved “" + t.title + "” to My playlist"); return true;
 }
 const songTrack = s => ({ title: s.title, artist: s.artist, lastfm: s.link, link_label: linkLabel(s.link), preview: s.preview, art: s.art, language: s.language, bucket: "" });
-hub.addEventListener("message", e => { if (e.data && e.data.type === "saved") onSavedChange(); });
-window.addEventListener("storage", e => { if (e.key === SAVED) onSavedChange(); });
+// Settings (the gear in the top bar). None of them changes the queue, so they
+// never rerun the app: each component reads them here.
+const SETTINGS = "moodtune.settings";
+const DEFAULTS = { autoplay: true, repeat: "all", emotions: false, large: false };
+function settings() {
+  const s = load(SETTINGS, {}), out = Object.assign({}, DEFAULTS);
+  if (s && typeof s === "object") for (const k in DEFAULTS) if (typeof s[k] === typeof DEFAULTS[k]) out[k] = s[k];
+  if (!["off", "all", "one"].includes(out.repeat)) out.repeat = DEFAULTS.repeat;
+  return out;
+}
+let onSettingsChange = () => {};
+function setSetting(key, value) { const s = settings(); s[key] = value; save(SETTINGS, s); hub.postMessage({ type: "settings" }); onSettingsChange(); }
+hub.addEventListener("message", e => {
+  if (e.data && e.data.type === "saved") onSavedChange();
+  if (e.data && e.data.type === "settings") onSettingsChange();
+});
+window.addEventListener("storage", e => { if (e.key === SAVED) onSavedChange(); if (e.key === SETTINGS) onSettingsChange(); });
 """
 
 # The queue's two pages (song list and player bar) also get the queue and the
@@ -688,7 +705,8 @@ const pathLen = DATA.mode === "Uplift" ? tracks.filter(t => t.section === "journ
 // songs added with "Play next" / "Add to queue" (added = true), which leave
 // the order once they have been played.
 let order = tracks.map((t, i) => ({ t, base: i, added: false }));
-let pos = -1, failures = 0, shuffle = false, repeat = "all", pathDone = pathLen === 0, queueOpen = false;
+let repeatDefault = settings().repeat;
+let pos = -1, failures = 0, shuffle = false, repeat = repeatDefault, pathDone = pathLen === 0, queueOpen = false;
 const fmt = s => { s = Math.max(0, Math.floor(s || 0)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
 $("qclose").innerHTML = icon("close"); $("queuebtn").innerHTML = icon("queue"); $("shuffle").innerHTML = icon("shuffle");
 
@@ -868,8 +886,15 @@ try {
 audio.addEventListener("ended", () => {
   failures = 0;
   if (repeat === "one") { audio.currentTime = 0; audio.play().catch(() => {}); return; }
+  if (!settings().autoplay) return refresh();   // "Autoplay next song" is off: stop here
   next(true);
 });
+// A new default repeat (Settings) also applies straight away.
+onSettingsChange = () => {
+  const d = settings().repeat;
+  if (d !== repeatDefault) { repeatDefault = d; repeat = d; }
+  refresh();
+};
 audio.addEventListener("error", () => { if (pos >= 0 && ++failures < order.length) next(true); });
 audio.addEventListener("playing", () => { failures = 0; refresh(); });
 audio.addEventListener("pause", refresh);
@@ -923,12 +948,16 @@ window.player = {
 
 
 def render_actions():
-    """The top bar's buttons (My playlist) and the drawer they open, as one HTML page.
+    """The top bar's buttons (My playlist, Settings) and the drawer they open, as one HTML page.
 
     It holds no queue data, so Streamlit never reloads it on a rerun. While
     the drawer is open the iframe is pinned over the whole window. Saved songs
-    are read from and written to the browser only (see BASE_JS); playing one
-    sends it to the player bar.
+    and settings are read from and written to the browser only (see BASE_JS);
+    playing a saved song sends it to the player bar. Settings never rerun the
+    app: autoplay and repeat are read by the player bar, "Larger text" puts a
+    class on the page, and "Show all 7 emotions" opens the mood card's
+    expander in the browser. The About view says what the app does, where
+    its data comes from, its limits and what it keeps.
     """
     return ACTIONS_HTML.replace("__FONTS__", FONT_CSS)
 
@@ -939,7 +968,8 @@ ACTIONS_HTML = r"""<!DOCTYPE html>
 __FONTS__
   * { box-sizing:border-box; }
   html, body { margin:0; height:100%; overflow:hidden; background:transparent; color:var(--ink); font-family:var(--sans); }
-  #buttons { display:flex; align-items:center; justify-content:flex-end; gap:8px; height:44px; padding:2px; }
+  /* room around the buttons for their focus rings */
+  #buttons { display:flex; align-items:center; justify-content:flex-end; gap:8px; height:50px; padding:5px 6px; }
   .top { height:40px; border:1px solid var(--line); background:#fff; border-radius:999px; display:flex; align-items:center; gap:8px;
          padding:0 14px; font:inherit; font-size:14px; color:var(--ink); cursor:pointer; white-space:nowrap; }
   .top:hover { border-color:var(--lavender); background:#fbfaff; }
@@ -989,15 +1019,45 @@ __FONTS__
   .empty { color:var(--muted); font-size:14px; line-height:1.55; background:#fff; border:1px dashed var(--line); border-radius:14px; padding:18px; text-align:center; }
   .note { font-size:13px; color:var(--ink); background:var(--lav-soft); border-radius:12px; padding:10px 14px; margin:0 0 12px; }
   .note[hidden], .empty[hidden], .row-actions[hidden] { display:none; }
+  #opensettings { width:40px; padding:0; justify-content:center; }
+  #back { margin-left:-10px; } #back[hidden] { display:none; }
+  /* settings */
+  .setting { display:flex; align-items:center; justify-content:space-between; gap:16px; background:#fff; border:1px solid var(--line);
+             border-radius:14px; padding:14px 16px; margin:0 0 10px; cursor:pointer; }
+  .setting b { display:block; font-size:14.5px; font-weight:600; } .setting small { display:block; color:var(--muted); font-size:12.5px; line-height:1.45; margin-top:3px; }
+  input[type="checkbox"][role="switch"] { appearance:none; flex:none; width:44px; height:26px; border-radius:999px; background:#d9d4e6; position:relative;
+         cursor:pointer; margin:0; transition:background .15s; }
+  input[type="checkbox"][role="switch"]::after { content:""; position:absolute; top:3px; left:3px; width:20px; height:20px; border-radius:50%; background:#fff;
+         box-shadow:0 1px 3px rgba(0,0,0,.2); transition:left .15s; }
+  input[type="checkbox"][role="switch"]:checked { background:var(--purple); }
+  input[type="checkbox"][role="switch"]:checked::after { left:21px; }
+  fieldset.setting { display:block; cursor:default; } fieldset.setting legend { float:left; width:100%; padding:0; margin:0 0 10px; }
+  .seg { display:flex; background:var(--lav-soft); border-radius:999px; padding:3px; clear:both; }
+  .seg label { flex:1; text-align:center; font-size:13.5px; padding:7px 0; border-radius:999px; cursor:pointer; color:var(--muted); font-weight:600; }
+  .seg input { position:absolute; opacity:0; pointer-events:none; }
+  .seg label:has(input:checked) { background:#fff; color:var(--purple); box-shadow:0 1px 3px rgba(45,42,82,.15); }
+  .seg label:has(input:focus-visible) { outline:3px solid var(--lavender); }
+  .group { font-size:11.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-weight:600; margin:18px 2px 8px; }
+  .link-row { display:flex; width:100%; align-items:center; justify-content:space-between; background:#fff; border:1px solid var(--line); border-radius:14px;
+              padding:14px 16px; font:inherit; font-size:14.5px; font-weight:600; color:var(--ink); cursor:pointer; text-align:left; margin:0 0 10px; }
+  .link-row:hover { border-color:var(--lavender); }
+  .link-row[disabled] { cursor:default; color:var(--muted); } .link-row[disabled]:hover { border-color:var(--line); }
+  /* about */
+  #v-about h3 { font-family:var(--serif); font-size:18px; font-weight:600; margin:20px 0 6px; }
+  #v-about p, #v-about li { font-size:14px; line-height:1.6; margin:0 0 8px; }
+  #v-about ul { padding-left:20px; margin:0 0 8px; }
+  #v-about a { color:var(--purple); }
 </style></head>
 <body>
 <div id="buttons">
   <button class="top" id="openlist" aria-haspopup="dialog" title="My playlist"><span id="listicon"></span><span class="label">My playlist</span><span class="badge" id="badge" hidden>0</span></button>
+  <button class="top" id="opensettings" aria-haspopup="dialog" title="Settings" aria-label="Settings"></button>
 </div>
 <div id="overlay" hidden>
   <div id="backdrop"></div>
   <section id="drawer" role="dialog" aria-modal="true" aria-labelledby="dtitle">
-    <header><h2 id="dtitle">My playlist</h2><button class="icon-btn" id="dclose" title="Close" aria-label="Close"></button></header>
+    <header><button class="icon-btn" id="back" title="Back to Settings" aria-label="Back to Settings" hidden></button>
+      <h2 id="dtitle">My playlist</h2><button class="icon-btn" id="dclose" title="Close" aria-label="Close"></button></header>
     <div class="view" id="v-list" data-title="My playlist">
       <p class="hint">Songs you save with ♡ stay in this browser, on this computer only. They are never sent anywhere.</p>
       <p class="note" id="noplayer" hidden>Songs can play once your mood has been read and the player is on the page.</p>
@@ -1007,12 +1067,55 @@ __FONTS__
       <div id="songs"></div>
       <p class="empty" id="empty" hidden>No saved songs yet. Tap ♡ next to a song, or press L while it plays, to keep it here.</p>
     </div>
+    <div class="view" id="v-settings" data-title="Settings" hidden>
+      <p class="hint">Changes apply straight away, without stopping the music. They are kept in this browser only.</p>
+      <div class="group">Playback</div>
+      <label class="setting"><span><b>Autoplay next song</b><small>When a song ends, the next one starts.</small></span>
+        <input type="checkbox" role="switch" id="s-autoplay"></label>
+      <fieldset class="setting"><legend><b>Repeat</b><small>Where the player starts. The repeat button in the player changes it for now.</small></legend>
+        <div class="seg" role="radiogroup" aria-label="Default repeat">
+          <label><input type="radio" name="repeat" value="off">Off</label><label><input type="radio" name="repeat" value="all">All</label><label><input type="radio" name="repeat" value="one">This song</label></div></fieldset>
+      <div class="group">Display</div>
+      <label class="setting"><span><b>Show all 7 emotions</b><small>Open "See all 7 emotions" on the mood card by default.</small></span>
+        <input type="checkbox" role="switch" id="s-emotions"></label>
+      <label class="setting"><span><b>Larger text</b><small>Makes the page's text and cards bigger.</small></span>
+        <input type="checkbox" role="switch" id="s-large"></label>
+      <div class="group">Your data</div>
+      <button class="link-row" id="s-clear"><span>Clear my saved songs <small id="s-count" style="display:block;font-weight:400;color:var(--muted);font-size:12.5px;margin-top:3px"></small></span><span aria-hidden="true">›</span></button>
+      <div class="confirm" id="confirmclear2" hidden><p id="confirmtext2"></p>
+        <button class="btn danger primary" id="clearyes2">Clear all</button> <button class="btn" id="clearno2">Cancel</button></div>
+      <button class="link-row" id="openabout"><span>About MOOD TUNE</span><span aria-hidden="true">›</span></button>
+    </div>
+    <div class="view" id="v-about" data-title="About MOOD TUNE" hidden>
+      <p>MOOD TUNE reads your expression from the webcam (or a photo) and, if you like, a sentence about your day, and combines the two into a mood reading.
+        Then it suggests music: songs that match how you feel ("Meet me here"), or a five-song path from a low mood towards a lighter one ("Lift my mood").</p>
+      <h3>Where the songs come from</h3>
+      <ul>
+        <li>English songs: the Muse dataset (<code>muse_v3.csv</code>), with listeners' mood tags. Links go to Last.fm.</li>
+        <li>Hindi, Tamil, Telugu, Malayalam and Korean songs: "Spotify Tracks Dataset (Updated Every Week)" by gauthamvijayaraj on Kaggle, Apache 2.0 licence. Links go to Spotify.</li>
+        <li>Previews and artwork: 30-second previews from the iTunes Search API, played from Apple's servers.</li>
+        <li>Fonts: Fraunces and Inter, SIL Open Font License.</li>
+      </ul>
+      <h3>Limits</h3>
+      <ul>
+        <li>The face model reads 63.2% of faces correctly on the FER2013 test set (3,589 faces). Fear and sad are the emotions it gets wrong most often.</li>
+        <li>Only 30-second previews play, not whole songs.</li>
+        <li>Each song's language is as labelled in its dataset; MOOD TUNE does not check it.</li>
+      </ul>
+      <h3>Privacy</h3>
+      <ul>
+        <li>Your webcam picture (or photo) is analysed in memory and never saved.</li>
+        <li>Your words are kept only for this visit.</li>
+        <li>Saved songs and these settings stay in this browser, on this computer.</li>
+      </ul>
+    </div>
   </section>
 </div>
 <script>
 __BASE__
 let opener = null;
 $("listicon").outerHTML = icon("heart"); $("dclose").innerHTML = icon("close");
+$("opensettings").innerHTML = icon("gear"); $("back").innerHTML = icon("back");
 $("playall").innerHTML = icon("play") + "Play all";
 const playerOnPage = () => { try { return !!window.parent.document.querySelector(".st-key-playerbar iframe"); } catch (e) { return false; } };
 
@@ -1025,11 +1128,17 @@ function openDrawer(view, button) {
     $("buttons").style.cssText = `position:fixed; left:${r.left}px; top:${r.top}px; width:${r.width}px;`;
     Object.assign(f.style, { position: "fixed", left: "0", top: "0", width: "100vw", height: "100vh", zIndex: "1002" });
   }
+  $("overlay").hidden = false; opener = button;
+  showView(view);
+}
+function showView(view) {
   document.querySelectorAll(".view").forEach(v => { v.hidden = v.id !== view; });
   $("dtitle").textContent = $(view).dataset.title;
-  $("overlay").hidden = false; opener = button;
-  render();
-  $("dclose").focus();
+  $("back").hidden = view !== "v-about";
+  $("confirmclear").hidden = $("confirmclear2").hidden = true;
+  $(view).scrollTop = 0;
+  render(); renderSettings();
+  (view === "v-about" ? $("back") : $("dclose")).focus();
 }
 function closeDrawer() {
   if ($("overlay").hidden) return;
@@ -1064,7 +1173,47 @@ function render() {
   $("playall").disabled = !playerOnPage(); $("noplayer").hidden = !n || playerOnPage();
   if (!n) $("confirmclear").hidden = true;
 }
-onSavedChange = render;
+onSavedChange = () => { render(); renderSettings(); };
+
+// Settings. "Larger text" and "Show all 7 emotions" act on the page itself
+// (a class on the page, and opening the mood card's expander), so they never
+// rerun the app; autoplay and repeat are read by the player bar.
+function renderSettings() {
+  const s = settings(), n = savedSongs().length;
+  $("s-autoplay").checked = s.autoplay; $("s-emotions").checked = s.emotions; $("s-large").checked = s.large;
+  document.querySelectorAll('input[name="repeat"]').forEach(r => { r.checked = r.value === s.repeat; });
+  $("s-count").textContent = n ? n + (n === 1 ? " song" : " songs") + " saved in this browser" : "Nothing saved";
+  $("s-clear").disabled = !n;
+  if (!n) $("confirmclear2").hidden = true;
+}
+function applyLarge() { try { window.parent.document.documentElement.classList.toggle("moodtune-large", settings().large); } catch (e) {} }
+function applyEmotions(now) {
+  if (!settings().emotions) return;
+  try {
+    // each mood card's expander is opened once, the first time it appears (or now, when the setting is turned on)
+    window.parent.document.querySelectorAll(".st-key-moodcard details").forEach(d => {
+      if (d.dataset.moodtuneSeen && !now) return;
+      d.dataset.moodtuneSeen = "1";
+      if (!d.open) { const s = d.querySelector("summary"); if (s) s.click(); }
+    });
+  } catch (e) {}
+}
+try { new MutationObserver(() => applyEmotions(false)).observe(window.parent.document.body, { childList: true, subtree: true }); } catch (e) {}
+onSettingsChange = () => { renderSettings(); applyLarge(); };
+$("s-autoplay").addEventListener("change", e => setSetting("autoplay", e.target.checked));
+$("s-emotions").addEventListener("change", e => { setSetting("emotions", e.target.checked); applyEmotions(true); });
+$("s-large").addEventListener("change", e => setSetting("large", e.target.checked));
+document.querySelectorAll('input[name="repeat"]').forEach(r => r.addEventListener("change", () => setSetting("repeat", r.value)));
+$("s-clear").addEventListener("click", () => {
+  const n = savedSongs().length; if (!n) return;
+  $("confirmtext2").textContent = "Remove all " + n + (n === 1 ? " saved song" : " saved songs") + " from this browser?";
+  $("confirmclear2").hidden = false; $("clearno2").focus();
+});
+$("clearno2").addEventListener("click", () => { $("confirmclear2").hidden = true; $("s-clear").focus(); });
+$("clearyes2").addEventListener("click", () => { setSaved([]); $("confirmclear2").hidden = true; toast("Your saved songs are cleared"); $("dclose").focus(); });
+$("openabout").addEventListener("click", () => showView("v-about"));
+$("back").addEventListener("click", () => showView("v-settings"));
+$("opensettings").addEventListener("click", () => openDrawer("v-settings", $("opensettings")));
 
 $("openlist").addEventListener("click", () => openDrawer("v-list", $("openlist")));
 $("dclose").addEventListener("click", closeDrawer);
@@ -1096,8 +1245,8 @@ document.addEventListener("keydown", e => {
   e.preventDefault();
   if (key !== "held") hub.postMessage({ type: "key", key });
 });
-render();
-window.actions = { open: openDrawer, close: closeDrawer, saved: savedSongs };
+render(); renderSettings(); applyLarge(); applyEmotions(false);
+window.actions = { open: openDrawer, close: closeDrawer, saved: savedSongs, settings };
 </script>
 </body></html>
 """.replace("__BASE__", BASE_JS)

@@ -172,8 +172,11 @@ PAGE_CSS = """
   [data-testid="stMain"] { scroll-padding-bottom:110px; scroll-padding-top:16px; }
   .st-key-playerbar iframe { display:block; width:100%; height:86px; border:none; }
   /* the top bar's My playlist button (a component; its drawer pins the iframe over the window) */
-  [data-testid="stLayoutWrapper"]:has(> .st-key-topactions) { flex:none; width:178px; }
-  .st-key-topactions iframe { display:block; width:100%; height:44px; border:none; }
+  [data-testid="stLayoutWrapper"]:has(> .st-key-topactions) { flex:none; width:232px; margin-right:-6px; }
+  /* Settings > Larger text: the page's cards are drawn 15% bigger (the top bar and the player bar keep their size) */
+  html.moodtune-large .greeting, html.moodtune-large .st-key-hero, html.moodtune-large .st-key-notices,
+  html.moodtune-large .st-key-moodcard, html.moodtune-large .st-key-choice, html.moodtune-large .st-key-path { zoom:1.15; }
+  .st-key-topactions iframe { display:block; width:100%; height:50px; border:none; }
   /* short messages from the song list and the player ("Added to the queue", "Link copied") */
   #moodtune-toast { position:fixed; left:50%; bottom:104px; transform:translateX(-50%); z-index:1003; pointer-events:none;
                     background:var(--purple); color:#fff; font-size:14px; padding:10px 18px; border-radius:999px; max-width:calc(100vw - 32px);
@@ -194,7 +197,7 @@ PAGE_CSS = """
     .mood-title { font-size:25px; } .mood-head .emoji { font-size:42px; }
     .mood-grid { grid-template-columns:minmax(0,1fr); gap:18px; } .gauge-box { max-width:230px; margin:0 auto; }
     .app-tagline { display:none; }
-    [data-testid="stLayoutWrapper"]:has(> .st-key-topactions) { width:78px; }
+    [data-testid="stLayoutWrapper"]:has(> .st-key-topactions) { width:132px; }
     .st-key-language { min-width:0; flex:1 1 auto; }
   }
 </style>
