@@ -164,10 +164,20 @@ PAGE_CSS = """
 
   /* 5-6. the path card iframe grows to fit; the player bar iframe is pinned to the bottom */
   .st-key-path iframe { display:block; width:100%; border:none; }
+  /* Streamlit fixes the wrapper at the component's first height; let it follow the card's own height
+     (otherwise the end of the list hangs past the page's bottom padding, behind the player bar) */
+  .st-key-path [data-testid="stElementContainer"] { height:auto !important; }
   .st-key-playerbar { position:fixed; left:0; right:0; bottom:0; z-index:999; }
   /* keep things scrolled to (or focused with the keyboard) clear of the player bar */
   [data-testid="stMain"] { scroll-padding-bottom:110px; scroll-padding-top:16px; }
   .st-key-playerbar iframe { display:block; width:100%; height:86px; border:none; }
+  /* short messages from the song list and the player ("Added to the queue", "Link copied") */
+  #moodtune-toast { position:fixed; left:50%; bottom:104px; transform:translateX(-50%); z-index:1003; pointer-events:none;
+                    background:var(--purple); color:#fff; font-size:14px; padding:10px 18px; border-radius:999px; max-width:calc(100vw - 32px);
+                    box-shadow:0 10px 30px rgba(45,42,82,.25); opacity:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #moodtune-toast.show { animation:moodtune-toast 2.8s ease forwards; }
+  @keyframes moodtune-toast { 0% { opacity:0; transform:translate(-50%, 8px); } 8%, 82% { opacity:1; transform:translate(-50%, 0); } 100% { opacity:0; } }
+  @media (prefers-reduced-motion: reduce) { #moodtune-toast.show { animation-duration:3.2s; animation-timing-function:steps(1, end); } }
 
   /* alerts */
   .st-key-notices [data-testid="stAlert"] { border-radius:14px; }

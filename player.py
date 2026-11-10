@@ -159,8 +159,10 @@ def render_path(queue, message):
 
     queue: from app.build_queue; message: the mood card's sentence about the
     playlist. All text is inserted as text, never as HTML. The page plays
-    nothing itself: rows and Play pills send commands to the player bar
-    (render_bar) over a BroadcastChannel named after the queue id.
+    nothing itself: rows, Play pills and each row's "..." menu (Play next,
+    Add to queue, Open on Spotify / Last.fm, Copy link) send commands to the
+    player bar (render_bar) over a BroadcastChannel named after the queue id.
+    A search box filters the list by title or artist, in the browser.
     """
     title = path_title(queue["journey"]) if queue["mode"] == "Uplift" else "Songs for this moment"
     payload = _payload(queue, mode=queue["mode"], title=title, message=message, subtitle=queue["subtitle"],
@@ -211,7 +213,18 @@ const ICONS = {
   volume: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>',
   muted: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>',
   close: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+  more: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
+  search: '<circle cx="11" cy="11" r="7"/><line x1="20.5" y1="20.5" x2="16" y2="16"/>',
 };
+// A short message at the bottom of the page (in the page itself, so it shows
+// wherever the song list is scrolled to). The CSS animation fades it out.
+function toast(text) {
+  let doc = document;
+  try { doc = window.parent.document; } catch (e) {}
+  let box = doc.getElementById("moodtune-toast");
+  if (!box) { box = doc.createElement("div"); box.id = "moodtune-toast"; box.setAttribute("role", "status"); box.setAttribute("aria-live", "polite"); doc.body.appendChild(box); }
+  box.textContent = text; box.classList.remove("show"); void box.offsetWidth; box.classList.add("show");
+}
 const icon = name => '<svg class="s" viewBox="0 0 24 24" aria-hidden="true">' + ICONS[name] + '</svg>';
 function artNode(track, cls) {
   if (track.art) { const img = el("img", cls); img.src = track.art; img.alt = ""; img.loading = "lazy"; return img; }
@@ -261,8 +274,29 @@ __FONTS__
   .steps li.arrow { background:none; padding:3px 0; }
   .section { color:var(--muted); font-size:12px; letter-spacing:.1em; text-transform:uppercase; font-weight:600; margin:20px 6px 6px; }
   .uplift #panel .section { color:var(--terra-ink); margin-top:16px; }
-  .row { display:grid; grid-template-columns:30px 48px minmax(0,1fr) auto auto auto; align-items:center; gap:14px;
-         padding:8px 12px 8px 6px; border-radius:12px; cursor:pointer; }
+  .row { display:grid; grid-template-columns:30px 48px minmax(0,1fr) auto auto auto; align-items:center; gap:12px;
+         padding:8px 8px 8px 6px; border-radius:12px; cursor:pointer; }
+  .row[hidden], .section[hidden] { display:none !important; }
+  .icon-btn { width:34px; height:34px; border:none; background:none; border-radius:999px; color:var(--muted); cursor:pointer;
+              display:flex; align-items:center; justify-content:center; padding:0; }
+  .icon-btn:hover, .icon-btn[aria-expanded="true"] { color:var(--purple); background:rgba(45,42,82,.07); }
+  .icon-btn svg { width:19px; height:19px; } .icon-btn:focus-visible { outline:3px solid var(--lavender); outline-offset:1px; }
+  /* search */
+  .tools { display:flex; align-items:center; gap:12px; margin:16px 0 0; }
+  .search { flex:1; max-width:380px; display:flex; align-items:center; gap:8px; background:#fff; border:1px solid var(--line);
+            border-radius:999px; padding:0 14px; color:var(--muted); }
+  .search:focus-within { border-color:var(--lavender); box-shadow:0 0 0 3px rgba(185,176,232,.35); }
+  .search svg { width:16px; height:16px; flex:none; }
+  #search { flex:1; min-width:0; border:none; outline:none; background:none; font:inherit; font-size:14px; color:var(--ink); padding:9px 0; }
+  #matches { font-size:12.5px; color:var(--muted); }
+  #nomatch { color:var(--muted); font-size:14px; padding:14px 8px 6px; }
+  /* the song menu */
+  #menu { position:absolute; z-index:5; min-width:220px; background:#fff; border:1px solid var(--line); border-radius:14px; padding:6px;
+          box-shadow:0 14px 40px rgba(45,42,82,.2); }
+  #menu .mi { display:block; width:100%; text-align:left; border:none; background:none; font:inherit; font-size:14px; color:var(--ink);
+              padding:9px 12px; border-radius:9px; cursor:pointer; text-decoration:none; }
+  #menu .mi:hover, #menu .mi:focus { background:var(--lav-soft); outline:none; }
+  #menu hr { border:none; border-top:1px solid var(--line); margin:5px 4px; }
   .row:hover { background:#f4f1fb; } .uplift #panel .row:hover { background:rgba(255,255,255,.6); }
   .row.playing { background:var(--lav-soft); } .uplift #panel .row.playing { background:#fff; }
   .num { text-align:center; color:var(--muted); font-size:14.5px; font-variant-numeric:tabular-nums; }
@@ -277,8 +311,6 @@ __FONTS__
           padding:6px 14px; cursor:pointer; white-space:nowrap; min-width:76px; }
   .pill:hover { background:#433e78; }
   .uplift #panel .pill { background:var(--terra); } .uplift #panel .pill:hover { background:#a04d2d; }
-  .lastfm { font-size:12.5px; color:var(--muted); text-decoration:none; white-space:nowrap; }
-  .lastfm:hover { color:var(--purple); text-decoration:underline; }
   .eq { display:inline-flex; gap:2px; align-items:flex-end; height:14px; }
   .eq i { width:3px; background:currentColor; animation:eq .9s ease-in-out infinite; }
   .eq i:nth-child(2) { animation-delay:.25s; } .eq i:nth-child(3) { animation-delay:.5s; }
@@ -291,8 +323,9 @@ __FONTS__
   @media (max-width: 640px) {
     #card { padding:20px 14px 12px; border-radius:18px; } h2 { font-size:25px; }
     .uplift #panel { padding:18px 12px 10px; margin:-4px -4px 6px; }
-    .row { grid-template-columns:24px 44px minmax(0,1fr) auto; gap:10px; padding:8px 4px; }
-    .row .tag, .row .lastfm { display:none; } .art { width:44px; height:44px; }
+    .row { grid-template-columns:22px 44px minmax(0,1fr) auto auto; gap:8px; padding:8px 2px; }
+    .row .tag { display:none; } .art { width:44px; height:44px; }
+    .pill { min-width:0; padding:6px 11px; } .search { max-width:none; }
   }
 </style></head>
 <body>
@@ -303,11 +336,16 @@ __FONTS__
       <button id="bigplay" title="Play" aria-label="Play"></button></div>
     <p class="note" id="note" hidden></p>
     <ul class="steps" id="steps" hidden></ul>
+    <div class="tools" id="tools"><label class="search"><span id="searchicon"></span>
+      <input id="search" type="search" placeholder="Search this list" aria-label="Search this list by title or artist" autocomplete="off"></label>
+      <span id="matches" aria-live="polite"></span></div>
     <div id="journeyrows"></div>
     <div id="journey"></div>
   </div>
   <div id="rows"></div>
+  <div id="nomatch" hidden>No songs in this list match your search.</div>
 </div>
+<div id="menu" role="menu" hidden></div>
 <script>
 __COMMON__
 const SECTIONS = { journey: "Your path, in play order", more: "Keep listening", mood: "" };
@@ -315,7 +353,7 @@ let current = -1, paused = true;
 const send = msg => channel.postMessage(msg);
 
 function row(t, i) {
-  const r = el("div", "row"); r.dataset.index = i; r.tabIndex = 0; r.setAttribute("role", "button");
+  const r = el("div", "row"); r.dataset.index = i; r.dataset.section = t.section; r.tabIndex = 0; r.setAttribute("role", "button");
   r.setAttribute("aria-label", "Play " + t.title + " by " + t.artist);
   r.appendChild(el("div", "num", String(t.number)));
   r.appendChild(artNode(t, "art"));
@@ -323,8 +361,10 @@ function row(t, i) {
   r.appendChild(el("span", "tag", t.bucket));
   const pill = el("button", "pill", "▶ Play"); pill.title = "Play this song";
   pill.addEventListener("click", e => { e.stopPropagation(); send(i === current ? { type: "toggle" } : { type: "play", index: i }); }); r.appendChild(pill);
-  const link = el("a", "lastfm", t.link_label || "Last.fm"); link.href = t.lastfm; link.target = "_blank"; link.rel = "noopener noreferrer";
-  link.title = "Open on " + (t.link_label || "Last.fm"); link.addEventListener("click", e => e.stopPropagation()); r.appendChild(link);
+  const more = el("button", "icon-btn more"); more.innerHTML = icon("more");
+  more.title = "More options"; more.ariaLabel = "More options for " + t.title; more.setAttribute("aria-haspopup", "menu"); more.setAttribute("aria-expanded", "false");
+  more.addEventListener("click", e => { e.stopPropagation(); if (menuFor === i) closeMenu(true); else openMenu(i, more); });
+  more.addEventListener("keydown", e => e.stopPropagation()); r.appendChild(more);
   r.addEventListener("click", () => send({ type: "play", index: i }));
   r.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); send(i === current ? { type: "toggle" } : { type: "play", index: i }); } });
   return r;
@@ -336,7 +376,7 @@ function build() {
   $("kicker").textContent = uplift ? "Your path" : "Your songs";
   $("title").textContent = DATA.title; $("msg").textContent = DATA.message || ""; $("qsub").textContent = DATA.subtitle;
   if (DATA.note) { $("note").textContent = DATA.note; $("note").hidden = false; }
-  if (!tracks.length) { $("rows").appendChild(el("div", "empty", "No playable songs were found for this mood.")); $("bigplay").hidden = true; return; }
+  if (!tracks.length) { $("rows").appendChild(el("div", "empty", "No playable songs were found for this mood.")); $("bigplay").hidden = true; $("tools").hidden = true; return; }
   if (uplift && DATA.journey) {
     const steps = [DATA.journey.start].concat(DATA.journey.targets);
     steps.forEach((s, k) => { if (k) { const a = el("li", "arrow", "→"); a.setAttribute("aria-hidden", "true"); $("steps").appendChild(a); } $("steps").appendChild(el("li", null, s)); });
@@ -349,7 +389,7 @@ function build() {
       section = t.section;
       let label = SECTIONS[section];
       if (section === "more") label += " · " + t.bucket;
-      if (label) target.appendChild(el("div", "section", label));
+      if (label) { const head = el("div", "section", label); head.dataset.section = section; target.appendChild(head); }
     }
     target.appendChild(row(t, i));
   });
@@ -382,6 +422,73 @@ function buildJourney() {
   box.appendChild(el("p", "cap", "Dashed line: the planned path. Solid line: the songs picked, in play order. Values come from listeners' mood tags."));
   $("journey").appendChild(box);
 }
+
+// The "..." menu. Play next and Add to queue insert the song after the one
+// playing (the player bar keeps the list's order and Uplift's path as they are).
+let menuFor = -1, menuButton = null;
+function openMenu(i, button) {
+  closeMenu(false);
+  const t = tracks[i], menu = $("menu"), label = t.link_label || "Last.fm";
+  menu.replaceChildren();
+  const item = (text, action, href) => {
+    const b = el(href ? "a" : "button", "mi", text); b.setAttribute("role", "menuitem"); b.tabIndex = -1;
+    if (href) { b.href = href; b.target = "_blank"; b.rel = "noopener noreferrer"; b.classList.add("lastfm"); b.addEventListener("click", () => closeMenu(false)); }
+    else b.addEventListener("click", () => { closeMenu(true); action(); });
+    menu.appendChild(b);
+  };
+  item("Play next", () => { send({ type: "insert", index: i, where: "next" }); toast("“" + t.title + "” will play next"); });
+  item("Add to queue", () => { send({ type: "insert", index: i, where: "queue" }); toast("Added “" + t.title + "” to the queue"); });
+  menu.appendChild(el("hr"));
+  item("Open on " + label, null, t.lastfm);
+  item("Copy link", () => copyLink(t.lastfm));
+  const roomBelow = document.body.scrollHeight;
+  menu.hidden = false;
+  const r = button.getBoundingClientRect(), h = menu.offsetHeight;
+  // open below the button, or above it near the bottom of the card
+  menu.style.top = (r.bottom + 6 + h > roomBelow - 4 ? r.top - h - 6 : r.bottom + 6) + "px";
+  menu.style.left = Math.max(8, r.right - menu.offsetWidth) + "px";
+  menuFor = i; menuButton = button; button.setAttribute("aria-expanded", "true");
+  menu.querySelector(".mi").focus();
+}
+function closeMenu(refocus) {
+  if (menuFor < 0) return;
+  $("menu").hidden = true; menuButton.setAttribute("aria-expanded", "false");
+  if (refocus) menuButton.focus();
+  menuFor = -1; menuButton = null;
+}
+$("menu").addEventListener("keydown", e => {
+  const items = [...$("menu").querySelectorAll(".mi")], k = items.indexOf(document.activeElement);
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); items[(k + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length].focus(); }
+  else if (e.key === "Escape") { e.preventDefault(); closeMenu(true); }
+  else if (e.key === "Tab") closeMenu(false);
+  e.stopPropagation();
+});
+document.addEventListener("click", e => { if (menuFor >= 0 && !$("menu").contains(e.target)) closeMenu(false); });
+async function copyLink(link) {
+  let ok = false;
+  try { await navigator.clipboard.writeText(link); ok = true; }
+  catch (e) {
+    try { const box = el("textarea"); box.value = link; box.style.cssText = "position:fixed;opacity:0"; document.body.appendChild(box); box.select(); ok = document.execCommand("copy"); box.remove(); } catch (e2) {}
+  }
+  toast(ok ? "Link copied" : "Couldn't copy the link");
+}
+
+// Search: filters the list by title or artist, as you type (nothing is sent anywhere).
+const norm = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLocaleLowerCase();
+function filter() {
+  const q = norm($("search").value.trim());
+  let shown = 0;
+  document.querySelectorAll(".row").forEach(r => {
+    const t = tracks[+r.dataset.index], hit = !q || norm(t.title + " " + t.artist).includes(q);
+    r.hidden = !hit; if (hit) shown++;
+  });
+  document.querySelectorAll(".section").forEach(s => { s.hidden = !!q && !document.querySelector(`.row[data-section="${s.dataset.section}"]:not([hidden])`); });
+  $("matches").textContent = q ? shown + " of " + tracks.length : "";
+  $("nomatch").hidden = !q || shown > 0;
+  closeMenu(false);
+}
+$("search").addEventListener("input", filter);
+$("searchicon").outerHTML = icon("search");
 
 function refresh() {
   const playing = current >= 0 && !paused;
@@ -709,6 +816,7 @@ channel.onmessage = e => {
   const m = e.data;
   if (m.type === "play") playBase(m.index); else if (m.type === "toggle") toggle(); else if (m.type === "hello") announce();
   else if (m.type === "key") act(m.key);
+  else if (m.type === "insert" && tracks[m.index]) insert(tracks[m.index], m.index, m.where);
 };
 refreshVolume(); refresh();
 window.player = {
