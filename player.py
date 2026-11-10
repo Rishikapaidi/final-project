@@ -171,11 +171,15 @@ def render_path(queue, message):
 def render_bar(queue):
     """The player bar (the only <audio> on the page), as one HTML page.
 
-    app.py pins it to the bottom of the window with CSS. When a song ends the
-    next one starts; at the end of the queue it loops from queue["loop_from"]
-    (after an Uplift journey, the "keep listening" songs).
+    app.py pins it to the bottom of the window with CSS. Controls: shuffle
+    (only the songs still to come, never Uplift's path, and only once the path
+    has finished), previous / play / next, repeat (off / all / one), a
+    progress bar to click or drag, the queue panel, mute and volume, and the
+    keyboard shortcuts. When a song ends the next one starts; with repeat
+    "all" the queue loops from queue["loop_from"] (after an Uplift journey,
+    the "keep listening" songs).
     """
-    return BAR_HTML.replace("__FONTS__", FONT_CSS).replace("__DATA__", _payload(queue))
+    return BAR_HTML.replace("__FONTS__", FONT_CSS).replace("__DATA__", _payload(queue, mode=queue["mode"]))
 
 
 # The bundled fonts (static/fonts, served at app/static/). The component pages
@@ -196,11 +200,35 @@ const tracks = DATA.tracks;
 const channel = new BroadcastChannel("moodtune:" + DATA.id);
 const $ = id => document.getElementById(id);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-const PLAY = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 1.8v12.4L14 8z"/></svg>';
-const PAUSE = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 1.8h3.6v12.4H3zM9.4 1.8H13v12.4H9.4z"/></svg>';
+const PLAY = '<svg class="f" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 1.8v12.4L14 8z"/></svg>';
+const PAUSE = '<svg class="f" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 1.8h3.6v12.4H3zM9.4 1.8H13v12.4H9.4z"/></svg>';
+// Line icons (24 x 24, drawn with the current text colour).
+const ICONS = {
+  shuffle: '<polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/>',
+  repeat: '<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>',
+  repeatOne: '<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/><path d="M11 10.5l1.5-1v5"/>',
+  queue: '<line x1="9" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="9" y1="18" x2="16" y2="18"/><polyline points="3 5 6 7 3 9"/>',
+  volume: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>',
+  muted: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>',
+  close: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+};
+const icon = name => '<svg class="s" viewBox="0 0 24 24" aria-hidden="true">' + ICONS[name] + '</svg>';
 function artNode(track, cls) {
   if (track.art) { const img = el("img", cls); img.src = track.art; img.alt = ""; img.loading = "lazy"; return img; }
   const box = el("div", cls + " noart", "♫"); box.setAttribute("aria-hidden", "true"); return box;
+}
+// Keyboard shortcuts: Space = play/pause, Right/Left = next/previous, M = mute.
+// Nothing happens while typing in a text box, or with a modifier key held;
+// Space on a button, link or row is left to that control.
+function shortcut(e) {
+  if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return null;
+  const t = e.target || {}, tag = (t.tagName || "").toLowerCase(), role = t.getAttribute ? t.getAttribute("role") || "" : "";
+  if (t.isContentEditable || tag === "input" || tag === "textarea" || tag === "select" || role === "combobox" || role === "textbox") return null;
+  const key = { " ": "space", ArrowRight: "next", ArrowLeft: "prev", m: "mute", M: "mute" }[e.key] || null;
+  if (key === "space" && (tag === "button" || tag === "a" || tag === "summary" || role === "button" || role === "menuitem")) return null;
+  if ((key === "next" || key === "prev") && role === "slider") return null;
+  if (key && key !== "next" && key !== "prev" && e.repeat) return "held";
+  return key;
 }
 """
 
@@ -221,6 +249,7 @@ __FONTS__
   #bigplay { width:52px; height:52px; border-radius:50%; border:none; background:var(--purple); cursor:pointer; flex:none;
              display:flex; align-items:center; justify-content:center; box-shadow:0 6px 16px rgba(45,42,82,.25); transition:transform .12s; }
   #bigplay:hover { transform:scale(1.05); } #bigplay svg { width:20px; height:20px; fill:#fff; }
+  svg.s { fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
   #bigplay:focus-visible, .pill:focus-visible, .lastfm:focus-visible, .row:focus-visible, summary:focus-visible { outline:3px solid var(--lavender); outline-offset:2px; }
   /* Uplift: the warm terracotta panel holding the journey */
   .uplift #panel { background:var(--terra-soft); border-radius:18px; padding:22px 22px 12px; margin:-6px -6px 6px; }
@@ -297,7 +326,7 @@ function row(t, i) {
   const link = el("a", "lastfm", t.link_label || "Last.fm"); link.href = t.lastfm; link.target = "_blank"; link.rel = "noopener noreferrer";
   link.title = "Open on " + (t.link_label || "Last.fm"); link.addEventListener("click", e => e.stopPropagation()); r.appendChild(link);
   r.addEventListener("click", () => send({ type: "play", index: i }));
-  r.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); send({ type: "play", index: i }); } });
+  r.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); send(i === current ? { type: "toggle" } : { type: "play", index: i }); } });
   return r;
 }
 
@@ -373,6 +402,8 @@ new ResizeObserver(fit).observe(document.body);
 
 channel.onmessage = e => { if (e.data.type === "state") { current = e.data.current; paused = e.data.paused; refresh(); } };
 $("bigplay").addEventListener("click", () => send({ type: "toggle" }));
+// Shortcut keys pressed in this card go to the player bar.
+document.addEventListener("keydown", e => { const key = shortcut(e); if (!key) return; e.preventDefault(); if (key !== "held") send({ type: "key", key }); });
 build(); refresh(); fit();
 send({ type: "hello" });
 window.playlist = { state: () => ({ current, paused }) };
@@ -386,7 +417,10 @@ BAR_HTML = r"""<!DOCTYPE html>
 __FONTS__
   * { box-sizing:border-box; }
   html, body { margin:0; height:100%; overflow:hidden; background:transparent; color:var(--ink); font-family:var(--sans); }
-  #bar { position:absolute; inset:0; background:rgba(255,253,249,.97); border-top:1px solid var(--line);
+  /* While the queue is open the iframe fills the window: the shade (a click on it closes the queue) and the panel sit above the bar. */
+  #shade { position:absolute; left:0; right:0; top:0; bottom:86px; display:none; background:rgba(43,40,64,.16); }
+  body.queue-open #shade { display:block; }
+  #bar { position:absolute; left:0; right:0; bottom:0; height:86px; background:rgba(255,253,249,.97); border-top:1px solid var(--line);
          box-shadow:0 -6px 24px rgba(45,42,82,.08); display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) minmax(0,1fr);
          align-items:center; gap:18px; padding:0 22px; }
   #now { display:flex; align-items:center; gap:12px; min-width:0; }
@@ -394,96 +428,295 @@ __FONTS__
   .noart { display:flex; align-items:center; justify-content:center; color:#8f8aa3; font-size:20px; }
   .meta { min-width:0; } .title { font-size:14.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .artist { font-size:12.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
-  #center { display:flex; flex-direction:column; align-items:center; gap:7px; min-width:0; }
-  .controls { display:flex; align-items:center; gap:22px; }
-  button { background:none; border:none; cursor:pointer; padding:4px; display:flex; border-radius:999px; }
-  button svg { width:18px; height:18px; fill:var(--muted); } button:hover svg { fill:var(--purple); }
-  button:focus-visible, input:focus-visible { outline:3px solid var(--lavender); outline-offset:2px; }
-  #toggle { width:42px; height:42px; background:var(--purple); align-items:center; justify-content:center; }
-  #toggle svg { fill:#fff !important; width:16px; height:16px; } #toggle:hover { background:#433e78; }
+  #center { display:flex; flex-direction:column; align-items:center; gap:5px; min-width:0; }
+  .controls { display:flex; align-items:center; gap:14px; }
+  button { background:none; border:none; cursor:pointer; padding:7px; display:flex; align-items:center; justify-content:center;
+           border-radius:999px; color:var(--muted); position:relative; font-family:var(--sans); }
+  button:hover { color:var(--purple); background:rgba(45,42,82,.06); }
+  button svg { width:18px; height:18px; }
+  svg.f { fill:currentColor; }
+  svg.s { fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  button.on { color:var(--purple); }
+  button.on::after { content:""; position:absolute; bottom:-2px; left:50%; width:4px; height:4px; margin-left:-2px; border-radius:50%; background:var(--purple); }
+  button[aria-disabled="true"] { opacity:.35; cursor:not-allowed; }
+  button[aria-disabled="true"]:hover { background:none; color:var(--muted); }
+  button:focus-visible, input:focus-visible, #track:focus-visible, .qrow:focus-visible { outline:3px solid var(--lavender); outline-offset:2px; }
+  #toggle { width:42px; height:42px; background:var(--purple); color:#fff; } #toggle:hover { background:#433e78; color:#fff; }
+  #toggle svg { width:16px; height:16px; }
   .progress { display:flex; align-items:center; gap:10px; width:100%; font-size:11.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
-  #track { flex:1; height:5px; background:#e5e0f2; border-radius:3px; cursor:pointer; position:relative; }
-  #fill { height:100%; width:0; background:var(--purple); border-radius:3px; }
-  #right { display:flex; align-items:center; justify-content:flex-end; gap:10px; color:var(--muted); font-size:12px; }
-  #volume { width:110px; accent-color:var(--purple); }
-  #right svg { width:18px; height:18px; fill:var(--muted); flex:none; }
+  #track { flex:1; height:16px; cursor:pointer; position:relative; touch-action:none; display:flex; align-items:center; }
+  #track::before { content:""; position:absolute; left:0; right:0; height:5px; background:#e5e0f2; border-radius:3px; }
+  #fill { position:relative; height:5px; width:0; background:var(--purple); border-radius:3px; }
+  #knob { position:absolute; top:2px; left:0; width:12px; height:12px; margin-left:-6px; border-radius:50%; background:var(--purple); opacity:0; transition:opacity .15s; }
+  #track:hover #knob, #track.drag #knob, #track:focus-visible #knob { opacity:1; }
+  #right { display:flex; align-items:center; justify-content:flex-end; gap:6px; }
+  #volume { width:104px; accent-color:var(--purple); }
+  #queuebtn.on::after { display:none; } #queuebtn.on { background:var(--lav-soft); }
+  /* the queue panel */
+  #queue { position:absolute; right:16px; bottom:98px; width:min(400px, calc(100% - 32px)); max-height:calc(100% - 118px); display:none; flex-direction:column;
+           background:var(--card); border:1px solid var(--line); border-radius:18px; box-shadow:0 18px 50px rgba(45,42,82,.22); overflow:hidden; }
+  body.queue-open #queue { display:flex; }
+  #queue header { display:flex; align-items:center; justify-content:space-between; padding:16px 12px 6px 20px; }
+  #queue h2 { font-family:var(--serif); font-weight:600; font-size:22px; margin:0; }
+  #qlist { overflow:auto; padding:0 10px 14px; }
+  .qhead { font-size:11.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-weight:600; margin:12px 10px 6px; }
+  .qrow { display:grid; grid-template-columns:40px minmax(0,1fr) auto; align-items:center; gap:12px; padding:6px 8px; border-radius:10px; cursor:pointer; }
+  .qrow:hover { background:#f4f1fb; } .qrow.now { background:var(--lav-soft); cursor:default; }
+  .qrow .art { width:40px; height:40px; border-radius:8px; }
+  .qrow .title { font-size:14px; font-weight:500; } .qrow .artist { font-size:12px; }
+  .byyou { display:inline-block; font-size:11px; color:var(--purple); background:var(--lav-soft); border-radius:999px; padding:1px 8px; margin-top:4px; }
+  .qrow.now .byyou { background:#fff; }
+  .qempty { color:var(--muted); font-size:13.5px; padding:4px 10px 8px; margin:0; }
   @media (max-width: 760px) {
-    #bar { grid-template-columns:minmax(0,1fr) auto; gap:10px; padding:0 12px; }
-    #center { flex-direction:row; } .progress, #right { display:none; } .controls { gap:12px; }
+    #bar { grid-template-columns:minmax(0,1fr) auto auto; gap:4px; padding:0 8px 0 12px; }
     .art { width:44px; height:44px; }
+    .controls { gap:0; } #toggle { margin:0 2px; }
+    /* the progress bar becomes a thin line along the top of the bar (still click/drag to seek) */
+    .progress { position:absolute; left:0; right:0; top:-7px; } #tcur, #tdur, #volume, #mute { display:none; }
   }
 </style></head>
 <body>
+<div id="shade"></div>
+<section id="queue" role="dialog" aria-label="Queue">
+  <header><h2>Queue</h2><button id="qclose" title="Close the queue" aria-label="Close the queue"></button></header>
+  <div id="qlist"></div>
+</section>
 <div id="bar">
   <div id="now"><div class="art noart" id="nowart" aria-hidden="true">&#9835;</div>
     <div class="meta"><div class="title" id="nowtitle">Nothing playing</div><div class="artist" id="nowartist">Press play or pick a song</div></div></div>
   <div id="center">
     <div class="controls">
-      <button id="prev" title="Previous" aria-label="Previous"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2h2v12H3zM14 2v12L6 8z"/></svg></button>
+      <button id="shuffle" aria-label="Shuffle" aria-pressed="false"></button>
+      <button id="prev" title="Previous" aria-label="Previous"><svg class="f" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2h2v12H3zM14 2v12L6 8z"/></svg></button>
       <button id="toggle" title="Play" aria-label="Play"></button>
-      <button id="next" title="Next" aria-label="Next"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11 2h2v12h-2zM2 2l8 6-8 6z"/></svg></button>
+      <button id="next" title="Next" aria-label="Next"><svg class="f" viewBox="0 0 16 16" aria-hidden="true"><path d="M11 2h2v12h-2zM2 2l8 6-8 6z"/></svg></button>
+      <button id="repeat"></button>
     </div>
-    <div class="progress"><span id="tcur">0:00</span><div id="track" role="slider" aria-label="Position in the song" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0"><div id="fill"></div></div><span id="tdur">0:30</span></div>
+    <div class="progress"><span id="tcur">0:00</span>
+      <div id="track" role="slider" aria-label="Position in the song" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0"><div id="fill"></div><div id="knob"></div></div>
+      <span id="tdur">0:30</span></div>
   </div>
-  <div id="right"><span id="position"></span>
-    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6h3l4-3v10l-4-3H2zM11 5.2a4 4 0 0 1 0 5.6l-.8-.8a2.9 2.9 0 0 0 0-4z"/></svg>
+  <div id="right">
+    <button id="queuebtn" title="Queue" aria-label="Queue" aria-expanded="false" aria-controls="queue"></button>
+    <button id="mute" aria-label="Mute" aria-pressed="false"></button>
     <input id="volume" type="range" min="0" max="1" step="0.05" value="0.8" aria-label="Volume"></div>
 </div>
 <script>
 __COMMON__
 const audio = new Audio();
 audio.preload = "auto";
-let current = -1, failures = 0;
+const BAR_HEIGHT = 86;
+const REPEAT_TITLES = { off: "Repeat: off", all: "Repeat: all", one: "Repeat: this song" };
+// Uplift's path songs (the first pathLen songs of the list) are never shuffled.
+const pathLen = DATA.mode === "Uplift" ? tracks.filter(t => t.section === "journey").length : 0;
+// The play order: the list's songs (base = their place in the list), plus
+// songs added with "Play next" / "Add to queue" (added = true), which leave
+// the order once they have been played.
+let order = tracks.map((t, i) => ({ t, base: i, added: false }));
+let pos = -1, failures = 0, shuffle = false, repeat = "all", pathDone = pathLen === 0, queueOpen = false;
 const fmt = s => { s = Math.max(0, Math.floor(s || 0)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+$("qclose").innerHTML = icon("close"); $("queuebtn").innerHTML = icon("queue"); $("shuffle").innerHTML = icon("shuffle");
 
 // The volume is a per-browser convenience; the page works without storage.
 try { const v = parseFloat(localStorage.getItem("moodtune.volume")); if (v >= 0 && v <= 1) $("volume").value = v; } catch (e) {}
 audio.volume = +$("volume").value;
-$("volume").addEventListener("input", () => { audio.volume = +$("volume").value; try { localStorage.setItem("moodtune.volume", $("volume").value); } catch (e) {} });
+$("volume").addEventListener("input", () => {
+  audio.volume = +$("volume").value; if (audio.volume > 0) audio.muted = false;
+  try { localStorage.setItem("moodtune.volume", $("volume").value); } catch (e) {}
+  refreshVolume();
+});
+function setMuted(on) { audio.muted = on; refreshVolume(); }
+function refreshVolume() {
+  const off = audio.muted || audio.volume === 0;
+  $("mute").innerHTML = icon(off ? "muted" : "volume"); $("mute").title = audio.muted ? "Unmute (M)" : "Mute (M)";
+  $("mute").setAttribute("aria-pressed", audio.muted);
+}
 
-function announce() { channel.postMessage({ type: "state", current, paused: audio.paused }); }
+const now = () => (pos >= 0 ? order[pos] : null);
+function lastPathPos() { let p = -1; order.forEach((e, k) => { if (!e.added && e.base < pathLen) p = k; }); return p; }
+function announce() { const c = now(); channel.postMessage({ type: "state", current: c ? c.base : -1, paused: audio.paused }); }
+
 function refresh() {
-  const playing = current >= 0 && !audio.paused;
+  const c = now(), playing = c && !audio.paused;
   $("toggle").innerHTML = playing ? PAUSE : PLAY;
   $("toggle").title = $("toggle").ariaLabel = playing ? "Pause" : "Play";
-  if (current >= 0) {
-    const t = tracks[current];
-    $("nowtitle").textContent = t.title; $("nowartist").textContent = t.artist;
-    const old = $("nowart"), art = artNode(t, "art"); art.id = "nowart"; old.replaceWith(art);
-    $("position").textContent = (current + 1) + " of " + tracks.length;
+  if (c) {
+    $("nowtitle").textContent = c.t.title; $("nowartist").textContent = c.t.artist;
+    const old = $("nowart"), art = artNode(c.t, "art"); art.id = "nowart"; old.replaceWith(art);
   }
+  const sh = $("shuffle");
+  sh.classList.toggle("on", shuffle); sh.setAttribute("aria-pressed", shuffle); sh.setAttribute("aria-disabled", !pathDone);
+  sh.title = !pathDone ? "Shuffle turns on once the " + pathLen + "-song path has finished" : shuffle ? "Shuffle: on" : "Shuffle: off";
+  const rp = $("repeat");
+  rp.innerHTML = icon(repeat === "one" ? "repeatOne" : "repeat"); rp.classList.toggle("on", repeat !== "off");
+  rp.title = rp.ariaLabel = REPEAT_TITLES[repeat];
+  $("queuebtn").classList.toggle("on", queueOpen);
+  if (queueOpen) renderQueue();
   announce();
 }
-function play(i) {
-  if (!tracks.length) return;
-  current = (i + tracks.length) % tracks.length;
-  audio.src = tracks[current].preview;
+
+function playAt(p) {
+  if (!order.length) return;
+  p = Math.max(0, Math.min(p, order.length - 1));
+  // an added song leaves the order once it has been played
+  if (pos >= 0 && p !== pos && order[pos].added) { order.splice(pos, 1); if (p > pos) p--; }
+  pos = p;
+  if (pos > lastPathPos()) pathDone = true;
+  audio.src = order[pos].t.preview;
   audio.play().catch(() => {});
   refresh();
 }
-function next() { play(current + 1 >= tracks.length ? DATA.loopFrom : current + 1); }
-function prev() { if (audio.currentTime > 3 || current <= 0) { audio.currentTime = 0; audio.play().catch(() => {}); } else play(current - 1); }
-function toggle() { if (current < 0) return play(0); if (audio.paused) audio.play().catch(() => {}); else audio.pause(); }
+function playBase(i) { const p = order.findIndex(e => !e.added && e.base === i); if (p >= 0) playAt(p); }
+function loopStart() { const p = order.findIndex(e => !e.added && e.base === DATA.loopFrom); return p < 0 ? 0 : p; }
+// auto: the song ended by itself. Repeat "off" then stops at the end of the
+// queue; the Next button always goes on (from the start of the loop).
+function next(auto) {
+  if (pos < 0) return playAt(0);
+  if (pos + 1 < order.length) return playAt(pos + 1);
+  if (auto && repeat === "off") { audio.pause(); audio.currentTime = 0; return refresh(); }
+  playAt(loopStart());
+}
+function prev() {
+  if (pos < 0) return playAt(0);
+  if (audio.currentTime > 3 || pos === 0) { audio.currentTime = 0; audio.play().catch(() => {}); } else playAt(pos - 1);
+}
+function toggle() { if (pos < 0) return playAt(0); if (audio.paused) audio.play().catch(() => {}); else audio.pause(); }
 
-audio.addEventListener("ended", () => { failures = 0; next(); });
-audio.addEventListener("error", () => { if (current >= 0 && ++failures < tracks.length) next(); });
+// Shuffle reorders only the songs still to come, and never the path's songs
+// or the songs added by the listener (they keep their places).
+function setShuffle(on) {
+  if (on && !pathDone) return false;
+  shuffle = on;
+  const slots = [];
+  for (let k = pos + 1; k < order.length; k++) if (!order[k].added && order[k].base >= pathLen) slots.push(k);
+  const items = slots.map(k => order[k]);
+  if (on) for (let k = items.length - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); [items[k], items[j]] = [items[j], items[k]]; }
+  else items.sort((a, b) => a.base - b.base);
+  slots.forEach((k, n) => { order[k] = items[n]; });
+  refresh();
+  return true;
+}
+function cycleRepeat() { repeat = { off: "all", all: "one", one: "off" }[repeat]; refresh(); }
+
+// Insert a song after the current one: "next" right after it, "queue" after
+// the songs already added. The list's own order is never changed.
+function insert(t, base, where) {
+  let p = pos + 1;
+  if (where === "queue") while (p < order.length && order[p].added) p++;
+  order.splice(p, 0, { t, base, added: true });
+  refresh();
+  return p;
+}
+function removeAt(p) { if (p > pos && order[p] && order[p].added) { order.splice(p, 1); refresh(); } }
+
+// The queue panel: while it is open the iframe itself is pinned to the whole
+// window (Streamlit's wrapper keeps the bar's height, so growing inside it
+// would push the panel off the bottom of the screen).
+function openQueue(on) {
+  queueOpen = on;
+  document.body.classList.toggle("queue-open", on);
+  $("queuebtn").setAttribute("aria-expanded", on);
+  const f = window.frameElement;
+  if (f) Object.assign(f.style, on ? { position: "fixed", left: "0", bottom: "0", width: "100%", height: "100vh", zIndex: "1001" }
+                                   : { position: "", left: "", bottom: "", width: "", height: BAR_HEIGHT + "px", zIndex: "" });
+  refresh();
+  (on ? $("qclose") : $("queuebtn")).focus();
+}
+function qrow(e, p, isNow) {
+  const r = el("div", "qrow" + (isNow ? " now" : ""));
+  r.appendChild(artNode(e.t, "art"));
+  const meta = el("div", "meta"); meta.appendChild(el("div", "title", e.t.title)); meta.appendChild(el("div", "artist", e.t.artist));
+  if (e.added) meta.appendChild(el("span", "byyou", "Added by you"));
+  r.appendChild(meta);
+  if (e.added && !isNow) {
+    const x = el("button", "remove"); x.innerHTML = icon("close"); x.title = "Remove from the queue"; x.ariaLabel = "Remove " + e.t.title + " from the queue";
+    x.addEventListener("click", ev => { ev.stopPropagation(); removeAt(p); }); r.appendChild(x);
+  }
+  if (!isNow) {
+    r.tabIndex = 0; r.setAttribute("role", "button"); r.ariaLabel = "Play " + e.t.title + " by " + e.t.artist;
+    r.addEventListener("click", () => playAt(p));
+    r.addEventListener("keydown", ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); playAt(p); } });
+  }
+  return r;
+}
+function renderQueue() {
+  const list = $("qlist"), keep = list.scrollTop;
+  list.replaceChildren();
+  list.appendChild(el("div", "qhead", "Now playing"));
+  if (pos >= 0) list.appendChild(qrow(order[pos], pos, true)); else list.appendChild(el("p", "qempty", "Nothing yet. Press play or pick a song."));
+  const rest = order.length - pos - 1;
+  list.appendChild(el("div", "qhead", "Next up" + (rest ? " · " + rest : "")));
+  if (!rest) list.appendChild(el("p", "qempty", repeat === "off" ? "That's the end of the list." : "Then the list starts again."));
+  for (let p = pos + 1; p < order.length; p++) list.appendChild(qrow(order[p], p, false));
+  list.scrollTop = keep;
+}
+
+function act(key) {
+  if (key === "space") toggle(); else if (key === "next") next(false); else if (key === "prev") prev();
+  else if (key === "mute") setMuted(!audio.muted);
+}
+function onKey(e) {
+  if (e.key === "Escape" && queueOpen) { openQueue(false); return; }
+  const key = shortcut(e);
+  if (!key) return;
+  e.preventDefault();
+  if (key !== "held") act(key);
+}
+document.addEventListener("keydown", onKey);
+// Keys pressed on the page itself (outside the song list and this bar): one
+// listener on the page, replaced by each new player bar.
+try {
+  const page = window.parent;
+  if (page.__moodtuneKeys) page.document.removeEventListener("keydown", page.__moodtuneKeys);
+  page.__moodtuneKeys = e => { try { onKey(e); } catch (err) {} };
+  page.document.addEventListener("keydown", page.__moodtuneKeys);
+} catch (e) {}
+
+audio.addEventListener("ended", () => {
+  failures = 0;
+  if (repeat === "one") { audio.currentTime = 0; audio.play().catch(() => {}); return; }
+  next(true);
+});
+audio.addEventListener("error", () => { if (pos >= 0 && ++failures < order.length) next(true); });
 audio.addEventListener("playing", () => { failures = 0; refresh(); });
 audio.addEventListener("pause", refresh);
-audio.addEventListener("timeupdate", () => {
-  const d = audio.duration || 30, p = Math.min(100, audio.currentTime / d * 100);
-  $("fill").style.width = p + "%"; $("track").setAttribute("aria-valuenow", Math.round(p));
-  $("tcur").textContent = fmt(audio.currentTime); $("tdur").textContent = fmt(d);
-});
-$("track").addEventListener("click", e => { if (current < 0 || !audio.duration) return; const r = $("track").getBoundingClientRect(); audio.currentTime = (e.clientX - r.left) / r.width * audio.duration; });
-$("track").addEventListener("keydown", e => { if (current < 0 || !audio.duration) return; if (e.key === "ArrowRight") audio.currentTime += 5; if (e.key === "ArrowLeft") audio.currentTime -= 5; });
+function showTime(t) {
+  const d = audio.duration || 30, p = Math.min(100, Math.max(0, t / d * 100));
+  $("fill").style.width = p + "%"; $("knob").style.left = p + "%"; $("track").setAttribute("aria-valuenow", Math.round(p));
+  $("tcur").textContent = fmt(t); $("tdur").textContent = fmt(d);
+}
+audio.addEventListener("timeupdate", () => showTime(audio.currentTime));
+audio.addEventListener("loadedmetadata", () => showTime(audio.currentTime));
+// Click or drag the progress bar to seek.
+function seekTo(x) {
+  if (pos < 0 || !audio.duration) return;
+  const r = $("track").getBoundingClientRect(), f = Math.min(1, Math.max(0, (x - r.left) / r.width));
+  audio.currentTime = f * audio.duration; showTime(audio.currentTime);
+}
+$("track").addEventListener("pointerdown", e => { if (pos < 0) return; $("track").classList.add("drag"); $("track").setPointerCapture(e.pointerId); seekTo(e.clientX); });
+$("track").addEventListener("pointermove", e => { if ($("track").classList.contains("drag")) seekTo(e.clientX); });
+["pointerup", "pointercancel"].forEach(n => $("track").addEventListener(n, () => $("track").classList.remove("drag")));
+$("track").addEventListener("keydown", e => { if (pos < 0 || !audio.duration) return; if (e.key === "ArrowRight") audio.currentTime += 5; if (e.key === "ArrowLeft") audio.currentTime -= 5; });
 $("toggle").addEventListener("click", toggle);
-$("next").addEventListener("click", next); $("prev").addEventListener("click", prev);
+$("next").addEventListener("click", () => next(false)); $("prev").addEventListener("click", prev);
+$("shuffle").addEventListener("click", () => setShuffle(!shuffle));
+$("repeat").addEventListener("click", cycleRepeat);
+$("mute").addEventListener("click", () => setMuted(!audio.muted));
+$("queuebtn").addEventListener("click", () => openQueue(!queueOpen));
+$("qclose").addEventListener("click", () => openQueue(false));
+$("shade").addEventListener("click", () => openQueue(false));
 channel.onmessage = e => {
   const m = e.data;
-  if (m.type === "play") play(m.index); else if (m.type === "toggle") toggle(); else if (m.type === "hello") announce();
+  if (m.type === "play") playBase(m.index); else if (m.type === "toggle") toggle(); else if (m.type === "hello") announce();
+  else if (m.type === "key") act(m.key);
 };
-refresh();
-window.player = { audio, play, toggle, next, state: () => ({ current, paused: audio.paused, time: audio.currentTime, src: audio.src }) };
+refreshVolume(); refresh();
+window.player = {
+  audio, play: playBase, playAt, toggle, next: () => next(false), prev, setShuffle, cycleRepeat, setMuted, openQueue, insert, removeAt,
+  state: () => ({ current: now() ? now().base : -1, pos, paused: audio.paused, time: audio.currentTime, src: audio.src, shuffle, repeat,
+                  muted: audio.muted, pathDone, pathLen, queueOpen,
+                  order: order.map(e => ({ base: e.base, added: e.added, title: e.t.title, link: e.t.lastfm })) }),
+};
 </script>
 </body></html>
 """.replace("__COMMON__", COMMON_JS)
