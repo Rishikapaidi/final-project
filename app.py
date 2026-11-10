@@ -50,6 +50,7 @@ UPLIFT_LANGUAGES = {"English", "Hindi", "Tamil", "Korean"}
 # The path card grows to fit its songs (see player.render_path); this is its first height.
 PATH_HEIGHT = 900
 BAR_HEIGHT = 86
+ACTIONS_HEIGHT = 44
 PHOTO_TYPES = ["jpg", "jpeg", "png"]
 
 st.set_page_config(page_title=ui.APP_NAME, page_icon="🎧", layout="wide")
@@ -336,6 +337,9 @@ with st.container(key="topbar"):
     with controls, st.container(horizontal=True, horizontal_alignment="right", vertical_alignment="center",
                                 wrap=False, key="topcontrols"):
         language = st.selectbox("Songs in", LANGUAGES, key="language", width=250)
+        # My playlist (and its drawer): a browser-only component that never reloads.
+        with st.container(key="topactions"):
+            components.html(player.render_actions(), height=ACTIONS_HEIGHT)
 local = ui.local_now(st.context.timezone, st.context.timezone_offset)
 st.markdown(ui.greeting_html(local), unsafe_allow_html=True)
 

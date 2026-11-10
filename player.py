@@ -48,7 +48,7 @@ def _track(song, preview, **extra):
     # The link is Last.fm for the English (Muse) songs and Spotify for the others;
     # artwork is iTunes', or the song file's own (Spotify) artwork if iTunes has none.
     track = {"title": song.title, "artist": song.artist, "lastfm": song.lastfm_url, "bucket": song.bucket,
-             "link_label": getattr(song, "link_source", "") or "Last.fm",
+             "link_label": getattr(song, "link_source", "") or "Last.fm", "language": getattr(song, "language", "") or "",
              "valence": round(float(song.valence_tags), 2), "arousal": round(float(song.arousal_tags), 2),
              "preview": preview["preview_url"], "art": preview["artwork_url"] or getattr(song, "artwork_url", "")}
     track.update(extra)
@@ -195,11 +195,9 @@ FONT_CSS = """
           --sans:"Inter", "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif; }
 """
 
-# Shared by the scripts of both pages.
-COMMON_JS = r"""
-const DATA = __DATA__;
-const tracks = DATA.tracks;
-const channel = new BroadcastChannel("moodtune:" + DATA.id);
+# Shared by the scripts of all three pages (the song list, the player bar and
+# the top bar's buttons).
+BASE_JS = r"""
 const $ = id => document.getElementById(id);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const PLAY = '<svg class="f" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 1.8v12.4L14 8z"/></svg>';
@@ -215,7 +213,28 @@ const ICONS = {
   close: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
   more: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
   search: '<circle cx="11" cy="11" r="7"/><line x1="20.5" y1="20.5" x2="16" y2="16"/>',
+  heart: '<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>',
+  play: '<polygon points="7 4 20 12 7 20 7 4"/>',
 };
+const icon = name => '<svg class="s" viewBox="0 0 24 24" aria-hidden="true">' + ICONS[name] + '</svg>';
+function artNode(track, cls) {
+  if (track.art) { const img = el("img", cls); img.src = track.art; img.alt = ""; img.loading = "lazy"; return img; }
+  const box = el("div", cls + " noart", "♫"); box.setAttribute("aria-hidden", "true"); return box;
+}
+// Keyboard shortcuts: Space = play/pause, Right/Left = next/previous, M = mute,
+// L = save the song playing to My playlist (or remove it).
+// Nothing happens while typing in a text box, or with a modifier key held;
+// Space on a button, link or row is left to that control.
+function shortcut(e) {
+  if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return null;
+  const t = e.target || {}, tag = (t.tagName || "").toLowerCase(), role = t.getAttribute ? t.getAttribute("role") || "" : "";
+  if (t.isContentEditable || tag === "input" || tag === "textarea" || tag === "select" || role === "combobox" || role === "textbox") return null;
+  const key = { " ": "space", ArrowRight: "next", ArrowLeft: "prev", m: "mute", M: "mute", l: "like", L: "like" }[e.key] || null;
+  if (key === "space" && (tag === "button" || tag === "a" || tag === "summary" || role === "button" || role === "menuitem")) return null;
+  if ((key === "next" || key === "prev") && role === "slider") return null;
+  if (key && key !== "next" && key !== "prev" && e.repeat) return "held";
+  return key;
+}
 // A short message at the bottom of the page (in the page itself, so it shows
 // wherever the song list is scrolled to). The CSS animation fades it out.
 function toast(text) {
@@ -225,25 +244,56 @@ function toast(text) {
   if (!box) { box = doc.createElement("div"); box.id = "moodtune-toast"; box.setAttribute("role", "status"); box.setAttribute("aria-live", "polite"); doc.body.appendChild(box); }
   box.textContent = text; box.classList.remove("show"); void box.offsetWidth; box.classList.add("show");
 }
-const icon = name => '<svg class="s" viewBox="0 0 24 24" aria-hidden="true">' + ICONS[name] + '</svg>';
-function artNode(track, cls) {
-  if (track.art) { const img = el("img", cls); img.src = track.art; img.alt = ""; img.loading = "lazy"; return img; }
-  const box = el("div", cls + " noart", "♫"); box.setAttribute("aria-hidden", "true"); return box;
+
+// Saved songs (My playlist) and settings live only in this browser:
+// localStorage when it works, otherwise an in-memory copy kept on the page
+// (shared by the three components until the page is reloaded). Nothing here
+// is ever sent to the server. "hub" tells the other components something changed.
+const hub = new BroadcastChannel("moodtune");
+function pageMemory() {
+  try { const page = window.parent; return page.__moodtuneMemory || (page.__moodtuneMemory = {}); }
+  catch (e) { return window.__moodtuneMemory || (window.__moodtuneMemory = {}); }
 }
-// Keyboard shortcuts: Space = play/pause, Right/Left = next/previous, M = mute.
-// Nothing happens while typing in a text box, or with a modifier key held;
-// Space on a button, link or row is left to that control.
-function shortcut(e) {
-  if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return null;
-  const t = e.target || {}, tag = (t.tagName || "").toLowerCase(), role = t.getAttribute ? t.getAttribute("role") || "" : "";
-  if (t.isContentEditable || tag === "input" || tag === "textarea" || tag === "select" || role === "combobox" || role === "textbox") return null;
-  const key = { " ": "space", ArrowRight: "next", ArrowLeft: "prev", m: "mute", M: "mute" }[e.key] || null;
-  if (key === "space" && (tag === "button" || tag === "a" || tag === "summary" || role === "button" || role === "menuitem")) return null;
-  if ((key === "next" || key === "prev") && role === "slider") return null;
-  if (key && key !== "next" && key !== "prev" && e.repeat) return "held";
-  return key;
+function load(key, fallback) {
+  let raw = null;
+  try { raw = localStorage.getItem(key); } catch (e) {}
+  if (raw == null) raw = pageMemory()[key];
+  if (raw == null) return fallback;
+  try { return JSON.parse(raw); } catch (e) { return fallback; }
 }
+function save(key, value) {
+  const raw = JSON.stringify(value);
+  pageMemory()[key] = raw;
+  try { localStorage.setItem(key, raw); } catch (e) {}
+}
+const SAVED = "moodtune.saved";
+const linkLabel = link => (/spotify\.com/.test(link || "") ? "Spotify" : "Last.fm");
+function savedSongs() { const list = load(SAVED, []); return Array.isArray(list) ? list.filter(s => s && s.link && s.preview) : []; }
+const isSaved = link => savedSongs().some(s => s.link === link);
+let onSavedChange = () => {};   // each page redraws its hearts / list
+function setSaved(list) { save(SAVED, list); hub.postMessage({ type: "saved" }); onSavedChange(); }
+// Only these six fields are kept for a saved song.
+function saveSong(t) {
+  if (isSaved(t.lastfm)) return;
+  setSaved(savedSongs().concat([{ title: t.title, artist: t.artist, link: t.lastfm, preview: t.preview, art: t.art || "", language: t.language || "" }]));
+}
+function unsaveSong(link) { setSaved(savedSongs().filter(s => s.link !== link)); }
+function toggleSaved(t) {
+  if (isSaved(t.lastfm)) { unsaveSong(t.lastfm); toast("Removed “" + t.title + "” from My playlist"); return false; }
+  saveSong(t); toast("Saved “" + t.title + "” to My playlist"); return true;
+}
+const songTrack = s => ({ title: s.title, artist: s.artist, lastfm: s.link, link_label: linkLabel(s.link), preview: s.preview, art: s.art, language: s.language, bucket: "" });
+hub.addEventListener("message", e => { if (e.data && e.data.type === "saved") onSavedChange(); });
+window.addEventListener("storage", e => { if (e.key === SAVED) onSavedChange(); });
 """
+
+# The queue's two pages (song list and player bar) also get the queue and the
+# channel named after it.
+COMMON_JS = r"""
+const DATA = __DATA__;
+const tracks = DATA.tracks;
+const channel = new BroadcastChannel("moodtune:" + DATA.id);
+""" + BASE_JS
 
 PATH_HTML = r"""<!DOCTYPE html>
 <html><head><meta charset="utf-8">
@@ -274,13 +324,14 @@ __FONTS__
   .steps li.arrow { background:none; padding:3px 0; }
   .section { color:var(--muted); font-size:12px; letter-spacing:.1em; text-transform:uppercase; font-weight:600; margin:20px 6px 6px; }
   .uplift #panel .section { color:var(--terra-ink); margin-top:16px; }
-  .row { display:grid; grid-template-columns:30px 48px minmax(0,1fr) auto auto auto; align-items:center; gap:12px;
+  .row { display:grid; grid-template-columns:30px 48px minmax(0,1fr) auto auto auto auto; align-items:center; gap:10px;
          padding:8px 8px 8px 6px; border-radius:12px; cursor:pointer; }
   .row[hidden], .section[hidden] { display:none !important; }
   .icon-btn { width:34px; height:34px; border:none; background:none; border-radius:999px; color:var(--muted); cursor:pointer;
               display:flex; align-items:center; justify-content:center; padding:0; }
   .icon-btn:hover, .icon-btn[aria-expanded="true"] { color:var(--purple); background:rgba(45,42,82,.07); }
   .icon-btn svg { width:19px; height:19px; } .icon-btn:focus-visible { outline:3px solid var(--lavender); outline-offset:1px; }
+  .heart[aria-pressed="true"] { color:var(--terra); } .heart[aria-pressed="true"] svg { fill:currentColor; }
   /* search */
   .tools { display:flex; align-items:center; gap:12px; margin:16px 0 0; }
   .search { flex:1; max-width:380px; display:flex; align-items:center; gap:8px; background:#fff; border:1px solid var(--line);
@@ -323,7 +374,7 @@ __FONTS__
   @media (max-width: 640px) {
     #card { padding:20px 14px 12px; border-radius:18px; } h2 { font-size:25px; }
     .uplift #panel { padding:18px 12px 10px; margin:-4px -4px 6px; }
-    .row { grid-template-columns:22px 44px minmax(0,1fr) auto auto; gap:8px; padding:8px 2px; }
+    .row { grid-template-columns:22px 44px minmax(0,1fr) auto auto auto; gap:6px; padding:8px 2px; }
     .row .tag { display:none; } .art { width:44px; height:44px; }
     .pill { min-width:0; padding:6px 11px; } .search { max-width:none; }
   }
@@ -359,6 +410,9 @@ function row(t, i) {
   r.appendChild(artNode(t, "art"));
   const meta = el("div", "meta"); meta.appendChild(el("div", "title", t.title)); meta.appendChild(el("div", "artist", t.artist)); r.appendChild(meta);
   r.appendChild(el("span", "tag", t.bucket));
+  const heart = el("button", "icon-btn heart"); heart.innerHTML = icon("heart"); heart.dataset.index = i;
+  heart.addEventListener("click", e => { e.stopPropagation(); toggleSaved(t); });
+  heart.addEventListener("keydown", e => e.stopPropagation()); r.appendChild(heart);
   const pill = el("button", "pill", "▶ Play"); pill.title = "Play this song";
   pill.addEventListener("click", e => { e.stopPropagation(); send(i === current ? { type: "toggle" } : { type: "play", index: i }); }); r.appendChild(pill);
   const more = el("button", "icon-btn more"); more.innerHTML = icon("more");
@@ -438,6 +492,7 @@ function openMenu(i, button) {
   };
   item("Play next", () => { send({ type: "insert", index: i, where: "next" }); toast("“" + t.title + "” will play next"); });
   item("Add to queue", () => { send({ type: "insert", index: i, where: "queue" }); toast("Added “" + t.title + "” to the queue"); });
+  item(isSaved(t.lastfm) ? "Remove from My playlist" : "Add to My playlist", () => toggleSaved(t));
   menu.appendChild(el("hr"));
   item("Open on " + label, null, t.lastfm);
   item("Copy link", () => copyLink(t.lastfm));
@@ -490,6 +545,16 @@ function filter() {
 $("search").addEventListener("input", filter);
 $("searchicon").outerHTML = icon("search");
 
+// Hearts: filled for songs in My playlist (kept in step with the other components).
+function refreshHearts() {
+  document.querySelectorAll(".heart").forEach(h => {
+    const t = tracks[+h.dataset.index], on = isSaved(t.lastfm);
+    h.setAttribute("aria-pressed", on); h.title = on ? "Remove from My playlist" : "Add to My playlist";
+    h.ariaLabel = (on ? "Remove " : "Add ") + t.title + (on ? " from My playlist" : " to My playlist");
+  });
+}
+onSavedChange = refreshHearts;
+
 function refresh() {
   const playing = current >= 0 && !paused;
   document.querySelectorAll(".row").forEach(r => {
@@ -511,7 +576,7 @@ channel.onmessage = e => { if (e.data.type === "state") { current = e.data.curre
 $("bigplay").addEventListener("click", () => send({ type: "toggle" }));
 // Shortcut keys pressed in this card go to the player bar.
 document.addEventListener("keydown", e => { const key = shortcut(e); if (!key) return; e.preventDefault(); if (key !== "held") send({ type: "key", key }); });
-build(); refresh(); fit();
+build(); refresh(); refreshHearts(); fit();
 send({ type: "hello" });
 window.playlist = { state: () => ({ current, paused }) };
 </script>
@@ -559,6 +624,8 @@ __FONTS__
   #right { display:flex; align-items:center; justify-content:flex-end; gap:6px; }
   #volume { width:104px; accent-color:var(--purple); }
   #queuebtn.on::after { display:none; } #queuebtn.on { background:var(--lav-soft); }
+  #like { flex:none; } #like[aria-pressed="true"] { color:var(--terra); } #like[aria-pressed="true"] svg { fill:currentColor; }
+  #like[hidden] { display:none; }
   /* the queue panel */
   #queue { position:absolute; right:16px; bottom:98px; width:min(400px, calc(100% - 32px)); max-height:calc(100% - 118px); display:none; flex-direction:column;
            background:var(--card); border:1px solid var(--line); border-radius:18px; box-shadow:0 18px 50px rgba(45,42,82,.22); overflow:hidden; }
@@ -590,7 +657,8 @@ __FONTS__
 </section>
 <div id="bar">
   <div id="now"><div class="art noart" id="nowart" aria-hidden="true">&#9835;</div>
-    <div class="meta"><div class="title" id="nowtitle">Nothing playing</div><div class="artist" id="nowartist">Press play or pick a song</div></div></div>
+    <div class="meta"><div class="title" id="nowtitle">Nothing playing</div><div class="artist" id="nowartist">Press play or pick a song</div></div>
+    <button id="like" aria-pressed="false" hidden></button></div>
   <div id="center">
     <div class="controls">
       <button id="shuffle" aria-label="Shuffle" aria-pressed="false"></button>
@@ -651,6 +719,7 @@ function refresh() {
     $("nowtitle").textContent = c.t.title; $("nowartist").textContent = c.t.artist;
     const old = $("nowart"), art = artNode(c.t, "art"); art.id = "nowart"; old.replaceWith(art);
   }
+  refreshLike();
   const sh = $("shuffle");
   sh.classList.toggle("on", shuffle); sh.setAttribute("aria-pressed", shuffle); sh.setAttribute("aria-disabled", !pathDone);
   sh.title = !pathDone ? "Shuffle turns on once the " + pathLen + "-song path has finished" : shuffle ? "Shuffle: on" : "Shuffle: off";
@@ -758,9 +827,26 @@ function renderQueue() {
   list.scrollTop = keep;
 }
 
+// The heart next to the song playing (and the L key).
+function refreshLike() {
+  const c = now(), on = !!c && isSaved(c.t.lastfm);
+  $("like").hidden = !c; $("like").innerHTML = icon("heart"); $("like").setAttribute("aria-pressed", on);
+  $("like").title = $("like").ariaLabel = on ? "Remove from My playlist (L)" : "Add to My playlist (L)";
+}
+function like() { const c = now(); if (c) toggleSaved(c.t); }
+onSavedChange = refreshLike;
+// Songs played from My playlist go in after the current song, like "Play
+// next"; the first one starts straight away.
+function playSongs(songs) {
+  if (!songs || !songs.length) return;
+  const p = pos + 1;
+  songs.forEach((s, k) => order.splice(p + k, 0, { t: songTrack(s), base: tracks.findIndex(t => t.lastfm === s.link), added: true }));
+  playAt(p);
+}
+
 function act(key) {
   if (key === "space") toggle(); else if (key === "next") next(false); else if (key === "prev") prev();
-  else if (key === "mute") setMuted(!audio.muted);
+  else if (key === "mute") setMuted(!audio.muted); else if (key === "like") like();
 }
 function onKey(e) {
   if (e.key === "Escape" && queueOpen) { openQueue(false); return; }
@@ -810,6 +896,12 @@ $("shuffle").addEventListener("click", () => setShuffle(!shuffle));
 $("repeat").addEventListener("click", cycleRepeat);
 $("mute").addEventListener("click", () => setMuted(!audio.muted));
 $("queuebtn").addEventListener("click", () => openQueue(!queueOpen));
+$("like").addEventListener("click", like);
+// From the top bar's component: keys pressed there, and "play from My playlist".
+hub.addEventListener("message", e => {
+  const m = e.data || {};
+  if (m.type === "key") act(m.key); else if (m.type === "playSaved") playSongs(m.songs);
+});
 $("qclose").addEventListener("click", () => openQueue(false));
 $("shade").addEventListener("click", () => openQueue(false));
 channel.onmessage = e => {
@@ -820,7 +912,7 @@ channel.onmessage = e => {
 };
 refreshVolume(); refresh();
 window.player = {
-  audio, play: playBase, playAt, toggle, next: () => next(false), prev, setShuffle, cycleRepeat, setMuted, openQueue, insert, removeAt,
+  audio, play: playBase, playAt, toggle, next: () => next(false), prev, setShuffle, cycleRepeat, setMuted, openQueue, insert, removeAt, playSongs,
   state: () => ({ current: now() ? now().base : -1, pos, paused: audio.paused, time: audio.currentTime, src: audio.src, shuffle, repeat,
                   muted: audio.muted, pathDone, pathLen, queueOpen,
                   order: order.map(e => ({ base: e.base, added: e.added, title: e.t.title, link: e.t.lastfm })) }),
@@ -828,3 +920,184 @@ window.player = {
 </script>
 </body></html>
 """.replace("__COMMON__", COMMON_JS)
+
+
+def render_actions():
+    """The top bar's buttons (My playlist) and the drawer they open, as one HTML page.
+
+    It holds no queue data, so Streamlit never reloads it on a rerun. While
+    the drawer is open the iframe is pinned over the whole window. Saved songs
+    are read from and written to the browser only (see BASE_JS); playing one
+    sends it to the player bar.
+    """
+    return ACTIONS_HTML.replace("__FONTS__", FONT_CSS)
+
+
+ACTIONS_HTML = r"""<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+__FONTS__
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; overflow:hidden; background:transparent; color:var(--ink); font-family:var(--sans); }
+  #buttons { display:flex; align-items:center; justify-content:flex-end; gap:8px; height:44px; padding:2px; }
+  .top { height:40px; border:1px solid var(--line); background:#fff; border-radius:999px; display:flex; align-items:center; gap:8px;
+         padding:0 14px; font:inherit; font-size:14px; color:var(--ink); cursor:pointer; white-space:nowrap; }
+  .top:hover { border-color:var(--lavender); background:#fbfaff; }
+  .top svg { width:18px; height:18px; flex:none; }
+  .badge { min-width:20px; height:20px; border-radius:999px; background:var(--terra); color:#fff; font-size:11.5px; font-weight:700;
+           display:inline-flex; align-items:center; justify-content:center; padding:0 6px; }
+  .badge[hidden] { display:none; }
+  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline:3px solid var(--lavender); outline-offset:2px; }
+  svg.s { fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  /* narrow screens: icons only */
+  @media (max-width: 170px) { .label { display:none; } .top { padding:0 11px; gap:6px; } }
+  /* the drawer */
+  #overlay { position:fixed; inset:0; }
+  #overlay[hidden] { display:none; }
+  #backdrop { position:absolute; inset:0; background:rgba(43,40,64,.38); }
+  #drawer { position:absolute; top:0; right:0; bottom:0; width:min(440px, 100%); background:var(--cream); display:flex; flex-direction:column;
+            box-shadow:-14px 0 44px rgba(45,42,82,.22); animation:slide .22s ease; }
+  @keyframes slide { from { transform:translateX(28px); opacity:0; } }
+  @media (prefers-reduced-motion: reduce) { #drawer { animation:none; } }
+  header { display:flex; align-items:center; gap:6px; padding:22px 14px 6px 24px; }
+  h2 { font-family:var(--serif); font-weight:600; font-size:27px; margin:0; flex:1; letter-spacing:-.01em; }
+  .icon-btn { width:38px; height:38px; border:none; background:none; border-radius:999px; color:var(--muted); cursor:pointer;
+              display:flex; align-items:center; justify-content:center; padding:0; flex:none; }
+  .icon-btn:hover { color:var(--purple); background:rgba(45,42,82,.07); } .icon-btn svg { width:19px; height:19px; }
+  .icon-btn[disabled] { opacity:.35; cursor:not-allowed; } .icon-btn[disabled]:hover { background:none; color:var(--muted); }
+  .view { overflow:auto; flex:1; padding:6px 24px 28px; }
+  .view[hidden] { display:none; }
+  .hint { color:var(--muted); font-size:13px; line-height:1.5; margin:0 0 14px; }
+  .row-actions { display:flex; gap:8px; align-items:center; margin:0 0 12px; flex-wrap:wrap; }
+  .btn { border:1px solid var(--line); background:#fff; color:var(--ink); border-radius:999px; font:inherit; font-size:13.5px; font-weight:600;
+         padding:8px 16px; cursor:pointer; display:inline-flex; align-items:center; gap:7px; }
+  .btn:hover { border-color:var(--lavender); }
+  .btn.primary { background:var(--purple); color:#fff; border-color:var(--purple); } .btn.primary:hover { background:#433e78; }
+  .btn.danger { color:#9b2f2f; } .btn.danger.primary { background:#9b2f2f; border-color:#9b2f2f; color:#fff; }
+  .btn[disabled] { opacity:.45; cursor:not-allowed; }
+  .btn svg { width:14px; height:14px; }
+  .confirm { background:#fff; border:1px solid var(--line); border-radius:14px; padding:12px 14px; margin:0 0 12px; font-size:14px; }
+  .confirm[hidden] { display:none; }
+  .confirm p { margin:0 0 10px; }
+  .song { display:grid; grid-template-columns:44px minmax(0,1fr) auto auto; align-items:center; gap:10px; padding:7px 6px; border-radius:12px; }
+  .song:hover { background:rgba(255,255,255,.7); }
+  .art { width:44px; height:44px; border-radius:9px; background:#ebe6dc; object-fit:cover; display:block; }
+  .noart { display:flex; align-items:center; justify-content:center; color:#8f8aa3; font-size:18px; }
+  .meta { min-width:0; } .title { font-size:14.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .artist { font-size:12.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
+  .lang { font-size:11px; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:1px 7px; margin-left:6px; background:#fff; }
+  .empty { color:var(--muted); font-size:14px; line-height:1.55; background:#fff; border:1px dashed var(--line); border-radius:14px; padding:18px; text-align:center; }
+  .note { font-size:13px; color:var(--ink); background:var(--lav-soft); border-radius:12px; padding:10px 14px; margin:0 0 12px; }
+  .note[hidden], .empty[hidden], .row-actions[hidden] { display:none; }
+</style></head>
+<body>
+<div id="buttons">
+  <button class="top" id="openlist" aria-haspopup="dialog" title="My playlist"><span id="listicon"></span><span class="label">My playlist</span><span class="badge" id="badge" hidden>0</span></button>
+</div>
+<div id="overlay" hidden>
+  <div id="backdrop"></div>
+  <section id="drawer" role="dialog" aria-modal="true" aria-labelledby="dtitle">
+    <header><h2 id="dtitle">My playlist</h2><button class="icon-btn" id="dclose" title="Close" aria-label="Close"></button></header>
+    <div class="view" id="v-list" data-title="My playlist">
+      <p class="hint">Songs you save with ♡ stay in this browser, on this computer only. They are never sent anywhere.</p>
+      <p class="note" id="noplayer" hidden>Songs can play once your mood has been read and the player is on the page.</p>
+      <div class="row-actions" id="listactions"><button class="btn primary" id="playall"></button><button class="btn danger" id="clear">Clear</button></div>
+      <div class="confirm" id="confirmclear" hidden><p id="confirmtext"></p>
+        <button class="btn danger primary" id="clearyes">Clear all</button> <button class="btn" id="clearno">Cancel</button></div>
+      <div id="songs"></div>
+      <p class="empty" id="empty" hidden>No saved songs yet. Tap ♡ next to a song, or press L while it plays, to keep it here.</p>
+    </div>
+  </section>
+</div>
+<script>
+__BASE__
+let opener = null;
+$("listicon").outerHTML = icon("heart"); $("dclose").innerHTML = icon("close");
+$("playall").innerHTML = icon("play") + "Play all";
+const playerOnPage = () => { try { return !!window.parent.document.querySelector(".st-key-playerbar iframe"); } catch (e) { return false; } };
+
+// Opening: the iframe is pinned over the whole window, and the buttons are
+// drawn where they were, under the dimmed backdrop.
+function openDrawer(view, button) {
+  const f = window.frameElement;
+  if (f) {
+    const r = f.getBoundingClientRect();
+    $("buttons").style.cssText = `position:fixed; left:${r.left}px; top:${r.top}px; width:${r.width}px;`;
+    Object.assign(f.style, { position: "fixed", left: "0", top: "0", width: "100vw", height: "100vh", zIndex: "1002" });
+  }
+  document.querySelectorAll(".view").forEach(v => { v.hidden = v.id !== view; });
+  $("dtitle").textContent = $(view).dataset.title;
+  $("overlay").hidden = false; opener = button;
+  render();
+  $("dclose").focus();
+}
+function closeDrawer() {
+  if ($("overlay").hidden) return;
+  $("overlay").hidden = true; $("confirmclear").hidden = true;
+  const f = window.frameElement;
+  if (f) Object.assign(f.style, { position: "", left: "", top: "", width: "", height: "", zIndex: "" });
+  $("buttons").style.cssText = "";
+  if (opener) opener.focus();
+}
+
+function songRow(s, k) {
+  const r = el("div", "song");
+  r.appendChild(artNode(s, "art"));
+  const meta = el("div", "meta"), title = el("div", "title", s.title);
+  if (s.language) title.appendChild(el("span", "lang", s.language));
+  meta.appendChild(title); meta.appendChild(el("div", "artist", s.artist)); r.appendChild(meta);
+  const play = el("button", "icon-btn play"); play.innerHTML = icon("play"); play.title = "Play"; play.ariaLabel = "Play " + s.title;
+  play.disabled = !playerOnPage();
+  play.addEventListener("click", () => { hub.postMessage({ type: "playSaved", songs: [s] }); closeDrawer(); });
+  const remove = el("button", "icon-btn remove"); remove.innerHTML = icon("close"); remove.title = "Remove"; remove.ariaLabel = "Remove " + s.title + " from My playlist";
+  remove.addEventListener("click", () => { unsaveSong(s.link); toast("Removed “" + s.title + "” from My playlist"); });
+  r.appendChild(play); r.appendChild(remove);
+  return r;
+}
+function render() {
+  const songs = savedSongs(), n = songs.length;
+  $("badge").textContent = n; $("badge").hidden = !n;
+  $("openlist").ariaLabel = "My playlist, " + n + (n === 1 ? " song" : " songs");
+  if ($("overlay").hidden) return;
+  const list = $("songs"); list.replaceChildren(); songs.forEach((s, k) => list.appendChild(songRow(s, k)));
+  $("empty").hidden = n > 0; $("listactions").hidden = !n;
+  $("playall").disabled = !playerOnPage(); $("noplayer").hidden = !n || playerOnPage();
+  if (!n) $("confirmclear").hidden = true;
+}
+onSavedChange = render;
+
+$("openlist").addEventListener("click", () => openDrawer("v-list", $("openlist")));
+$("dclose").addEventListener("click", closeDrawer);
+$("backdrop").addEventListener("click", closeDrawer);
+$("playall").addEventListener("click", () => { const songs = savedSongs(); if (songs.length) { hub.postMessage({ type: "playSaved", songs }); closeDrawer(); } });
+$("clear").addEventListener("click", () => {
+  const n = savedSongs().length;
+  $("confirmtext").textContent = "Remove all " + n + (n === 1 ? " saved song" : " saved songs") + " from this browser?";
+  $("confirmclear").hidden = false; $("clearno").focus();
+});
+$("clearno").addEventListener("click", () => { $("confirmclear").hidden = true; $("clear").focus(); });
+$("clearyes").addEventListener("click", () => { setSaved([]); $("confirmclear").hidden = true; toast("My playlist is empty"); $("dclose").focus(); });
+
+// Escape closes the drawer; Tab stays inside it while it is open; shortcut
+// keys pressed here go to the player bar.
+document.addEventListener("keydown", e => {
+  if (!$("overlay").hidden) {
+    if (e.key === "Escape") { e.preventDefault(); closeDrawer(); return; }
+    if (e.key === "Tab") {
+      const items = [...$("drawer").querySelectorAll("button, a, input, select")].filter(x => !x.disabled && x.offsetParent);
+      const first = items[0], last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      return;
+    }
+  }
+  const key = shortcut(e);
+  if (!key) return;
+  e.preventDefault();
+  if (key !== "held") hub.postMessage({ type: "key", key });
+});
+render();
+window.actions = { open: openDrawer, close: closeDrawer, saved: savedSongs };
+</script>
+</body></html>
+""".replace("__BASE__", BASE_JS)
