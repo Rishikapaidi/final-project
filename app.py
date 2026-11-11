@@ -287,6 +287,14 @@ def scan_note(scan):
     return "From your uploaded photo." if scan["source"] == "photo" else None
 
 
+NO_FACE_TIP = "Tip: face the light, with the window in front of you, not behind."
+
+
+def scan_tip(scan):
+    """A tip under the note when a picture had no face (not when there was no picture at all)."""
+    return NO_FACE_TIP if not scan["face_found"] and scan["image"] else None
+
+
 def choose(mode):
     st.session_state["mode_choice"] = mode
 
@@ -381,7 +389,7 @@ if "scan" not in state:
     face_slot.markdown(ui.scan_screen("Listening to your mood...", "Reading your expression"), unsafe_allow_html=True)
     new_scan({**summarise_scan(frames), "source": "webcam"})
 scan = state["scan"]
-face_slot.markdown(ui.face_tile_html(scan["image"], scan_note(scan)), unsafe_allow_html=True)
+face_slot.markdown(ui.face_tile_html(scan["image"], scan_note(scan), scan_tip(scan)), unsafe_allow_html=True)
 face_probs = scan["face_probs"]
 
 # Each distinct text is read once per session. The first read also loads the

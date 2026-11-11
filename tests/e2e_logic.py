@@ -181,6 +181,10 @@ print(f"RESULT [happy face + sad text, auto] {describe(at)}"); record("happy fac
 at = start(sad_frame); set_text(at, "This is absolutely infuriating, they lied to us again!")
 print(f"RESULT [sad face + angry text, auto] {describe(at)}"); record("sad face angry text", at)
 at = start(blank); print(f"RESULT [no face, no text           ] {describe(at)}")
+tile = lambda at: next((m.value for m in at.markdown if m.value.startswith('<p class="tile-label">Your expression')), "")
+TIP = "Tip: face the light, with the window in front of you, not behind."
+print(f"RESULT no-face note with the tip under it: {'No face was found in this picture' in tile(at) and 'tile-tip' in tile(at) and TIP in tile(at)}")
+at = start(sad_frame); print(f"RESULT a face found: no tip: {'scanimg' in tile(at) and 'tile-tip' not in tile(at)}")
 
 if os.environ.get("TEST_DUMP"):
     json.dump(dump, open(os.environ["TEST_DUMP"], "w"), indent=0)

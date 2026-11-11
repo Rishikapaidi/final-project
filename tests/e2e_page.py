@@ -18,6 +18,7 @@ SCENARIOS = [  # name, frame, text, extra playback checks
     ("4_no_face_text_only", "blank", SAD_TEXT, False),
 ]
 ONLY = sys.argv[1:]  # optional scenario name filter
+NO_FACE_NOTE = ["No face was found in this picture, so your mood comes from your words.", "Tip: face the light, with the window in front of you, not behind."]
 # Text that must never appear on the page: Streamlit's "Running <function>()" and the app's function names.
 FLAG = r"Running|load_songs|load_face_model|load_text_model|summarise_scan|text_probabilities|build_queue|build_view|cache_resource|cache_data"
 WATCH = """
@@ -75,7 +76,11 @@ with sync_playwright() as pw:
             img = page.locator(".scanimg")
             if img.count():
                 size = img.evaluate("e => [e.naturalWidth, e.naturalHeight, e.src.slice(0, 23), Math.round(e.src.length / 1024)]")
-                log(f"scan picture: {size[0]}x{size[1]}, src starts {size[2]!r}, {size[3]} KB in the page | note {page.locator('.tile-note').all_inner_texts()}")
+                notes = page.locator('.tile-note').all_inner_texts()
+                log(f"scan picture: {size[0]}x{size[1]}, src starts {size[2]!r}, {size[3]} KB in the page | note {notes}")
+                expected = NO_FACE_NOTE if frame == "blank" else []
+                log(f"note under the picture {'as expected' if notes == expected else 'WRONG, expected ' + repr(expected)}"
+                    f" ({'no-face message and tip' if expected else 'no note, no tip'}) | tip lines {page.locator('.tile-tip').count()}")
             else:
                 log(f"scan picture: none | {page.locator('.st-key-facetile').inner_text()[:80]!r}")
             choice = page.locator(".choice-card")

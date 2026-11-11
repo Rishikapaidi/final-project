@@ -7,6 +7,7 @@ from pagekit import bar_frame, full_shot, legend, path_frame, player_state, read
 
 HERE = os.path.dirname(os.path.abspath(__file__)); S = os.path.join(HERE, "output"); os.makedirs(S, exist_ok=True); ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); PY = sys.executable; PORT = "8586"
 def log(*a): print("RESULT", *a, flush=True)
+NO_FACE_NOTE = ["No face was found in this picture, so your mood comes from your words.", "Tip: face the light, with the window in front of you, not behind."]
 SIZE_JS = "e => e.naturalWidth + 'x' + e.naturalHeight"
 
 # --- test inputs (these are the test's own files, made before the app starts)
@@ -56,6 +57,7 @@ try:
         errors = []; page.on("pageerror", lambda e: errors.append(str(e)))
         page.goto(f"http://localhost:{PORT}"); page.wait_for_selector("[data-testid=stAlert]", timeout=180000)
         log(f"webcam sees no face: {page.locator('[data-testid=stAlert]').first.inner_text()!r} | tile {page.locator('.st-key-facetile').inner_text()[:60]!r} | camera opened {opened()} time(s)")
+        log(f"no-face note and tip under the webcam picture: {page.locator('.tile-note').all_inner_texts() == NO_FACE_NOTE} {page.locator('.tile-note').all_inner_texts()}")
         def close_popover():
             page.keyboard.press("Escape"); time.sleep(0.3); page.locator(".greeting h1").click(); time.sleep(0.4)
         def upload(name, wait=14):
@@ -93,6 +95,7 @@ try:
         close_popover()
         upload("no_face.png"); close_popover()
         log(f"after a photo with no face (and no text): alerts {[a[:80] for a in page.locator('[data-testid=stAlert]').all_inner_texts()]} | camera opened {opened()} time(s)")
+        log(f"no-face note and tip under the photo: {page.locator('.tile-note').all_inner_texts() == NO_FACE_NOTE} {page.locator('.tile-note').all_inner_texts()}")
         box = page.get_by_label("How was your day?"); box.fill("I miss her so much, everything feels empty and pointless now."); box.press("Enter")
         wait_for_text_bars(page); time.sleep(2)
         log(f"then with a sad sentence: {describe()} | camera opened {opened()} time(s)")

@@ -70,6 +70,8 @@ PAGE_CSS = """
                 color:#cfc8ef; font-size:14px; text-align:center; padding:0 20px; }
   /* the bottom margin keeps the note clear of "Tap to scan again" (markdown blocks pull up by 1rem) */
   .tile-note { color:#e3def7; font-size:13px !important; line-height:1.45; margin:10px 0 22px !important; }
+  .tile-note.with-tip { margin-bottom:0 !important; }
+  .tile-note.tile-tip { color:#cfc8ef; font-size:12.5px !important; margin-top:4px !important; }
   .listening { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; height:220px;
                border-radius:14px; background:#25224a; color:#f1edfb; font-size:17px; }
   .pulse { width:58px; height:58px; border-radius:50%; background:var(--lavender); animation:pulse 1.3s ease-in-out infinite; }
@@ -247,13 +249,16 @@ def scan_screen(title, detail=""):
             f'<div class="listening-detail">{detail}</div></div>')
 
 
-def face_tile_html(image, note):
-    """The scan picture (an in-memory data URI, never a file) and its note."""
+def face_tile_html(image, note, tip=None):
+    """The scan picture (an in-memory data URI, never a file), its note and an optional tip line under it."""
     if image:
         body = f'<img class="scanimg" src="{image}" alt="The picture used for your scan, with the face box and label">'
     else:
         body = '<div class="scan-empty">No picture for this scan</div>'
     note_html = f'<p class="tile-note">{html.escape(note)}</p>' if note else ""
+    if note and tip:
+        note_html = (f'<p class="tile-note with-tip">{html.escape(note)}</p>'
+                     f'<p class="tile-note tile-tip">{html.escape(tip)}</p>')
     return f'<p class="tile-label">Your expression</p>{body}{note_html}'
 
 
