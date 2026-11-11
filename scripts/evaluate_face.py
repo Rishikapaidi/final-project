@@ -6,9 +6,10 @@ Two ways of feeding the test faces, both with the app's own preprocessing
   (A) whole image   each 48x48 test image is already a face crop, so the whole
                     image is used as the face box. This measures the model.
   (B) Haar crop     each face is placed on a larger frame (as a webcam frame
-                    would be), found with the app's Haar detector and cropped
-                    to the Haar box, as the app does. Only faces Haar finds
-                    are scored.
+                    would be), found with the app's face detection
+                    (face.find_faces: the Haar cascade, then a contrast-boosted
+                    copy if it finds nothing) and cropped to that box from the
+                    original frame, as the app does. Only faces found are scored.
 
 For each it reports per-class precision, recall and F1, a confusion matrix,
 and how often each emotion is predicted compared with how often it is the
