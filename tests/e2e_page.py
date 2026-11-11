@@ -81,7 +81,8 @@ with sync_playwright() as pw:
             choice = page.locator(".choice-card")
             log(f"choice cards: selected {page.locator('.choice-card.on h3').all_inner_texts()} | recommended {[c.locator('h3').inner_text() for c in choice.all() if c.locator('.tag').count()]}")
             log(f"path card: {path.locator('#kicker').inner_text()!r} {path.locator('#title').inner_text()!r} / {path.locator('#qsub').inner_text()!r} | steps {path.locator('#steps li:not(.arrow)').all_inner_texts()} "
-                f"| rows {path.locator('.row').count()} | pills {path.locator('.row .pill').count()} | links {path.locator('a.lastfm').count()} | sections {path.locator('.section').all_inner_texts()} | journey chart {path.locator('details.journey').count()}")
+                f"| rows {path.locator('.row').count()} | pills {path.locator('.row .pill').count()} | hearts {path.locator('.row .heart').count()} | menus {path.locator('.row .more').count()} "
+                f"| links {path.evaluate('[...new Set(DATA.tracks.map(t => t.link_label))]')} | search box {path.locator('#search').count()} | sections {path.locator('.section').all_inner_texts()} | journey chart {path.locator('details.journey').count()}")
             log(f"   message {path.locator('#msg').inner_text()!r}" + (f" | note {path.locator('#note').inner_text()!r}" if path.locator('#note').is_visible() else ""))
             log(f"player bar: {bar.locator('#nowtitle').inner_text()!r} | buttons {bar.locator('button').evaluate_all('bs => bs.map(b => b.ariaLabel)')} | volume {bar.locator('#volume').count()} "
                 f"| pinned to the bottom: {page.locator('.st-key-playerbar').evaluate('e => getComputedStyle(e).position + \" bottom=\" + (innerHeight - e.getBoundingClientRect().bottom)')}")
@@ -104,7 +105,7 @@ with sync_playwright() as pw:
                 page.get_by_text("See all 7 emotions").click(); time.sleep(1.5); d1 = state(); time.sleep(2); d2 = state()
                 log(f"expander {'closed' if was_open else 'opened'}: still playing {not d2['paused']}, same track {d2['current'] == d1['current']}, time {d1['time']} -> {d2['time']} | open now {details.get_attribute('open') is not None}")
                 page.get_by_text("See all 7 emotions").click(); time.sleep(0.5)
-                log(f"settings button in the top bar: {page.get_by_role('button', name='⚙').count()} | uploaders on the page: {page.locator('[data-testid=stFileUploader]').count()} (closed popover)")
+                log(f"old ⚙ upload popover in the top bar: {page.get_by_role('button', name='⚙').count()} | uploaders on the page: {page.locator('[data-testid=stFileUploader]').count()} (closed popover)")
                 page.get_by_role("button", name="Upload a photo instead").click(); time.sleep(1.5); d1 = state(); time.sleep(2); d2 = state()
                 page.screenshot(path=os.path.join(OUT, "page_5_upload_while_playing.png"))
                 log(f"upload popover open: uploaders {page.locator('[data-testid=stFileUploader]').count()} | still playing {not d2['paused']}, same track {d2['current'] == d1['current']}, time {d1['time']} -> {d2['time']} | contents {page.locator('[data-testid=stPopoverBody]').inner_text()[:90]!r}")

@@ -19,12 +19,12 @@ To run the app, type the following command in the terminal.
 
 ### Streamlit version
 
-`requirements.txt` pins Streamlit to **1.64.0**. The page's song list and
-player bar are two `st.components.v1.html` components (see `player.py`), and
-Streamlit has announced that `st.components.v1.html` will be removed in a
-later version (1.64 already logs a warning suggesting `st.iframe`). Moving to
-a newer Streamlit means porting those two components first; until then, keep
-the pin.
+`requirements.txt` pins Streamlit to **1.64.0**. The page's song list, player
+bar and top-bar buttons are three `st.components.v1.html` components (see
+`player.py`), and Streamlit has announced that `st.components.v1.html` will
+be removed in a later version (1.64 already logs a warning suggesting
+`st.iframe`). Moving to a newer Streamlit means porting those components
+first; until then, keep the pin.
 
 ### Page design
 
@@ -33,6 +33,35 @@ in `static/fonts/` (SIL Open Font License, licence files in the same folder),
 served through Streamlit's static file serving, so the page looks the same
 offline. The page's CSS and HTML pieces are in `ui.py`. Screenshots are in
 `docs/screenshots/`.
+
+### Player, My playlist and Settings
+
+Everything below runs in the browser (`player.py`), so the music keeps
+playing while the app reruns, and none of it is sent to the server.
+
+- **Player bar:** previous / play / next, shuffle, repeat (off / all / this
+  song), a progress bar to click or drag, mute and volume, and a queue panel
+  ("Now playing", "Next up"). Shuffle only reorders the songs still to come;
+  Uplift's 5-song path is never shuffled, and shuffle stays greyed out until
+  the path has finished.
+- **Keyboard:** Space = play/pause, Right / Left = next / previous,
+  M = mute, L = save the song playing. Keys typed into a text box are
+  ignored.
+- **Song list:** a search box (title or artist), a heart per song, and a
+  "..." menu: Play next, Add to queue, Add to / Remove from My playlist,
+  Open on Spotify / Last.fm, Copy link. Songs added with Play next or Add to
+  queue are tagged "Added by you" in the queue and go after the current song;
+  the list's order and Uplift's path never change.
+- **My playlist** (top bar, with a count badge): play, remove, Play all,
+  Clear. Saved songs keep only title, artist, link, preview URL, artwork URL
+  and language, in the browser's localStorage; if localStorage is blocked,
+  an in-memory copy is used until the page is reloaded.
+- **Settings** (the gear): autoplay next song, the starting repeat mode,
+  showing all 7 emotions by default, larger text, and clearing the saved
+  songs. None of these changes the queue, so they never rerun the app or
+  stop the music; only "Songs in" and the Lift / Meet cards rebuild the
+  queue. **About MOOD TUNE** covers what the app does, its data sources and
+  licences, its limits and what it keeps.
 
 ## Libraries
 

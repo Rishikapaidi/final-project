@@ -69,6 +69,28 @@ def path_frame(page, not_tracks=None, timeout=90):
     raise RuntimeError("path card not found")
 
 
+def actions_frame(page, timeout=90):
+    """The top bar's component (window.actions): My playlist, Settings and their drawer."""
+    end = time.time() + timeout
+    while time.time() < end:
+        f = _frame_with(page, "actions")
+        if f:
+            return f
+        time.sleep(0.2)
+    raise RuntimeError("top-bar buttons not found")
+
+
+def count_reruns(page):
+    """Start counting app reruns (Streamlit's script state turning to "running"); read with reruns(page)."""
+    page.evaluate("""() => { window.__runs = 0; const app = document.querySelector('[data-testid=stApp]');
+      new MutationObserver(() => { if (app.dataset.testScriptState === 'running') window.__runs++; })
+        .observe(app, { attributes: true, attributeFilter: ['data-test-script-state'] }); }""")
+
+
+def reruns(page):
+    return page.evaluate("window.__runs || 0")
+
+
 def players(page):
     """(players on the page, players making sound)."""
     found = [f for f in page.frames if f != page.main_frame and _safe(f, "typeof window.player") == "object"]

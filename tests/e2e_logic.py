@@ -83,7 +83,7 @@ def describe(at):
         if more: out += f" | then {len(more)} more from {sorted(set(more))}"
     else:
         out += f" | buckets {pd.Series([x['bucket'] for x in t]).value_counts().to_dict()}"
-    out += f" | components {len(at.get('iframe'))} (path card + player bar) | note: {q['note']!r} | headline: {chip!r}"
+    out += f" | components {len(at.get('iframe'))} (top-bar buttons + path card + player bar) | note: {q['note']!r} | headline: {chip!r}"
     out += "\nRESULT      mood card: " + check_card(at)
     return out
 

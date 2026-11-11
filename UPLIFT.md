@@ -20,6 +20,11 @@ band: **Light** under 25%, **In between** from 25% to 50%, **Low** from 50%
 
 The logic is in `uplift.py` and needs neither the webcam nor Streamlit.
 
+In the player, the path keeps its order: shuffle is greyed out until the
+path has finished and never moves its songs, and songs added with Play next,
+Add to queue or from My playlist go after the current song without changing
+the path.
+
 The top bar has **Songs in** (English, Hindi, Tamil, Telugu, Malayalam,
 Korean). Uplift is offered for English, Hindi, Tamil and Korean;
 see "Other languages" below.
