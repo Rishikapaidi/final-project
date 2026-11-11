@@ -24,6 +24,7 @@ import face
 import mood
 import player
 import previews
+import shell
 import textmodel
 import ui
 import uplift
@@ -50,8 +51,23 @@ UPLIFT_LANGUAGES = {"English", "Hindi", "Tamil", "Korean"}
 # The path card grows to fit its songs (see player.render_path); this is its first height.
 PATH_HEIGHT = 900
 BAR_HEIGHT = 86
-ACTIONS_HEIGHT = 50
+TOP_HEIGHT = 56            # the top bar's two components
+NAVLISTS_HEIGHT = 360      # the sidebar's playlists (the page CSS stretches it to fill the sidebar)
+LIBRARY_HEIGHT = 640       # first heights; the Library and the Explore list grow to fit
+EXPLORE_LIST_HEIGHT = 900
 PHOTO_TYPES = ["jpg", "jpeg", "png"]
+# The sidebar's pages: key, label, icon.
+PAGES = [("home", "Home", ":material/home:"), ("explore", "Explore", ":material/explore:"),
+         ("library", "Library", ":material/library_music:")]
+# Explore: the moods (the song buckets) in this order, and each language in its own script.
+EXPLORE_MOODS = ["happy", "sad", "angry", "fear", "disgust", "surprise", "neutral"]
+LANGUAGE_NAMES = {"English": "English", "Hindi": "हिन्दी", "Tamil": "தமிழ்",
+                  "Telugu": "తెలుగు", "Malayalam": "മലയാളം",
+                  "Korean": "한국어"}
+EXPLORE_TRACKS = 30
+# The player bar with nothing to play yet (before a mood is read); songs from
+# Explore or the Library can still be played through it.
+IDLE_QUEUE = {"id": "idle", "tracks": [], "loop_from": 0, "mode": "Resonance"}
 
 st.set_page_config(page_title=ui.APP_NAME, page_icon="🎧", layout="wide")
 
@@ -325,6 +341,223 @@ def read_photo(photo):
     return True
 
 
+def go(page):
+    state["page"] = page
+
+
+def pick_mood(mood):
+    """Explore: pick a mood, or drop it if it's already picked."""
+    state["explore_mood"] = None if state.get("explore_mood") == mood else mood
+
+
+def pick_language(language):
+    state["explore_language"] = language
+
+
+def current_queue(emotions, fused, language, text, face_probs, text_probs):
+    """The play queue and mood view for this reading, rebuilt only when the scan,
+    the text, the requested mode or the language changes, so other reruns (and
+    moving between pages) leave the queue, and the music, alone. Picking the
+    card Auto had already chosen doesn't rebuild it."""
+    mode_choice = state["mode_choice"]
+    wanted = requested_mode(mode_choice, fused)
+    queue_key = (state.get("scan_id", 0), text.strip(), wanted, language)
+    if state.get("queue_key") != queue_key:
+        state["queue"] = {**build_queue(songs, emotions, fused, mode_choice, language), "id": uuid.uuid4().hex}
+        state["view"] = build_view(face_probs, text_probs, fused, state["queue"])
+        state["queue_key"] = queue_key
+    return state["queue"], state["view"], wanted
+
+
+def background_queue(language):
+    """The queue on Explore and the Library: the last reading (no camera, no
+    text model), so the player keeps the same songs; "Songs in" still applies."""
+    scan = state.get("scan")
+    if scan is None:
+        return None
+    text = state.get("text", "")
+    text_probs = state.get("text_results", {}).get(text.strip())
+    emotions, fused = combine_emotions(scan["face_probs"], text_probs)
+    if fused is None:
+        return None
+    return current_queue(emotions, fused, language, text, scan["face_probs"], text_probs)[0]
+
+
+def home_page(language):
+    """Greeting, the scan and your words, the mood reading, the choice cards and
+    the songs. Returns the queue, or None if there is no reading yet."""
+    local = ui.local_now(st.context.timezone, st.context.timezone_offset)
+    st.markdown(ui.greeting_html(local), unsafe_allow_html=True)
+
+    # The hero card: the face scan and the text box.
+    with st.container(key="hero"):
+        st.markdown(ui.HERO_HTML, unsafe_allow_html=True)
+        face_column, text_column = st.columns(2, gap="medium")
+        with face_column, st.container(key="facetile"):
+            face_slot = st.empty()
+            with st.container(horizontal=True, gap="small"):
+                if st.button("Tap to scan again", key="rescan", help="Look at the webcam again"):
+                    state.pop("scan", None)
+                with st.popover("Upload a photo instead"):
+                    tile_photo = st.file_uploader("Upload a photo instead", type=PHOTO_TYPES, key="photo",
+                                                  help="A backup if the webcam doesn't work.")
+                    st.caption("A photo is read once, in memory, to find a face. It is never saved.")
+        with text_column, st.container(key="texttile"):
+            st.markdown('<p class="tile-label">Your words</p>', unsafe_allow_html=True)
+            # Streamlit forgets a widget's value on a run where it isn't drawn (another
+            # page), so the text is kept in state["text"] and put back when Home returns.
+            if "user_text" not in state:
+                state["user_text"] = state.get("text", "")
+            # A form, so the text is read on "Check my mood" (or Enter), not on every keystroke.
+            with st.form("textform", border=False):
+                user_text = st.text_input("How was your day?", key="user_text", max_chars=180,
+                                          placeholder="e.g. Finally finished my exams!")
+                st.form_submit_button("Check my mood", type="primary")
+            state["text"] = user_text
+            reading_slot = st.empty()
+            st.markdown('<p class="tile-foot">Up to 180 characters. Your words are read on this computer and kept only '
+                        'for this visit.</p>', unsafe_allow_html=True)
+    notices = st.container(key="notices")
+
+    if tile_photo is not None and not read_photo(tile_photo):
+        notices.warning("That file couldn't be read as a picture. Try a JPEG or PNG.")
+
+    # The webcam is only opened on first load and on "Tap to scan again"; anything
+    # else reuses the cached scan (face result and picture, both kept in memory only).
+    if "scan" not in state:
+        # The face model loads first, so the countdown and capture are not held up by it.
+        face_slot.markdown(ui.scan_screen("Listening to your mood...", "Starting the camera"), unsafe_allow_html=True)
+        load_face_model()
+        frames = guided_webcam_scan(face_slot)
+        face_slot.markdown(ui.scan_screen("Listening to your mood...", "Reading your expression"), unsafe_allow_html=True)
+        new_scan({**summarise_scan(frames), "source": "webcam"})
+    scan = state["scan"]
+    face_slot.markdown(ui.face_tile_html(scan["image"], scan_note(scan), scan_tip(scan)), unsafe_allow_html=True)
+    face_probs = scan["face_probs"]
+
+    # Each distinct text is read once per session. The first read also loads the
+    # text model (unless the background warm-up already has), so a friendly
+    # message stands in while it happens.
+    text_results = state.setdefault("text_results", {})
+    if user_text.strip() and user_text.strip() not in text_results:
+        reading_slot.markdown(ui.READING_HTML, unsafe_allow_html=True)
+        text_results[user_text.strip()] = text_probabilities(user_text)
+    text_probs = text_results.get(user_text.strip())
+    if user_text.strip() and text_probs is None:
+        reading_slot.caption("The text model isn't available on this machine, so only your face was read.")
+    else:
+        reading_slot.empty()
+    emotions, fused = combine_emotions(face_probs, text_probs)
+
+    if fused is None:
+        notices.warning("I couldn't see a face. Tap to scan again, upload a photo, or tell me how your day was.")
+        return None
+
+    queue, view, wanted = current_queue(emotions, fused, language, user_text, face_probs, text_probs)
+    mode_choice = state["mode_choice"]
+
+    if previews.rate_limited():
+        notices.caption("The preview service is limiting requests right now, so some songs could not be checked. "
+                        "Scan again in a minute for a fuller list.")
+
+    # The mood reading: "X% low" (the share Auto mode uses), and the same for face and text.
+    with st.container(key="moodcard"):
+        st.markdown(ui.mood_card_html(view["card"], view["low"]), unsafe_allow_html=True)
+        with st.expander("See all 7 emotions"):
+            st.markdown(ui.bars_html(view["bars"]), unsafe_allow_html=True)
+
+    # What do you need from music? Auto stays the default, and the card it
+    # would choose is tagged "Recommended".
+    recommended = requested_mode("Auto", fused)
+    with st.container(key="choice"):
+        st.markdown(ui.CHOICE_HTML, unsafe_allow_html=True)
+        for column, mode in zip(st.columns(2, gap="medium"), ["Uplift", "Resonance"]):
+            fallback = None
+            if mode == "Uplift" and language not in UPLIFT_LANGUAGES:
+                fallback = f"Uplift needs more songs than we have in {language}, so these songs match your mood instead."
+            with column, st.container(key=f"choice_{mode.lower()}"):
+                st.markdown(ui.choice_card_html(mode, wanted == mode, recommended == mode, fallback),
+                            unsafe_allow_html=True)
+                st.button(ui.CHOICES[mode][2], key=f"choose_{mode.lower()}", on_click=choose, args=(mode,),
+                          use_container_width=True)
+        if mode_choice != "Auto":
+            st.button("Let MOOD TUNE choose", key="choose_auto", on_click=choose, args=("Auto",))
+
+    # The path card (Uplift) or the songs for this moment (Resonance).
+    with st.container(key="path"):
+        if queue["tracks"]:
+            components.html(player.render_path(queue, view["card"]["message"]), height=PATH_HEIGHT)
+        else:
+            # Cache-only by default: only songs already in data/songs/previews.csv can be played.
+            st.info(f"No {language} songs with a saved preview match this mood yet. Try another language.")
+    return queue
+
+
+def explore_rows(language, mood=None):
+    """Explore: the songs of one language (and mood), only those with a saved preview
+    unless live lookups are on."""
+    rows = songs[(songs.language == language).values & ((songs.bucket == mood).values if mood else True)]
+    if not previews.LIVE_LOOKUPS:
+        rows = rows[rows.lastfm_url.isin(previews.playable_urls()).values]
+    return rows
+
+
+def explore_list(language, mood):
+    """A random pick of EXPLORE_TRACKS playable songs, kept for the session so reruns don't reshuffle it."""
+    lists = state.setdefault("explore_lists", {})
+    if (mood, language) not in lists:
+        picked = player.playable_songs(explore_rows(language, mood), EXPLORE_TRACKS, np.random.default_rng())
+        lists[(mood, language)] = {"id": uuid.uuid4().hex, "tracks": [
+            player._track(song, preview, section="mood", number=n) for n, (song, preview) in enumerate(picked, 1)]}
+    return lists[(mood, language)]
+
+
+def explore_page(language):
+    """Browse by mood (the seven song buckets) and by language; the songs picked play through the player bar."""
+    st.markdown(ui.page_head_html("Explore", "Browse the songs by mood or by language. A song you play here "
+                                  "starts straight away, and the queue carries on after it."), unsafe_allow_html=True)
+    # The language follows "Songs in" until one is picked here.
+    lang = state.get("explore_language") or language
+    mood = state.get("explore_mood")
+    with st.container(key="explore"):
+        st.markdown(ui.section_head_html("Moods", f"Songs with a preview in {lang}"), unsafe_allow_html=True)
+        with st.container(key="moodcards"):
+            for emotion in EXPLORE_MOODS:
+                with st.container(key=f"xcard_mood_{emotion}"):
+                    st.markdown(ui.mood_tile_html(emotion, len(explore_rows(lang, emotion)), mood == emotion),
+                                unsafe_allow_html=True)
+                    st.button(f"{emotion.capitalize()} songs", key=f"xmood_{emotion}", on_click=pick_mood, args=(emotion,))
+        st.markdown(ui.section_head_html("Languages", "“Lift my mood” needs more songs than Telugu and Malayalam "
+                                         "have, so those two offer “Meet me here” only."), unsafe_allow_html=True)
+        with st.container(key="langcards"):
+            for name in LANGUAGES:
+                with st.container(key=f"xcard_lang_{name.lower()}"):
+                    st.markdown(ui.language_tile_html(name, LANGUAGE_NAMES[name], len(explore_rows(name)),
+                                                      name in UPLIFT_LANGUAGES, lang == name), unsafe_allow_html=True)
+                    st.button(f"Songs in {name}", key=f"xlang_{name.lower()}", on_click=pick_language, args=(name,))
+    picked = explore_list(lang, mood)
+    in_lang = "" if lang == "English" else f" in {lang}"
+    title = f"{mood.capitalize()} songs{in_lang}" if mood else f"Songs in {lang}"
+    pool = len(explore_rows(lang, mood))
+    shown = len(picked["tracks"])
+    subtitle = ((f"All {shown} songs with a preview, in random order." if shown >= pool else
+                 f"{shown} of the {pool:,} songs with a preview, picked at random.")
+                + ("" if mood else " Pick a mood above to narrow it down."))
+    with st.container(key="explorelist"):
+        if picked["tracks"]:
+            components.html(shell.render_songlist(picked["id"], title, subtitle, picked["tracks"]),
+                            height=EXPLORE_LIST_HEIGHT)
+        else:
+            st.info(f"No {mood + ' ' if mood else ''}songs{in_lang} have a saved preview yet. Try another mood or language.")
+
+
+def library_page():
+    st.markdown(ui.page_head_html("Library", "Your liked songs, your playlists and what you played recently. They "
+                                  "are kept in this browser only and never sent anywhere."), unsafe_allow_html=True)
+    with st.container(key="library"):
+        components.html(shell.render_library(), height=LIBRARY_HEIGHT)
+
+
 st.markdown(ui.PAGE_CSS, unsafe_allow_html=True)
 
 if not os.path.exists(SONGS_FILE):
@@ -333,135 +566,45 @@ if not os.path.exists(SONGS_FILE):
 songs = load_songs()
 state = st.session_state
 state.setdefault("mode_choice", "Auto")
+state.setdefault("page", "home")
+page = state["page"]
 
 # The page is laid out in keyed containers, created in the same order on every
-# run, so the two player components keep their place (and the music keeps
-# playing) across reruns that don't change the queue.
+# run and on every page, so the shell's components and the player bar keep
+# their place (and the music keeps playing) across reruns and page changes.
 
-# 1. Top bar and greeting.
-with st.container(key="topbar"):
-    brand, controls = st.columns([1, 1], vertical_alignment="center")
-    brand.markdown(ui.topbar_html(), unsafe_allow_html=True)
-    with controls, st.container(horizontal=True, horizontal_alignment="right", vertical_alignment="center",
-                                wrap=False, key="topcontrols"):
-        language = st.selectbox("Songs in", LANGUAGES, key="language", width=250)
-        # My playlist and Settings (and their drawer): a browser-only component that never reloads.
-        with st.container(key="topactions"):
-            components.html(player.render_actions(), height=ACTIONS_HEIGHT)
-local = ui.local_now(st.context.timezone, st.context.timezone_offset)
-st.markdown(ui.greeting_html(local), unsafe_allow_html=True)
+# 1. Top bar: the menu button, logo and search (a component), "Songs in", and
+#    the avatar with its menu (a component). Both components never reload.
+with st.container(key="topbar", horizontal=True, vertical_alignment="center", gap="small"):
+    with st.container(key="topleft"):
+        components.html(shell.render_topbar(), height=TOP_HEIGHT)
+    language = st.selectbox("Songs in", LANGUAGES, key="language")
+    with st.container(key="topactions"):
+        components.html(shell.render_profile(), height=TOP_HEIGHT)
 
-# 2. Hero card: the face scan and the text box.
-with st.container(key="hero"):
-    st.markdown(ui.HERO_HTML, unsafe_allow_html=True)
-    face_column, text_column = st.columns(2, gap="medium")
-    with face_column, st.container(key="facetile"):
-        face_slot = st.empty()
-        with st.container(horizontal=True, gap="small"):
-            if st.button("Tap to scan again", key="rescan", help="Look at the webcam again"):
-                state.pop("scan", None)
-            with st.popover("Upload a photo instead"):
-                tile_photo = st.file_uploader("Upload a photo instead", type=PHOTO_TYPES, key="photo",
-                                              help="A backup if the webcam doesn't work.")
-                st.caption("A photo is read once, in memory, to find a face. It is never saved.")
-    with text_column, st.container(key="texttile"):
-        st.markdown('<p class="tile-label">Your words</p>', unsafe_allow_html=True)
-        # A form, so the text is read on "Check my mood" (or Enter), not on every keystroke.
-        with st.form("textform", border=False):
-            user_text = st.text_input("How was your day?", key="user_text", max_chars=180,
-                                      placeholder="e.g. Finally finished my exams!")
-            st.form_submit_button("Check my mood", type="primary")
-        reading_slot = st.empty()
-        st.markdown('<p class="tile-foot">Up to 180 characters. Your words are read on this computer and kept only '
-                    'for this visit.</p>', unsafe_allow_html=True)
-notices = st.container(key="notices")
+# 2. Sidebar: Home, Explore and Library, then New playlist and your playlists.
+with st.container(key="nav"):
+    for key, label, icon in PAGES:
+        st.button(label, key=f"nav_{key}", icon=icon, on_click=go, args=(key,),
+                  type="primary" if page == key else "tertiary", use_container_width=True)
+    with st.container(key="navlists"):
+        components.html(shell.render_navlists(), height=NAVLISTS_HEIGHT)
 
-if tile_photo is not None and not read_photo(tile_photo):
-    notices.warning("That file couldn't be read as a picture. Try a JPEG or PNG.")
+# 3. The player bar's place, pinned to the bottom of the window by the page CSS
+#    (filled below, once the queue is known).
+bar_slot = st.container(key="playerbar")
 
-# The webcam is only opened on first load and on "Tap to scan again"; anything
-# else reuses the cached scan (face result and picture, both kept in memory only).
-if "scan" not in state:
-    # The face model loads first, so the countdown and capture are not held up by it.
-    face_slot.markdown(ui.scan_screen("Listening to your mood...", "Starting the camera"), unsafe_allow_html=True)
-    load_face_model()
-    frames = guided_webcam_scan(face_slot)
-    face_slot.markdown(ui.scan_screen("Listening to your mood...", "Reading your expression"), unsafe_allow_html=True)
-    new_scan({**summarise_scan(frames), "source": "webcam"})
-scan = state["scan"]
-face_slot.markdown(ui.face_tile_html(scan["image"], scan_note(scan), scan_tip(scan)), unsafe_allow_html=True)
-face_probs = scan["face_probs"]
+# 4. The page.
+queue = home_page(language) if page == "home" else background_queue(language)
+with bar_slot:
+    components.html(player.render_bar(queue if queue and queue["tracks"] else IDLE_QUEUE), height=BAR_HEIGHT)
+if page == "explore":
+    explore_page(language)
+elif page == "library":
+    library_page()
 
-# Each distinct text is read once per session. The first read also loads the
-# text model (unless the background warm-up already has), so a friendly
-# message stands in while it happens.
-text_results = state.setdefault("text_results", {})
-if user_text.strip() and user_text.strip() not in text_results:
-    reading_slot.markdown(ui.READING_HTML, unsafe_allow_html=True)
-    text_results[user_text.strip()] = text_probabilities(user_text)
-text_probs = text_results.get(user_text.strip())
-if user_text.strip() and text_probs is None:
-    reading_slot.caption("The text model isn't available on this machine, so only your face was read.")
-else:
-    reading_slot.empty()
-emotions, fused = combine_emotions(face_probs, text_probs)
-
-if fused is None:
-    notices.warning("I couldn't see a face. Tap to scan again, upload a photo, or tell me how your day was.")
-    st.stop()
-
-# The queue is rebuilt only when the scan, the text, the requested mode or the
-# language changes, so other reruns leave the page (and the music) alone.
-# Picking the card Auto had already chosen doesn't rebuild it.
-mode_choice = state["mode_choice"]
-wanted = requested_mode(mode_choice, fused)
-queue_key = (state["scan_id"], user_text.strip(), wanted, language)
-if state.get("queue_key") != queue_key:
-    state["queue"] = {**build_queue(songs, emotions, fused, mode_choice, language), "id": uuid.uuid4().hex}
-    state["view"] = build_view(face_probs, text_probs, fused, state["queue"])
-    state["queue_key"] = queue_key
-queue, view = state["queue"], state["view"]
-
-if previews.rate_limited():
-    notices.caption("The preview service is limiting requests right now, so some songs could not be checked. "
-                    "Scan again in a minute for a fuller list.")
-
-# 3. Mood reading: "X% low" (the share Auto mode uses), and the same for face and text.
-with st.container(key="moodcard"):
-    st.markdown(ui.mood_card_html(view["card"], view["low"]), unsafe_allow_html=True)
-    with st.expander("See all 7 emotions"):
-        st.markdown(ui.bars_html(view["bars"]), unsafe_allow_html=True)
-
-# 4. What do you need from music? The cards replace the old mode radio: Auto
-# stays the default, and the card it would choose is tagged "Recommended".
-recommended = requested_mode("Auto", fused)
-with st.container(key="choice"):
-    st.markdown(ui.CHOICE_HTML, unsafe_allow_html=True)
-    for column, mode in zip(st.columns(2, gap="medium"), ["Uplift", "Resonance"]):
-        fallback = None
-        if mode == "Uplift" and language not in UPLIFT_LANGUAGES:
-            fallback = f"Uplift needs more songs than we have in {language}, so these songs match your mood instead."
-        with column, st.container(key=f"choice_{mode.lower()}"):
-            st.markdown(ui.choice_card_html(mode, wanted == mode, recommended == mode, fallback),
-                        unsafe_allow_html=True)
-            st.button(ui.CHOICES[mode][2], key=f"choose_{mode.lower()}", on_click=choose, args=(mode,),
-                      use_container_width=True)
-    if mode_choice != "Auto":
-        st.button("Let MOOD TUNE choose", key="choose_auto", on_click=choose, args=("Auto",))
-
-# 5. The path card (Uplift) or the songs for this moment (Resonance), and
-# 6. the player bar, pinned to the bottom of the window by the page CSS.
-with st.container(key="path"):
-    if queue["tracks"]:
-        components.html(player.render_path(queue, view["card"]["message"]), height=PATH_HEIGHT)
-    else:
-        # Cache-only by default: only songs already in data/songs/previews.csv can be played.
-        st.info(f"No {language} songs with a saved preview match this mood yet. Try another language.")
-if queue["tracks"]:
-    with st.container(key="playerbar"):
-        components.html(player.render_bar(queue), height=BAR_HEIGHT)
-
-# Now that the page is up, load the text model in the background (once per
-# server process), so it is usually ready before anyone types. The thread
-# only imports and loads the model; it never touches Streamlit.
-textmodel.warm_up(TEXT_MODEL_DIR)
+# Once a page with a reading is up, load the text model in the background
+# (once per server process), so it is usually ready before anyone types. The
+# thread only imports and loads the model; it never touches Streamlit.
+if queue is not None or page != "home":
+    textmodel.warm_up(TEXT_MODEL_DIR)

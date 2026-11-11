@@ -7,7 +7,7 @@ the narrow layout.
 """
 import os, sys, time
 from playwright.sync_api import sync_playwright
-from pagekit import (OUT, bar_frame, describe_card, full_shot, image_files, log, new_images, path_frame,
+from pagekit import (named_frame, OUT, bar_frame, describe_card, full_shot, image_files, log, new_images, path_frame,
                      player_state, players, read_card, set_bars_open, start_server, stop, wait_for_text_bars)
 
 SAD_TEXT = "I miss her so much, everything feels empty and pointless now."
@@ -48,9 +48,14 @@ with sync_playwright() as pw:
                 page.wait_for_selector("[data-testid=stAlert]", timeout=180000)
                 log("before any text:", page.locator("[data-testid=stAlert]").first.inner_text()[:100])
             else:
-                page.wait_for_selector(".st-key-playerbar iframe", timeout=180000)
-            log(f"top bar: {page.locator('.app-name').inner_text()!r} / {page.locator('.app-tagline').inner_text()!r} | logo {page.locator('.app-head svg.logo').count()} "
-                f"| date {page.locator('.greeting .date').inner_text()!r} | greeting {page.locator('.greeting h1').inner_text()!r} | tab {page.title()!r}")
+                page.wait_for_selector(".st-key-path iframe", timeout=180000)
+            top = named_frame(page, "topbar")
+            log(f"top bar: {top.locator('.brand').inner_text()!r} | logo {top.locator('svg.logo').count()} | menu button {top.locator('#hamburger').count()} "
+                f"| search {top.locator('#q').get_attribute('placeholder')!r} | 'Songs in' {page.locator('.st-key-language [data-testid=stWidgetLabel]').inner_text()!r} "
+                f"| avatar {named_frame(page, 'actions').locator('#avatar').get_attribute('aria-label')!r} | pinned {page.locator('.st-key-topbar').evaluate('e => getComputedStyle(e).position')}")
+            log(f"sidebar: {[b.strip() for b in page.locator('.st-key-nav .stButton').all_inner_texts()]} (current: {page.locator('.st-key-nav button[kind=primary]').inner_text().strip()!r}) "
+                f"| below them {named_frame(page, 'navlists').locator('#new, .item b').all_inner_texts()}")
+            log(f"date {page.locator('.greeting .date').inner_text()!r} | greeting {page.locator('.greeting h1').inner_text()!r} | tab {page.title()!r}")
             log(f"hero: {page.locator('.st-key-hero h2').first.inner_text()!r} / {page.locator('.hero-sub').inner_text()!r} | "
                 f"buttons {list(dict.fromkeys(b.replace('expand_more', '').strip() for b in page.locator('.st-key-hero button').all_inner_texts()))}")
             fonts = page.evaluate("[document.fonts.check('16px Fraunces'), document.fonts.check('16px Inter'), getComputedStyle(document.querySelector('.greeting h1')).fontFamily.split(',')[0]]")
@@ -87,7 +92,7 @@ with sync_playwright() as pw:
             log(f"choice cards: selected {page.locator('.choice-card.on h3').all_inner_texts()} | recommended {[c.locator('h3').inner_text() for c in choice.all() if c.locator('.tag').count()]}")
             log(f"path card: {path.locator('#kicker').inner_text()!r} {path.locator('#title').inner_text()!r} / {path.locator('#qsub').inner_text()!r} | steps {path.locator('#steps li:not(.arrow)').all_inner_texts()} "
                 f"| rows {path.locator('.row').count()} | pills {path.locator('.row .pill').count()} | hearts {path.locator('.row .heart').count()} | menus {path.locator('.row .more').count()} "
-                f"| links {path.evaluate('[...new Set(DATA.tracks.map(t => t.link_label))]')} | search box {path.locator('#search').count()} | sections {path.locator('.section').all_inner_texts()} | journey chart {path.locator('details.journey').count()}")
+                f"| links {path.evaluate('[...new Set(DATA.tracks.map(t => t.link_label))]')} | search box in the card {path.locator('#search').count()} (it is in the top bar) | sections {path.locator('.section').all_inner_texts()} | journey chart {path.locator('details.journey').count()}")
             log(f"   message {path.locator('#msg').inner_text()!r}" + (f" | note {path.locator('#note').inner_text()!r}" if path.locator('#note').is_visible() else ""))
             log(f"player bar: {bar.locator('#nowtitle').inner_text()!r} | buttons {bar.locator('button').evaluate_all('bs => bs.map(b => b.ariaLabel)')} | volume {bar.locator('#volume').count()} "
                 f"| pinned to the bottom: {page.locator('.st-key-playerbar').evaluate('e => getComputedStyle(e).position + \" bottom=\" + (innerHeight - e.getBoundingClientRect().bottom)')}")

@@ -44,15 +44,36 @@ def _frame_with(page, name):
     return None
 
 
-def bar_frame(page, timeout=90):
-    """The player bar's iframe (it holds window.player and the page's only <audio>)."""
+def bar_frame(page, timeout=90, idle=False):
+    """The player bar's iframe (it holds window.player and the page's only <audio>).
+
+    Before a mood is read the bar is idle (no queue); that one is skipped unless idle=True.
+    page.wait_for_timeout keeps Playwright's frame list up to date (time.sleep would not).
+    """
     end = time.time() + timeout
     while time.time() < end:
-        f = _frame_with(page, "player")
+        for f in page.frames:
+            if f == page.main_frame:
+                continue
+            try:
+                if f.evaluate("typeof window.player === 'object' && (DATA.id !== 'idle' || %s)" % ("true" if idle else "false")):
+                    return f
+            except Exception:
+                pass
+        page.wait_for_timeout(200)
+    raise RuntimeError("player bar not found")
+
+
+def named_frame(page, name, timeout=60):
+    """The component whose page sets window.<name>: topbar (menu button, logo, search), actions (the avatar's
+    menu, Settings and About), navlists (the sidebar's playlists), library, songlist (Explore's list)."""
+    end = time.time() + timeout
+    while time.time() < end:
+        f = _frame_with(page, name)
         if f:
             return f
-        time.sleep(0.2)
-    raise RuntimeError("player bar not found")
+        page.wait_for_timeout(200)
+    raise RuntimeError(f"{name} component not found")
 
 
 def path_frame(page, not_tracks=None, timeout=90):
@@ -65,18 +86,18 @@ def path_frame(page, not_tracks=None, timeout=90):
                 return f
         except Exception:
             pass
-        time.sleep(0.2)
+        page.wait_for_timeout(200)
     raise RuntimeError("path card not found")
 
 
 def actions_frame(page, timeout=90):
-    """The top bar's component (window.actions): My playlist, Settings and their drawer."""
+    """The top bar's avatar component (window.actions): its menu, and the Settings / About drawer."""
     end = time.time() + timeout
     while time.time() < end:
         f = _frame_with(page, "actions")
         if f:
             return f
-        time.sleep(0.2)
+        page.wait_for_timeout(200)
     raise RuntimeError("top-bar buttons not found")
 
 

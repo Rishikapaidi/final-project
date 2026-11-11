@@ -1,5 +1,9 @@
 """Build the play queue and render the two HTML/JS components that play it.
 
+(The page's other components, the top bar, the sidebar's playlists, the
+Explore list and the Library, are in shell.py and share BASE_JS and MENU_JS
+from here.)
+
 The queue is a list of tracks with a playable 30-second preview (see
 previews.py). Streamlit reruns the script on every interaction, which would
 stop any music started from a Streamlit widget, so playback lives in the
@@ -216,6 +220,13 @@ const ICONS = {
   heart: '<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>',
   play: '<polygon points="7 4 20 12 7 20 7 4"/>',
   back: '<line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>',
+  hamburger: '<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a7 7 0 0 1 7-7h2a7 7 0 0 1 7 7v1"/>',
+  plus: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+  list: '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/>',
+  history: '<path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 4 3 9 8 9"/><polyline points="12 7 12 12 15 14"/>',
+  info: '<circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="8" r=".6"/>',
+  pencil: '<path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
 };
 const icon = name => '<svg class="s" viewBox="0 0 24 24" aria-hidden="true">' + ICONS[name] + '</svg>';
@@ -247,10 +258,11 @@ function toast(text) {
   box.textContent = text; box.classList.remove("show"); void box.offsetWidth; box.classList.add("show");
 }
 
-// Saved songs (My playlist) and settings live only in this browser:
-// localStorage when it works, otherwise an in-memory copy kept on the page
-// (shared by the three components until the page is reloaded). Nothing here
-// is ever sent to the server. "hub" tells the other components something changed.
+// Liked songs, playlists, recently played, your name and the settings live
+// only in this browser: localStorage when it works, otherwise an in-memory
+// copy kept on the page (shared by the components until the page is
+// reloaded). Nothing here is ever sent to the server. "hub" tells the other
+// components that something changed.
 const hub = new BroadcastChannel("moodtune");
 function pageMemory() {
   try { const page = window.parent; return page.__moodtuneMemory || (page.__moodtuneMemory = {}); }
@@ -268,24 +280,82 @@ function save(key, value) {
   pageMemory()[key] = raw;
   try { localStorage.setItem(key, raw); } catch (e) {}
 }
-const SAVED = "moodtune.saved";
+// Changes: on(type, fn) runs fn when this component or another one changes it.
+const subs = {};
+function on(type, fn) { (subs[type] = subs[type] || []).push(fn); }
+function emit(type) { (subs[type] || []).forEach(fn => { try { fn(); } catch (e) {} }); }
+function changed(type) { hub.postMessage({ type }); emit(type); }
+const STORE = { "moodtune.saved": "saved", "moodtune.settings": "settings", "moodtune.playlists": "playlists",
+                "moodtune.recent": "recent", "moodtune.profile": "profile" };
+const STORE_TYPES = Object.values(STORE);
+hub.addEventListener("message", e => { const t = e.data && e.data.type; if (STORE_TYPES.includes(t)) emit(t); });
+window.addEventListener("storage", e => { if (STORE[e.key]) emit(STORE[e.key]); });
+
+// A song is kept with these six fields only (never a mood, a scan or a time).
 const linkLabel = link => (/spotify\.com/.test(link || "") ? "Spotify" : "Last.fm");
-function savedSongs() { const list = load(SAVED, []); return Array.isArray(list) ? list.filter(s => s && s.link && s.preview) : []; }
+const validSong = s => !!(s && typeof s.link === "string" && s.link && typeof s.preview === "string" && s.preview);
+const songOf = t => ({ title: t.title, artist: t.artist, link: t.lastfm, preview: t.preview, art: t.art || "", language: t.language || "" });
+const songTrack = s => ({ title: s.title, artist: s.artist, lastfm: s.link, link_label: linkLabel(s.link), preview: s.preview, art: s.art, language: s.language, bucket: "" });
+const songList = key => { const list = load(key, []); return Array.isArray(list) ? list.filter(validSong) : []; };
+const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
+
+// Liked songs: the hearts (and the L key).
+const SAVED = "moodtune.saved";
+const savedSongs = () => songList(SAVED);
 const isSaved = link => savedSongs().some(s => s.link === link);
-let onSavedChange = () => {};   // each page redraws its hearts / list
-function setSaved(list) { save(SAVED, list); hub.postMessage({ type: "saved" }); onSavedChange(); }
-// Only these six fields are kept for a saved song.
-function saveSong(t) {
-  if (isSaved(t.lastfm)) return;
-  setSaved(savedSongs().concat([{ title: t.title, artist: t.artist, link: t.lastfm, preview: t.preview, art: t.art || "", language: t.language || "" }]));
-}
+function setSaved(list) { save(SAVED, list); changed("saved"); }
+function saveSong(t) { if (!isSaved(t.lastfm)) setSaved(savedSongs().concat([songOf(t)])); }
 function unsaveSong(link) { setSaved(savedSongs().filter(s => s.link !== link)); }
 function toggleSaved(t) {
-  if (isSaved(t.lastfm)) { unsaveSong(t.lastfm); toast("Removed “" + t.title + "” from My playlist"); return false; }
-  saveSong(t); toast("Saved “" + t.title + "” to My playlist"); return true;
+  if (isSaved(t.lastfm)) { unsaveSong(t.lastfm); toast("Removed “" + t.title + "” from Liked songs"); return false; }
+  saveSong(t); toast("Added “" + t.title + "” to Liked songs"); return true;
 }
-const songTrack = s => ({ title: s.title, artist: s.artist, lastfm: s.link, link_label: linkLabel(s.link), preview: s.preview, art: s.art, language: s.language, bucket: "" });
-// Settings (the gear in the top bar). None of them changes the queue, so they
+
+// Playlists: "My playlist" is always there; "New playlist" adds more. Ids are random, not times.
+const PLAYLISTS = "moodtune.playlists", MY_PLAYLIST = "my";
+function playlists() {
+  let list = load(PLAYLISTS, []);
+  list = Array.isArray(list) ? list.filter(p => p && typeof p.id === "string" && typeof p.name === "string" && p.name.trim()) : [];
+  list = list.map(p => ({ id: p.id, name: p.name.trim().slice(0, 60), songs: Array.isArray(p.songs) ? p.songs.filter(validSong) : [] }));
+  if (!list.some(p => p.id === MY_PLAYLIST)) list.unshift({ id: MY_PLAYLIST, name: "My playlist", songs: [] });
+  return list;
+}
+const playlistById = id => playlists().find(p => p.id === id);
+function setPlaylists(list) { save(PLAYLISTS, list); changed("playlists"); }
+function addToPlaylist(id, t) {
+  const list = playlists(), p = list.find(x => x.id === id);
+  if (!p) return;
+  if (p.songs.some(s => s.link === t.lastfm)) { toast("“" + t.title + "” is already in " + p.name); return; }
+  p.songs.push(songOf(t)); setPlaylists(list); toast("Added “" + t.title + "” to " + p.name);
+}
+function removeFromPlaylist(id, link) {
+  const list = playlists(), p = list.find(x => x.id === id);
+  if (p) { p.songs = p.songs.filter(s => s.link !== link); setPlaylists(list); }
+}
+function newPlaylist(name) {
+  const list = playlists(), id = "p" + Math.random().toString(36).slice(2, 10);
+  list.push({ id, name: name.trim().slice(0, 60), songs: [] }); setPlaylists(list); return id;
+}
+function renamePlaylist(id, name) { const list = playlists(), p = list.find(x => x.id === id); if (p) { p.name = name.trim().slice(0, 60); setPlaylists(list); } }
+function deletePlaylist(id) { if (id !== MY_PLAYLIST) setPlaylists(playlists().filter(p => p.id !== id)); }
+function clearPlaylist(id) { const list = playlists(), p = list.find(x => x.id === id); if (p) { p.songs = []; setPlaylists(list); } }
+
+// Recently played: the last RECENT_MAX songs started, newest first, without times.
+const RECENT = "moodtune.recent", RECENT_MAX = 50;
+const recentSongs = () => songList(RECENT);
+function addRecent(t) {
+  if (!t || !t.lastfm || !t.preview) return;
+  save(RECENT, [songOf(t)].concat(recentSongs().filter(s => s.link !== t.lastfm)).slice(0, RECENT_MAX)); changed("recent");
+}
+function removeRecent(link) { save(RECENT, recentSongs().filter(s => s.link !== link)); changed("recent"); }
+function clearRecent() { save(RECENT, []); changed("recent"); }
+
+// Your name, for the avatar's letter (optional).
+const PROFILE = "moodtune.profile";
+function profileName() { const p = load(PROFILE, {}); return p && typeof p.name === "string" ? p.name.trim().slice(0, 40) : ""; }
+function setProfileName(name) { save(PROFILE, { name: name.trim().slice(0, 40) }); changed("profile"); }
+
+// Settings (in the profile menu). None of them changes the queue, so they
 // never rerun the app: each component reads them here.
 const SETTINGS = "moodtune.settings";
 const DEFAULTS = { autoplay: true, repeat: "all", emotions: false, large: false };
@@ -295,13 +365,133 @@ function settings() {
   if (!["off", "all", "one"].includes(out.repeat)) out.repeat = DEFAULTS.repeat;
   return out;
 }
-let onSettingsChange = () => {};
-function setSetting(key, value) { const s = settings(); s[key] = value; save(SETTINGS, s); hub.postMessage({ type: "settings" }); onSettingsChange(); }
-hub.addEventListener("message", e => {
-  if (e.data && e.data.type === "saved") onSavedChange();
-  if (e.data && e.data.type === "settings") onSettingsChange();
+function setSetting(key, value) { const s = settings(); s[key] = value; save(SETTINGS, s); changed("settings"); }
+
+// The search box in the top bar filters the song list on the page, in the
+// browser. The query is kept on the page (not stored), so a list that
+// appears later starts filtered too.
+const norm = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLocaleLowerCase();
+function searchQuery() { try { return window.parent.__moodtuneSearch || ""; } catch (e) { return ""; } }
+function onSearch(fn) { hub.addEventListener("message", e => { if (e.data && e.data.type === "search") fn(e.data.q || ""); }); }
+const matches = (q, t) => !q || norm(t.title + " " + t.artist).includes(norm(q));
+
+// Asking for a name (New playlist, Rename, Your name): a small dialog drawn on
+// the page itself, so it sits above everything whichever component asks.
+function askName(o) {
+  let doc = document;
+  try { doc = window.parent.document; } catch (e) {}
+  const old = doc.getElementById("moodtune-dialog"); if (old) old.remove();
+  const wrap = doc.createElement("div"); wrap.id = "moodtune-dialog";
+  wrap.innerHTML = '<div class="mtd-shade"></div><form class="mtd-box" role="dialog" aria-modal="true" aria-labelledby="mtd-title">'
+    + '<h2 id="mtd-title"></h2><label class="mtd-label" for="mtd-input"></label><input id="mtd-input" autocomplete="off">'
+    + '<p class="mtd-hint"></p><div class="mtd-actions"><button type="button" class="mtd-cancel">Cancel</button>'
+    + '<button type="submit" class="mtd-ok"></button></div></form>';
+  const q = s => wrap.querySelector(s), input = q("#mtd-input"), back = doc.activeElement;
+  q("#mtd-title").textContent = o.title; q(".mtd-label").textContent = o.label || "Name";
+  q(".mtd-hint").textContent = o.hint || ""; q(".mtd-ok").textContent = o.ok || "Save";
+  input.value = o.value || ""; input.maxLength = o.max || 60;
+  const close = () => { wrap.remove(); try { if (back && back.focus) back.focus(); } catch (e) {} };
+  q("form").addEventListener("submit", e => { e.preventDefault(); const v = input.value.trim(); if (!v && !o.allowEmpty) { input.focus(); return; } close(); o.onOk(v); });
+  q(".mtd-cancel").addEventListener("click", close); q(".mtd-shade").addEventListener("click", close);
+  wrap.addEventListener("keydown", e => {
+    e.stopPropagation();
+    if (e.key === "Escape") { e.preventDefault(); close(); }
+    if (e.key === "Tab") {
+      const items = [input, q(".mtd-cancel"), q(".mtd-ok")], k = items.indexOf(doc.activeElement);
+      e.preventDefault(); items[(k + (e.shiftKey ? items.length - 1 : 1)) % items.length].focus();
+    }
+  });
+  doc.body.appendChild(wrap); input.focus(); input.select();
+}
+"""
+
+# The "..." menu on a song, shared by the song lists (Home, Explore and
+# Library). Each list says what Play next / Add to queue do, and may add a
+# "Remove from ..." item. The page needs an empty <div id="menu" role="menu" hidden>.
+MENU_CSS = """
+  #menu { position:absolute; z-index:5; min-width:230px; max-width:300px; background:#fff; border:1px solid var(--line); border-radius:14px; padding:6px;
+          box-shadow:0 14px 40px rgba(45,42,82,.2); }
+  #menu[hidden] { display:none; }
+  #menu .mi { display:block; width:100%; text-align:left; border:none; background:none; font:inherit; font-size:14px; color:var(--ink);
+              padding:9px 12px; border-radius:9px; cursor:pointer; text-decoration:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #menu .mi:hover, #menu .mi:focus { background:var(--lav-soft); outline:none; }
+  #menu .mi.in { color:var(--purple); font-weight:600; }
+  #menu .mhead { font-size:11.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-weight:600; padding:8px 12px 4px; }
+  #menu hr { border:none; border-top:1px solid var(--line); margin:5px 4px; }
+"""
+MENU_JS = r"""
+let menuState = null;
+function menuItem(text, run, opts) {
+  opts = opts || {};
+  const b = el(opts.href ? "a" : "button", "mi" + (opts.cls ? " " + opts.cls : ""), text); b.setAttribute("role", "menuitem"); b.tabIndex = -1;
+  if (opts.href) { b.href = opts.href; b.target = "_blank"; b.rel = "noopener noreferrer"; b.classList.add("lastfm"); b.addEventListener("click", () => closeSongMenu(false)); }
+  else b.addEventListener("click", e => { e.stopPropagation(); if (opts.stay) run(); else { closeSongMenu(true); run(); } });
+  $("menu").appendChild(b);
+  return b;
+}
+function placeMenu() {
+  const menu = $("menu"), r = menuState.button.getBoundingClientRect(), h = menu.offsetHeight, room = document.documentElement.scrollHeight;
+  // below the button, or above it near the bottom of the list
+  menu.style.top = (window.scrollY + r.bottom + 6 + h > room - 4 ? window.scrollY + r.top - h - 6 : window.scrollY + r.bottom + 6) + "px";
+  menu.style.left = Math.max(8, r.right - menu.offsetWidth) + "px";
+  const first = menu.querySelector(".mi"); if (first) first.focus();
+}
+function mainMenu() {
+  const { t, actions } = menuState, label = t.link_label || linkLabel(t.lastfm);
+  $("menu").replaceChildren();
+  menuItem("Play next", () => { actions.playNext(); toast("“" + t.title + "” will play next"); });
+  menuItem("Add to queue", () => { actions.addToQueue(); toast("Added “" + t.title + "” to the queue"); });
+  menuItem(isSaved(t.lastfm) ? "Remove from Liked songs" : "Add to Liked songs", () => toggleSaved(t));
+  menuItem("Add to playlist…", playlistMenu, { stay: true, cls: "toplaylists" });
+  if (actions.remove) menuItem(actions.remove.label, actions.remove.run);
+  $("menu").appendChild(el("hr"));
+  menuItem("Open on " + label, null, { href: t.lastfm });
+  menuItem("Copy link", () => copyLink(t.lastfm));
+  placeMenu();
+}
+function playlistMenu() {
+  const { t } = menuState;
+  $("menu").replaceChildren();
+  menuItem("‹ Back", mainMenu, { stay: true });
+  $("menu").appendChild(el("div", "mhead", "Add to playlist"));
+  playlists().forEach(p => {
+    const has = p.songs.some(s => s.link === t.lastfm);
+    const b = menuItem(p.name + (has ? " ✓" : ""), () => addToPlaylist(p.id, t), { cls: has ? "in" : "" });
+    if (has) b.setAttribute("aria-label", p.name + ", already has this song");
+  });
+  menuItem("New playlist…", () => askName({ title: "New playlist", label: "Playlist name", ok: "Create", hint: "Kept in this browser only.",
+                                             onOk: name => addToPlaylist(newPlaylist(name), t) }));
+  placeMenu();
+}
+function openSongMenu(button, t, actions) {
+  closeSongMenu(false);
+  menuState = { button, t, actions };
+  $("menu").hidden = false; button.setAttribute("aria-expanded", "true");
+  mainMenu();
+}
+function closeSongMenu(refocus) {
+  if (!menuState) return;
+  $("menu").hidden = true; menuState.button.setAttribute("aria-expanded", "false");
+  if (refocus) menuState.button.focus();
+  menuState = null;
+}
+const menuOpenFor = button => !!menuState && menuState.button === button;
+$("menu").addEventListener("keydown", e => {
+  const items = [...$("menu").querySelectorAll(".mi")], k = items.indexOf(document.activeElement);
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); items[(k + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length].focus(); }
+  else if (e.key === "Escape") { e.preventDefault(); closeSongMenu(true); }
+  else if (e.key === "Tab") closeSongMenu(false);
+  e.stopPropagation();
 });
-window.addEventListener("storage", e => { if (e.key === SAVED) onSavedChange(); if (e.key === SETTINGS) onSettingsChange(); });
+document.addEventListener("click", e => { if (menuState && !$("menu").contains(e.target)) closeSongMenu(false); });
+async function copyLink(link) {
+  let ok = false;
+  try { await navigator.clipboard.writeText(link); ok = true; }
+  catch (e) {
+    try { const box = el("textarea"); box.value = link; box.style.cssText = "position:fixed;opacity:0"; document.body.appendChild(box); box.select(); ok = document.execCommand("copy"); box.remove(); } catch (e2) {}
+  }
+  toast(ok ? "Link copied" : "Couldn't copy the link");
+}
 """
 
 # The queue's two pages (song list and player bar) also get the queue and the
@@ -349,23 +539,10 @@ __FONTS__
   .icon-btn:hover, .icon-btn[aria-expanded="true"] { color:var(--purple); background:rgba(45,42,82,.07); }
   .icon-btn svg { width:19px; height:19px; } .icon-btn:focus-visible { outline:3px solid var(--lavender); outline-offset:1px; }
   .heart[aria-pressed="true"] { color:var(--terra); } .heart[aria-pressed="true"] svg { fill:currentColor; }
-  /* search */
-  .tools { display:flex; align-items:center; gap:12px; margin:16px 0 0; }
-  .search { flex:1; max-width:380px; display:flex; align-items:center; gap:8px; background:#fff; border:1px solid var(--line);
-            border-radius:999px; padding:0 14px; color:var(--muted); }
-  .search:focus-within { border-color:var(--lavender); box-shadow:0 0 0 3px rgba(185,176,232,.35); }
-  .search svg { width:16px; height:16px; flex:none; }
-  #search { flex:1; min-width:0; border:none; outline:none; background:none; font:inherit; font-size:14px; color:var(--ink); padding:9px 0; }
-  #matches { font-size:12.5px; color:var(--muted); }
+  /* the top bar's search: how many songs match */
+  #matches { font-size:13px; color:var(--muted); margin:14px 0 0; } #matches[hidden] { display:none; }
   #nomatch { color:var(--muted); font-size:14px; padding:14px 8px 6px; }
-  /* the song menu */
-  #menu { position:absolute; z-index:5; min-width:220px; background:#fff; border:1px solid var(--line); border-radius:14px; padding:6px;
-          box-shadow:0 14px 40px rgba(45,42,82,.2); }
-  #menu .mi { display:block; width:100%; text-align:left; border:none; background:none; font:inherit; font-size:14px; color:var(--ink);
-              padding:9px 12px; border-radius:9px; cursor:pointer; text-decoration:none; }
-  #menu .mi:hover, #menu .mi:focus { background:var(--lav-soft); outline:none; }
-  #menu hr { border:none; border-top:1px solid var(--line); margin:5px 4px; }
-  .row:hover { background:#f4f1fb; } .uplift #panel .row:hover { background:rgba(255,255,255,.6); }
+__MENU_CSS__  .row:hover { background:#f4f1fb; } .uplift #panel .row:hover { background:rgba(255,255,255,.6); }
   .row.playing { background:var(--lav-soft); } .uplift #panel .row.playing { background:#fff; }
   .num { text-align:center; color:var(--muted); font-size:14.5px; font-variant-numeric:tabular-nums; }
   .row.playing .num, .row.playing .title { color:var(--purple); font-weight:600; }
@@ -393,7 +570,7 @@ __FONTS__
     .uplift #panel { padding:18px 12px 10px; margin:-4px -4px 6px; }
     .row { grid-template-columns:22px 44px minmax(0,1fr) auto auto auto; gap:6px; padding:8px 2px; }
     .row .tag { display:none; } .art { width:44px; height:44px; }
-    .pill { min-width:0; padding:6px 11px; } .search { max-width:none; }
+    .pill { min-width:0; padding:6px 11px; }
   }
 </style></head>
 <body>
@@ -404,9 +581,7 @@ __FONTS__
       <button id="bigplay" title="Play" aria-label="Play"></button></div>
     <p class="note" id="note" hidden></p>
     <ul class="steps" id="steps" hidden></ul>
-    <div class="tools" id="tools"><label class="search"><span id="searchicon"></span>
-      <input id="search" type="search" placeholder="Search this list" aria-label="Search this list by title or artist" autocomplete="off"></label>
-      <span id="matches" aria-live="polite"></span></div>
+    <p id="matches" aria-live="polite" hidden></p>
     <div id="journeyrows"></div>
     <div id="journey"></div>
   </div>
@@ -416,6 +591,7 @@ __FONTS__
 <div id="menu" role="menu" hidden></div>
 <script>
 __COMMON__
+__MENU__
 const SECTIONS = { journey: "Your path, in play order", more: "Keep listening", mood: "" };
 let current = -1, paused = true;
 const send = msg => channel.postMessage(msg);
@@ -434,7 +610,12 @@ function row(t, i) {
   pill.addEventListener("click", e => { e.stopPropagation(); send(i === current ? { type: "toggle" } : { type: "play", index: i }); }); r.appendChild(pill);
   const more = el("button", "icon-btn more"); more.innerHTML = icon("more");
   more.title = "More options"; more.ariaLabel = "More options for " + t.title; more.setAttribute("aria-haspopup", "menu"); more.setAttribute("aria-expanded", "false");
-  more.addEventListener("click", e => { e.stopPropagation(); if (menuFor === i) closeMenu(true); else openMenu(i, more); });
+  more.addEventListener("click", e => {
+    e.stopPropagation();
+    if (menuOpenFor(more)) return closeSongMenu(true);
+    openSongMenu(more, t, { playNext: () => send({ type: "insert", index: i, where: "next" }),
+                            addToQueue: () => send({ type: "insert", index: i, where: "queue" }) });
+  });
   more.addEventListener("keydown", e => e.stopPropagation()); r.appendChild(more);
   r.addEventListener("click", () => send({ type: "play", index: i }));
   r.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); send(i === current ? { type: "toggle" } : { type: "play", index: i }); } });
@@ -447,7 +628,7 @@ function build() {
   $("kicker").textContent = uplift ? "Your path" : "Your songs";
   $("title").textContent = DATA.title; $("msg").textContent = DATA.message || ""; $("qsub").textContent = DATA.subtitle;
   if (DATA.note) { $("note").textContent = DATA.note; $("note").hidden = false; }
-  if (!tracks.length) { $("rows").appendChild(el("div", "empty", "No playable songs were found for this mood.")); $("bigplay").hidden = true; $("tools").hidden = true; return; }
+  if (!tracks.length) { $("rows").appendChild(el("div", "empty", "No playable songs were found for this mood.")); $("bigplay").hidden = true; return; }
   if (uplift && DATA.journey) {
     const steps = [DATA.journey.start].concat(DATA.journey.targets);
     steps.forEach((s, k) => { if (k) { const a = el("li", "arrow", "→"); a.setAttribute("aria-hidden", "true"); $("steps").appendChild(a); } $("steps").appendChild(el("li", null, s)); });
@@ -494,83 +675,26 @@ function buildJourney() {
   $("journey").appendChild(box);
 }
 
-// The "..." menu. Play next and Add to queue insert the song after the one
-// playing (the player bar keeps the list's order and Uplift's path as they are).
-let menuFor = -1, menuButton = null;
-function openMenu(i, button) {
-  closeMenu(false);
-  const t = tracks[i], menu = $("menu"), label = t.link_label || "Last.fm";
-  menu.replaceChildren();
-  const item = (text, action, href) => {
-    const b = el(href ? "a" : "button", "mi", text); b.setAttribute("role", "menuitem"); b.tabIndex = -1;
-    if (href) { b.href = href; b.target = "_blank"; b.rel = "noopener noreferrer"; b.classList.add("lastfm"); b.addEventListener("click", () => closeMenu(false)); }
-    else b.addEventListener("click", () => { closeMenu(true); action(); });
-    menu.appendChild(b);
-  };
-  item("Play next", () => { send({ type: "insert", index: i, where: "next" }); toast("“" + t.title + "” will play next"); });
-  item("Add to queue", () => { send({ type: "insert", index: i, where: "queue" }); toast("Added “" + t.title + "” to the queue"); });
-  item(isSaved(t.lastfm) ? "Remove from My playlist" : "Add to My playlist", () => toggleSaved(t));
-  menu.appendChild(el("hr"));
-  item("Open on " + label, null, t.lastfm);
-  item("Copy link", () => copyLink(t.lastfm));
-  const roomBelow = document.body.scrollHeight;
-  menu.hidden = false;
-  const r = button.getBoundingClientRect(), h = menu.offsetHeight;
-  // open below the button, or above it near the bottom of the card
-  menu.style.top = (r.bottom + 6 + h > roomBelow - 4 ? r.top - h - 6 : r.bottom + 6) + "px";
-  menu.style.left = Math.max(8, r.right - menu.offsetWidth) + "px";
-  menuFor = i; menuButton = button; button.setAttribute("aria-expanded", "true");
-  menu.querySelector(".mi").focus();
-}
-function closeMenu(refocus) {
-  if (menuFor < 0) return;
-  $("menu").hidden = true; menuButton.setAttribute("aria-expanded", "false");
-  if (refocus) menuButton.focus();
-  menuFor = -1; menuButton = null;
-}
-$("menu").addEventListener("keydown", e => {
-  const items = [...$("menu").querySelectorAll(".mi")], k = items.indexOf(document.activeElement);
-  if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); items[(k + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length].focus(); }
-  else if (e.key === "Escape") { e.preventDefault(); closeMenu(true); }
-  else if (e.key === "Tab") closeMenu(false);
-  e.stopPropagation();
-});
-document.addEventListener("click", e => { if (menuFor >= 0 && !$("menu").contains(e.target)) closeMenu(false); });
-async function copyLink(link) {
-  let ok = false;
-  try { await navigator.clipboard.writeText(link); ok = true; }
-  catch (e) {
-    try { const box = el("textarea"); box.value = link; box.style.cssText = "position:fixed;opacity:0"; document.body.appendChild(box); box.select(); ok = document.execCommand("copy"); box.remove(); } catch (e2) {}
-  }
-  toast(ok ? "Link copied" : "Couldn't copy the link");
-}
-
-// Search: filters the list by title or artist, as you type (nothing is sent anywhere).
-const norm = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLocaleLowerCase();
-function filter() {
-  const q = norm($("search").value.trim());
+// Search (the top bar's box): filters the list by title or artist, as you type.
+function filter(q) {
   let shown = 0;
-  document.querySelectorAll(".row").forEach(r => {
-    const t = tracks[+r.dataset.index], hit = !q || norm(t.title + " " + t.artist).includes(q);
-    r.hidden = !hit; if (hit) shown++;
-  });
+  document.querySelectorAll(".row").forEach(r => { const hit = matches(q, tracks[+r.dataset.index]); r.hidden = !hit; if (hit) shown++; });
   document.querySelectorAll(".section").forEach(s => { s.hidden = !!q && !document.querySelector(`.row[data-section="${s.dataset.section}"]:not([hidden])`); });
-  $("matches").textContent = q ? shown + " of " + tracks.length : "";
+  $("matches").hidden = !q; $("matches").textContent = q ? plural(shown, "song", "songs") + " of " + tracks.length + " match “" + q + "”" : "";
   $("nomatch").hidden = !q || shown > 0;
-  closeMenu(false);
+  closeSongMenu(false);
 }
-$("search").addEventListener("input", filter);
-$("searchicon").outerHTML = icon("search");
+onSearch(filter);
 
-// Hearts: filled for songs in My playlist (kept in step with the other components).
+// Hearts: filled for Liked songs (kept in step with the other components).
 function refreshHearts() {
   document.querySelectorAll(".heart").forEach(h => {
     const t = tracks[+h.dataset.index], on = isSaved(t.lastfm);
-    h.setAttribute("aria-pressed", on); h.title = on ? "Remove from My playlist" : "Add to My playlist";
-    h.ariaLabel = (on ? "Remove " : "Add ") + t.title + (on ? " from My playlist" : " to My playlist");
+    h.setAttribute("aria-pressed", on); h.title = on ? "Remove from Liked songs" : "Add to Liked songs";
+    h.ariaLabel = (on ? "Remove " : "Add ") + t.title + (on ? " from Liked songs" : " to Liked songs");
   });
 }
-onSavedChange = refreshHearts;
+on("saved", refreshHearts);
 
 function refresh() {
   const playing = current >= 0 && !paused;
@@ -593,12 +717,12 @@ channel.onmessage = e => { if (e.data.type === "state") { current = e.data.curre
 $("bigplay").addEventListener("click", () => send({ type: "toggle" }));
 // Shortcut keys pressed in this card go to the player bar.
 document.addEventListener("keydown", e => { const key = shortcut(e); if (!key) return; e.preventDefault(); if (key !== "held") send({ type: "key", key }); });
-build(); refresh(); refreshHearts(); fit();
+build(); refresh(); refreshHearts(); if (searchQuery()) filter(searchQuery()); fit();
 send({ type: "hello" });
 window.playlist = { state: () => ({ current, paused }) };
 </script>
 </body></html>
-""".replace("__COMMON__", COMMON_JS)
+""".replace("__COMMON__", COMMON_JS).replace("__MENU__", MENU_JS).replace("__MENU_CSS__", MENU_CSS)
 
 BAR_HTML = r"""<!DOCTYPE html>
 <html><head><meta charset="utf-8">
@@ -727,7 +851,12 @@ function refreshVolume() {
 
 const now = () => (pos >= 0 ? order[pos] : null);
 function lastPathPos() { let p = -1; order.forEach((e, k) => { if (!e.added && e.base < pathLen) p = k; }); return p; }
-function announce() { const c = now(); channel.postMessage({ type: "state", current: c ? c.base : -1, paused: audio.paused }); }
+// What is playing: to the Home list (by its place in the list) and to every other list on the page (by its link).
+function announce() {
+  const c = now();
+  channel.postMessage({ type: "state", current: c ? c.base : -1, paused: audio.paused });
+  hub.postMessage({ type: "now", link: c ? c.t.lastfm : "", paused: audio.paused });
+}
 
 function refresh() {
   const c = now(), playing = c && !audio.paused;
@@ -758,6 +887,7 @@ function playAt(p) {
   if (pos > lastPathPos()) pathDone = true;
   audio.src = order[pos].t.preview;
   audio.play().catch(() => {});
+  addRecent(order[pos].t);
   refresh();
 }
 function playBase(i) { const p = order.findIndex(e => !e.added && e.base === i); if (p >= 0) playAt(p); }
@@ -797,10 +927,9 @@ function cycleRepeat() { repeat = { off: "all", all: "one", one: "off" }[repeat]
 function insert(t, base, where) {
   let p = pos + 1;
   if (where === "queue") while (p < order.length && order[p].added) p++;
-  order.splice(p, 0, { t, base, added: true });
-  refresh();
-  return p;
+  return insertAt(p, t, base);
 }
+function insertAt(p, t, base) { order.splice(p, 0, { t, base, added: true }); refresh(); return p; }
 function removeAt(p) { if (p > pos && order[p] && order[p].added) { order.splice(p, 1); refresh(); } }
 
 // The queue panel: while it is open the iframe itself is pinned to the whole
@@ -845,21 +974,29 @@ function renderQueue() {
   list.scrollTop = keep;
 }
 
-// The heart next to the song playing (and the L key).
+// The heart next to the song playing (and the L key): Liked songs.
 function refreshLike() {
   const c = now(), on = !!c && isSaved(c.t.lastfm);
   $("like").hidden = !c; $("like").innerHTML = icon("heart"); $("like").setAttribute("aria-pressed", on);
-  $("like").title = $("like").ariaLabel = on ? "Remove from My playlist (L)" : "Add to My playlist (L)";
+  $("like").title = $("like").ariaLabel = on ? "Remove from Liked songs (L)" : "Add to Liked songs (L)";
 }
 function like() { const c = now(); if (c) toggleSaved(c.t); }
-onSavedChange = refreshLike;
-// Songs played from My playlist go in after the current song, like "Play
-// next"; the first one starts straight away.
+on("saved", refreshLike);
+// Songs played from Explore or the Library go in after the current song,
+// like "Play next"; the first one starts straight away.
+const baseOf = s => tracks.findIndex(t => t.lastfm === s.link);
 function playSongs(songs) {
-  if (!songs || !songs.length) return;
+  songs = (songs || []).filter(validSong);
+  if (!songs.length) return;
   const p = pos + 1;
-  songs.forEach((s, k) => order.splice(p + k, 0, { t: songTrack(s), base: tracks.findIndex(t => t.lastfm === s.link), added: true }));
+  songs.forEach((s, k) => order.splice(p + k, 0, { t: songTrack(s), base: baseOf(s), added: true }));
   playAt(p);
+}
+// "Play next" / "Add to queue" from Explore or the Library.
+function insertSongs(songs, where) {
+  songs = (songs || []).filter(validSong);
+  let p = -1;
+  songs.forEach((s, k) => { p = where === "next" && k ? insertAt(p + 1, songTrack(s), baseOf(s)) : insert(songTrack(s), baseOf(s), where); });
 }
 
 function act(key) {
@@ -890,11 +1027,11 @@ audio.addEventListener("ended", () => {
   next(true);
 });
 // A new default repeat (Settings) also applies straight away.
-onSettingsChange = () => {
+on("settings", () => {
   const d = settings().repeat;
   if (d !== repeatDefault) { repeatDefault = d; repeat = d; }
   refresh();
-};
+});
 audio.addEventListener("error", () => { if (pos >= 0 && ++failures < order.length) next(true); });
 audio.addEventListener("playing", () => { failures = 0; refresh(); });
 audio.addEventListener("pause", refresh);
@@ -922,10 +1059,13 @@ $("repeat").addEventListener("click", cycleRepeat);
 $("mute").addEventListener("click", () => setMuted(!audio.muted));
 $("queuebtn").addEventListener("click", () => openQueue(!queueOpen));
 $("like").addEventListener("click", like);
-// From the top bar's component: keys pressed there, and "play from My playlist".
+// From the other components: keys pressed there, songs to play or queue, and "what is playing?".
 hub.addEventListener("message", e => {
   const m = e.data || {};
-  if (m.type === "key") act(m.key); else if (m.type === "playSaved") playSongs(m.songs);
+  if (m.type === "key") act(m.key);
+  else if (m.type === "playSongs" || m.type === "playSaved") playSongs(m.songs);
+  else if (m.type === "insertSongs") insertSongs(m.songs, m.where);
+  else if (m.type === "hello") announce();
 });
 $("qclose").addEventListener("click", () => openQueue(false));
 $("shade").addEventListener("click", () => openQueue(false));
@@ -937,7 +1077,7 @@ channel.onmessage = e => {
 };
 refreshVolume(); refresh();
 window.player = {
-  audio, play: playBase, playAt, toggle, next: () => next(false), prev, setShuffle, cycleRepeat, setMuted, openQueue, insert, removeAt, playSongs,
+  audio, play: playBase, playAt, toggle, next: () => next(false), prev, setShuffle, cycleRepeat, setMuted, openQueue, insert, removeAt, playSongs, insertSongs,
   state: () => ({ current: now() ? now().base : -1, pos, paused: audio.paused, time: audio.currentTime, src: audio.src, shuffle, repeat,
                   muted: audio.muted, pathDone, pathLen, queueOpen,
                   order: order.map(e => ({ base: e.base, added: e.added, title: e.t.title, link: e.t.lastfm })) }),
@@ -945,308 +1085,3 @@ window.player = {
 </script>
 </body></html>
 """.replace("__COMMON__", COMMON_JS)
-
-
-def render_actions():
-    """The top bar's buttons (My playlist, Settings) and the drawer they open, as one HTML page.
-
-    It holds no queue data, so Streamlit never reloads it on a rerun. While
-    the drawer is open the iframe is pinned over the whole window. Saved songs
-    and settings are read from and written to the browser only (see BASE_JS);
-    playing a saved song sends it to the player bar. Settings never rerun the
-    app: autoplay and repeat are read by the player bar, "Larger text" puts a
-    class on the page, and "Show all 7 emotions" opens the mood card's
-    expander in the browser. The About view says what the app does, where
-    its data comes from, its limits and what it keeps.
-    """
-    return ACTIONS_HTML.replace("__FONTS__", FONT_CSS)
-
-
-ACTIONS_HTML = r"""<!DOCTYPE html>
-<html><head><meta charset="utf-8">
-<style>
-__FONTS__
-  * { box-sizing:border-box; }
-  html, body { margin:0; height:100%; overflow:hidden; background:transparent; color:var(--ink); font-family:var(--sans); }
-  /* room around the buttons for their focus rings */
-  #buttons { display:flex; align-items:center; justify-content:flex-end; gap:8px; height:50px; padding:5px 6px; }
-  .top { height:40px; border:1px solid var(--line); background:#fff; border-radius:999px; display:flex; align-items:center; gap:8px;
-         padding:0 14px; font:inherit; font-size:14px; color:var(--ink); cursor:pointer; white-space:nowrap; }
-  .top:hover { border-color:var(--lavender); background:#fbfaff; }
-  .top svg { width:18px; height:18px; flex:none; }
-  .badge { min-width:20px; height:20px; border-radius:999px; background:var(--terra); color:#fff; font-size:11.5px; font-weight:700;
-           display:inline-flex; align-items:center; justify-content:center; padding:0 6px; }
-  .badge[hidden] { display:none; }
-  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline:3px solid var(--lavender); outline-offset:2px; }
-  svg.s { fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
-  /* narrow screens: icons only */
-  @media (max-width: 170px) { .label { display:none; } .top { padding:0 11px; gap:6px; } }
-  /* the drawer */
-  #overlay { position:fixed; inset:0; }
-  #overlay[hidden] { display:none; }
-  #backdrop { position:absolute; inset:0; background:rgba(43,40,64,.38); }
-  #drawer { position:absolute; top:0; right:0; bottom:0; width:min(440px, 100%); background:var(--cream); display:flex; flex-direction:column;
-            box-shadow:-14px 0 44px rgba(45,42,82,.22); animation:slide .22s ease; }
-  @keyframes slide { from { transform:translateX(28px); opacity:0; } }
-  @media (prefers-reduced-motion: reduce) { #drawer { animation:none; } }
-  header { display:flex; align-items:center; gap:6px; padding:22px 14px 6px 24px; }
-  h2 { font-family:var(--serif); font-weight:600; font-size:27px; margin:0; flex:1; letter-spacing:-.01em; }
-  .icon-btn { width:38px; height:38px; border:none; background:none; border-radius:999px; color:var(--muted); cursor:pointer;
-              display:flex; align-items:center; justify-content:center; padding:0; flex:none; }
-  .icon-btn:hover { color:var(--purple); background:rgba(45,42,82,.07); } .icon-btn svg { width:19px; height:19px; }
-  .icon-btn[disabled] { opacity:.35; cursor:not-allowed; } .icon-btn[disabled]:hover { background:none; color:var(--muted); }
-  .view { overflow:auto; flex:1; padding:6px 24px 28px; }
-  .view[hidden] { display:none; }
-  .hint { color:var(--muted); font-size:13px; line-height:1.5; margin:0 0 14px; }
-  .row-actions { display:flex; gap:8px; align-items:center; margin:0 0 12px; flex-wrap:wrap; }
-  .btn { border:1px solid var(--line); background:#fff; color:var(--ink); border-radius:999px; font:inherit; font-size:13.5px; font-weight:600;
-         padding:8px 16px; cursor:pointer; display:inline-flex; align-items:center; gap:7px; }
-  .btn:hover { border-color:var(--lavender); }
-  .btn.primary { background:var(--purple); color:#fff; border-color:var(--purple); } .btn.primary:hover { background:#433e78; }
-  .btn.danger { color:#9b2f2f; } .btn.danger.primary { background:#9b2f2f; border-color:#9b2f2f; color:#fff; }
-  .btn[disabled] { opacity:.45; cursor:not-allowed; }
-  .btn svg { width:14px; height:14px; }
-  .confirm { background:#fff; border:1px solid var(--line); border-radius:14px; padding:12px 14px; margin:0 0 12px; font-size:14px; }
-  .confirm[hidden] { display:none; }
-  .confirm p { margin:0 0 10px; }
-  .song { display:grid; grid-template-columns:44px minmax(0,1fr) auto auto; align-items:center; gap:10px; padding:7px 6px; border-radius:12px; }
-  .song:hover { background:rgba(255,255,255,.7); }
-  .art { width:44px; height:44px; border-radius:9px; background:#ebe6dc; object-fit:cover; display:block; }
-  .noart { display:flex; align-items:center; justify-content:center; color:#8f8aa3; font-size:18px; }
-  .meta { min-width:0; } .title { font-size:14.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .artist { font-size:12.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
-  .lang { font-size:11px; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:1px 7px; margin-left:6px; background:#fff; }
-  .empty { color:var(--muted); font-size:14px; line-height:1.55; background:#fff; border:1px dashed var(--line); border-radius:14px; padding:18px; text-align:center; }
-  .note { font-size:13px; color:var(--ink); background:var(--lav-soft); border-radius:12px; padding:10px 14px; margin:0 0 12px; }
-  .note[hidden], .empty[hidden], .row-actions[hidden] { display:none; }
-  #opensettings { width:40px; padding:0; justify-content:center; }
-  #back { margin-left:-10px; } #back[hidden] { display:none; }
-  /* settings */
-  .setting { display:flex; align-items:center; justify-content:space-between; gap:16px; background:#fff; border:1px solid var(--line);
-             border-radius:14px; padding:14px 16px; margin:0 0 10px; cursor:pointer; }
-  .setting b { display:block; font-size:14.5px; font-weight:600; } .setting small { display:block; color:var(--muted); font-size:12.5px; line-height:1.45; margin-top:3px; }
-  input[type="checkbox"][role="switch"] { appearance:none; flex:none; width:44px; height:26px; border-radius:999px; background:#d9d4e6; position:relative;
-         cursor:pointer; margin:0; transition:background .15s; }
-  input[type="checkbox"][role="switch"]::after { content:""; position:absolute; top:3px; left:3px; width:20px; height:20px; border-radius:50%; background:#fff;
-         box-shadow:0 1px 3px rgba(0,0,0,.2); transition:left .15s; }
-  input[type="checkbox"][role="switch"]:checked { background:var(--purple); }
-  input[type="checkbox"][role="switch"]:checked::after { left:21px; }
-  fieldset.setting { display:block; cursor:default; } fieldset.setting legend { float:left; width:100%; padding:0; margin:0 0 10px; }
-  .seg { display:flex; background:var(--lav-soft); border-radius:999px; padding:3px; clear:both; }
-  .seg label { flex:1; text-align:center; font-size:13.5px; padding:7px 0; border-radius:999px; cursor:pointer; color:var(--muted); font-weight:600; }
-  .seg input { position:absolute; opacity:0; pointer-events:none; }
-  .seg label:has(input:checked) { background:#fff; color:var(--purple); box-shadow:0 1px 3px rgba(45,42,82,.15); }
-  .seg label:has(input:focus-visible) { outline:3px solid var(--lavender); }
-  .group { font-size:11.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-weight:600; margin:18px 2px 8px; }
-  .link-row { display:flex; width:100%; align-items:center; justify-content:space-between; background:#fff; border:1px solid var(--line); border-radius:14px;
-              padding:14px 16px; font:inherit; font-size:14.5px; font-weight:600; color:var(--ink); cursor:pointer; text-align:left; margin:0 0 10px; }
-  .link-row:hover { border-color:var(--lavender); }
-  .link-row[disabled] { cursor:default; color:var(--muted); } .link-row[disabled]:hover { border-color:var(--line); }
-  /* about */
-  #v-about h3 { font-family:var(--serif); font-size:18px; font-weight:600; margin:20px 0 6px; }
-  #v-about p, #v-about li { font-size:14px; line-height:1.6; margin:0 0 8px; }
-  #v-about ul { padding-left:20px; margin:0 0 8px; }
-  #v-about a { color:var(--purple); }
-</style></head>
-<body>
-<div id="buttons">
-  <button class="top" id="openlist" aria-haspopup="dialog" title="My playlist"><span id="listicon"></span><span class="label">My playlist</span><span class="badge" id="badge" hidden>0</span></button>
-  <button class="top" id="opensettings" aria-haspopup="dialog" title="Settings" aria-label="Settings"></button>
-</div>
-<div id="overlay" hidden>
-  <div id="backdrop"></div>
-  <section id="drawer" role="dialog" aria-modal="true" aria-labelledby="dtitle">
-    <header><button class="icon-btn" id="back" title="Back to Settings" aria-label="Back to Settings" hidden></button>
-      <h2 id="dtitle">My playlist</h2><button class="icon-btn" id="dclose" title="Close" aria-label="Close"></button></header>
-    <div class="view" id="v-list" data-title="My playlist">
-      <p class="hint">Songs you save with ♡ stay in this browser, on this computer only. They are never sent anywhere.</p>
-      <p class="note" id="noplayer" hidden>Songs can play once your mood has been read and the player is on the page.</p>
-      <div class="row-actions" id="listactions"><button class="btn primary" id="playall"></button><button class="btn danger" id="clear">Clear</button></div>
-      <div class="confirm" id="confirmclear" hidden><p id="confirmtext"></p>
-        <button class="btn danger primary" id="clearyes">Clear all</button> <button class="btn" id="clearno">Cancel</button></div>
-      <div id="songs"></div>
-      <p class="empty" id="empty" hidden>No saved songs yet. Tap ♡ next to a song, or press L while it plays, to keep it here.</p>
-    </div>
-    <div class="view" id="v-settings" data-title="Settings" hidden>
-      <p class="hint">Changes apply straight away, without stopping the music. They are kept in this browser only.</p>
-      <div class="group">Playback</div>
-      <label class="setting"><span><b>Autoplay next song</b><small>When a song ends, the next one starts.</small></span>
-        <input type="checkbox" role="switch" id="s-autoplay"></label>
-      <fieldset class="setting"><legend><b>Repeat</b><small>Where the player starts. The repeat button in the player changes it for now.</small></legend>
-        <div class="seg" role="radiogroup" aria-label="Default repeat">
-          <label><input type="radio" name="repeat" value="off">Off</label><label><input type="radio" name="repeat" value="all">All</label><label><input type="radio" name="repeat" value="one">This song</label></div></fieldset>
-      <div class="group">Display</div>
-      <label class="setting"><span><b>Show all 7 emotions</b><small>Open "See all 7 emotions" on the mood card by default.</small></span>
-        <input type="checkbox" role="switch" id="s-emotions"></label>
-      <label class="setting"><span><b>Larger text</b><small>Makes the page's text and cards bigger.</small></span>
-        <input type="checkbox" role="switch" id="s-large"></label>
-      <div class="group">Your data</div>
-      <button class="link-row" id="s-clear"><span>Clear my saved songs <small id="s-count" style="display:block;font-weight:400;color:var(--muted);font-size:12.5px;margin-top:3px"></small></span><span aria-hidden="true">›</span></button>
-      <div class="confirm" id="confirmclear2" hidden><p id="confirmtext2"></p>
-        <button class="btn danger primary" id="clearyes2">Clear all</button> <button class="btn" id="clearno2">Cancel</button></div>
-      <button class="link-row" id="openabout"><span>About MOOD TUNE</span><span aria-hidden="true">›</span></button>
-    </div>
-    <div class="view" id="v-about" data-title="About MOOD TUNE" hidden>
-      <p>MOOD TUNE reads your expression from the webcam (or a photo) and, if you like, a sentence about your day, and combines the two into a mood reading.
-        Then it suggests music: songs that match how you feel ("Meet me here"), or a five-song path from a low mood towards a lighter one ("Lift my mood").</p>
-      <h3>Where the songs come from</h3>
-      <ul>
-        <li>English songs: the Muse dataset (<code>muse_v3.csv</code>), with listeners' mood tags. Links go to Last.fm.</li>
-        <li>Hindi, Tamil, Telugu, Malayalam and Korean songs: "Spotify Tracks Dataset (Updated Every Week)" by gauthamvijayaraj on Kaggle, Apache 2.0 licence. Links go to Spotify.</li>
-        <li>Previews and artwork: 30-second previews from the iTunes Search API, played from Apple's servers.</li>
-        <li>Fonts: Fraunces and Inter, SIL Open Font License.</li>
-      </ul>
-      <h3>Limits</h3>
-      <ul>
-        <li>The face model reads 63.2% of faces correctly on the FER2013 test set (3,589 faces). Fear and sad are the emotions it gets wrong most often.</li>
-        <li>Only 30-second previews play, not whole songs.</li>
-        <li>Each song's language is as labelled in its dataset; MOOD TUNE does not check it.</li>
-      </ul>
-      <h3>Privacy</h3>
-      <ul>
-        <li>Your webcam picture (or photo) is analysed in memory and never saved.</li>
-        <li>Your words are kept only for this visit.</li>
-        <li>Saved songs and these settings stay in this browser, on this computer.</li>
-      </ul>
-    </div>
-  </section>
-</div>
-<script>
-__BASE__
-let opener = null;
-$("listicon").outerHTML = icon("heart"); $("dclose").innerHTML = icon("close");
-$("opensettings").innerHTML = icon("gear"); $("back").innerHTML = icon("back");
-$("playall").innerHTML = icon("play") + "Play all";
-const playerOnPage = () => { try { return !!window.parent.document.querySelector(".st-key-playerbar iframe"); } catch (e) { return false; } };
-
-// Opening: the iframe is pinned over the whole window, and the buttons are
-// drawn where they were, under the dimmed backdrop.
-function openDrawer(view, button) {
-  const f = window.frameElement;
-  if (f) {
-    const r = f.getBoundingClientRect();
-    $("buttons").style.cssText = `position:fixed; left:${r.left}px; top:${r.top}px; width:${r.width}px;`;
-    Object.assign(f.style, { position: "fixed", left: "0", top: "0", width: "100vw", height: "100vh", zIndex: "1002" });
-  }
-  $("overlay").hidden = false; opener = button;
-  showView(view);
-}
-function showView(view) {
-  document.querySelectorAll(".view").forEach(v => { v.hidden = v.id !== view; });
-  $("dtitle").textContent = $(view).dataset.title;
-  $("back").hidden = view !== "v-about";
-  $("confirmclear").hidden = $("confirmclear2").hidden = true;
-  $(view).scrollTop = 0;
-  render(); renderSettings();
-  (view === "v-about" ? $("back") : $("dclose")).focus();
-}
-function closeDrawer() {
-  if ($("overlay").hidden) return;
-  $("overlay").hidden = true; $("confirmclear").hidden = true;
-  const f = window.frameElement;
-  if (f) Object.assign(f.style, { position: "", left: "", top: "", width: "", height: "", zIndex: "" });
-  $("buttons").style.cssText = "";
-  if (opener) opener.focus();
-}
-
-function songRow(s, k) {
-  const r = el("div", "song");
-  r.appendChild(artNode(s, "art"));
-  const meta = el("div", "meta"), title = el("div", "title", s.title);
-  if (s.language) title.appendChild(el("span", "lang", s.language));
-  meta.appendChild(title); meta.appendChild(el("div", "artist", s.artist)); r.appendChild(meta);
-  const play = el("button", "icon-btn play"); play.innerHTML = icon("play"); play.title = "Play"; play.ariaLabel = "Play " + s.title;
-  play.disabled = !playerOnPage();
-  play.addEventListener("click", () => { hub.postMessage({ type: "playSaved", songs: [s] }); closeDrawer(); });
-  const remove = el("button", "icon-btn remove"); remove.innerHTML = icon("close"); remove.title = "Remove"; remove.ariaLabel = "Remove " + s.title + " from My playlist";
-  remove.addEventListener("click", () => { unsaveSong(s.link); toast("Removed “" + s.title + "” from My playlist"); });
-  r.appendChild(play); r.appendChild(remove);
-  return r;
-}
-function render() {
-  const songs = savedSongs(), n = songs.length;
-  $("badge").textContent = n; $("badge").hidden = !n;
-  $("openlist").ariaLabel = "My playlist, " + n + (n === 1 ? " song" : " songs");
-  if ($("overlay").hidden) return;
-  const list = $("songs"); list.replaceChildren(); songs.forEach((s, k) => list.appendChild(songRow(s, k)));
-  $("empty").hidden = n > 0; $("listactions").hidden = !n;
-  $("playall").disabled = !playerOnPage(); $("noplayer").hidden = !n || playerOnPage();
-  if (!n) $("confirmclear").hidden = true;
-}
-onSavedChange = () => { render(); renderSettings(); };
-
-// Settings. "Larger text" and "Show all 7 emotions" act on the page itself
-// (a class on the page, and opening the mood card's expander), so they never
-// rerun the app; autoplay and repeat are read by the player bar.
-function renderSettings() {
-  const s = settings(), n = savedSongs().length;
-  $("s-autoplay").checked = s.autoplay; $("s-emotions").checked = s.emotions; $("s-large").checked = s.large;
-  document.querySelectorAll('input[name="repeat"]').forEach(r => { r.checked = r.value === s.repeat; });
-  $("s-count").textContent = n ? n + (n === 1 ? " song" : " songs") + " saved in this browser" : "Nothing saved";
-  $("s-clear").disabled = !n;
-  if (!n) $("confirmclear2").hidden = true;
-}
-function applyLarge() { try { window.parent.document.documentElement.classList.toggle("moodtune-large", settings().large); } catch (e) {} }
-function applyEmotions(now) {
-  if (!settings().emotions) return;
-  try {
-    // each mood card's expander is opened once, the first time it appears (or now, when the setting is turned on)
-    window.parent.document.querySelectorAll(".st-key-moodcard details").forEach(d => {
-      if (d.dataset.moodtuneSeen && !now) return;
-      d.dataset.moodtuneSeen = "1";
-      if (!d.open) { const s = d.querySelector("summary"); if (s) s.click(); }
-    });
-  } catch (e) {}
-}
-try { new MutationObserver(() => applyEmotions(false)).observe(window.parent.document.body, { childList: true, subtree: true }); } catch (e) {}
-onSettingsChange = () => { renderSettings(); applyLarge(); };
-$("s-autoplay").addEventListener("change", e => setSetting("autoplay", e.target.checked));
-$("s-emotions").addEventListener("change", e => { setSetting("emotions", e.target.checked); applyEmotions(true); });
-$("s-large").addEventListener("change", e => setSetting("large", e.target.checked));
-document.querySelectorAll('input[name="repeat"]').forEach(r => r.addEventListener("change", () => setSetting("repeat", r.value)));
-$("s-clear").addEventListener("click", () => {
-  const n = savedSongs().length; if (!n) return;
-  $("confirmtext2").textContent = "Remove all " + n + (n === 1 ? " saved song" : " saved songs") + " from this browser?";
-  $("confirmclear2").hidden = false; $("clearno2").focus();
-});
-$("clearno2").addEventListener("click", () => { $("confirmclear2").hidden = true; $("s-clear").focus(); });
-$("clearyes2").addEventListener("click", () => { setSaved([]); $("confirmclear2").hidden = true; toast("Your saved songs are cleared"); $("dclose").focus(); });
-$("openabout").addEventListener("click", () => showView("v-about"));
-$("back").addEventListener("click", () => showView("v-settings"));
-$("opensettings").addEventListener("click", () => openDrawer("v-settings", $("opensettings")));
-
-$("openlist").addEventListener("click", () => openDrawer("v-list", $("openlist")));
-$("dclose").addEventListener("click", closeDrawer);
-$("backdrop").addEventListener("click", closeDrawer);
-$("playall").addEventListener("click", () => { const songs = savedSongs(); if (songs.length) { hub.postMessage({ type: "playSaved", songs }); closeDrawer(); } });
-$("clear").addEventListener("click", () => {
-  const n = savedSongs().length;
-  $("confirmtext").textContent = "Remove all " + n + (n === 1 ? " saved song" : " saved songs") + " from this browser?";
-  $("confirmclear").hidden = false; $("clearno").focus();
-});
-$("clearno").addEventListener("click", () => { $("confirmclear").hidden = true; $("clear").focus(); });
-$("clearyes").addEventListener("click", () => { setSaved([]); $("confirmclear").hidden = true; toast("My playlist is empty"); $("dclose").focus(); });
-
-// Escape closes the drawer; Tab stays inside it while it is open; shortcut
-// keys pressed here go to the player bar.
-document.addEventListener("keydown", e => {
-  if (!$("overlay").hidden) {
-    if (e.key === "Escape") { e.preventDefault(); closeDrawer(); return; }
-    if (e.key === "Tab") {
-      const items = [...$("drawer").querySelectorAll("button, a, input, select")].filter(x => !x.disabled && x.offsetParent);
-      const first = items[0], last = items[items.length - 1];
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-      return;
-    }
-  }
-  const key = shortcut(e);
-  if (!key) return;
-  e.preventDefault();
-  if (key !== "held") hub.postMessage({ type: "key", key });
-});
-render(); renderSettings(); applyLarge(); applyEmotions(false);
-window.actions = { open: openDrawer, close: closeDrawer, saved: savedSongs, settings };
-</script>
-</body></html>
-""".replace("__BASE__", BASE_JS)

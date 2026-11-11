@@ -43,7 +43,7 @@ try:
         ctx.add_init_script(WATCH); page = ctx.new_page()
         t0 = time.time() * 1000
         page.goto(f"http://localhost:{PORT}", wait_until="commit")
-        page.wait_for_selector(".app-name", timeout=120000); t_head = time.time() * 1000
+        page.wait_for_selector(".st-key-topleft iframe", timeout=120000); t_head = time.time() * 1000
         page.wait_for_selector(".listening", timeout=120000); t_listen = time.time() * 1000
         page.screenshot(path=f"{S}/cold_{RUN}_listening.png")
         page.wait_for_selector(".st-key-playerbar iframe", timeout=180000)

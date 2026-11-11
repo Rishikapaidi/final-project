@@ -3,17 +3,18 @@
 Player bar: shuffle (never the 5-song path, locked until it has finished),
 repeat off / all / one, seeking by click and drag, mute, the keyboard
 shortcuts and the queue panel. Song list: the "..." menu (Play next, Add to
-queue, Add to My playlist, Open on ..., Copy link), hearts and search. Top
-bar: My playlist (survives a reload, Clear empties it, still works when
-localStorage throws) and Settings / About. Every control is used while a song
-plays, and the music must keep playing; settings must never rerun the app.
-Also saves the screenshots of the queue panel, My playlist, the song menu,
-Settings and About.
+queue, Add to Liked songs, Add to playlist, Open on ..., Copy link), hearts,
+and the top bar's search. Liked songs and playlists: the sidebar's counts,
+the Library (play, Play all, remove), kept after a reload, cleared from
+Settings, and still working when localStorage throws. The avatar's menu:
+Settings and About. Every control is used while a song plays, and the music
+must keep playing; settings must never rerun the app. Also saves the
+screenshots of the queue panel, the Library, the song menu, Settings and About.
 """
 import os, re, sys, time
 from playwright.sync_api import sync_playwright
-from pagekit import (OUT, actions_frame, bar_frame, count_reruns, image_files, log, new_images, path_frame, reruns,
-                     start_server, stop)
+from pagekit import (OUT, actions_frame, bar_frame, count_reruns, image_files, log, named_frame, new_images, path_frame,
+                     reruns, start_server, stop)
 
 PORT = 8620
 # Text that must never appear on the page: Streamlit's "Running <function>()" and the app's function names.
@@ -38,7 +39,7 @@ def open_page(ctx):
     page = ctx.new_page()
     page.errors = []; page.on("pageerror", lambda e: page.errors.append(str(e)))
     page.goto(f"http://localhost:{PORT}")
-    page.wait_for_selector(".st-key-playerbar iframe", timeout=180000)
+    page.wait_for_selector(".st-key-path iframe", timeout=180000)
     bar, path, top = bar_frame(page), path_frame(page), actions_frame(page)
     time.sleep(1.5)
     return page, bar, path, top
@@ -47,6 +48,19 @@ def open_page(ctx):
 def to_middle(frame, locator):
     """Scroll a row to the middle of the window (the pinned player bar covers the bottom)."""
     locator.evaluate("e => e.scrollIntoView({block: 'center'})"); time.sleep(0.4)
+
+
+def go(page, name):
+    """Press a sidebar button (Home, Explore, Library) and wait for its page."""
+    page.locator(f".st-key-nav_{name} button").click()
+    page.wait_for_selector({"home": ".st-key-path iframe", "explore": ".st-key-explorelist iframe", "library": ".st-key-library iframe"}[name], timeout=30000)
+    page.wait_for_timeout(1500)
+
+
+def sidebar(page):
+    """The sidebar's collections and their counts."""
+    nav = named_frame(page, "navlists")
+    return dict(zip(nav.locator(".item b").all_inner_texts(), nav.locator(".item small").all_inner_texts()))
 
 
 before = image_files()
@@ -65,6 +79,7 @@ try:
         order = lambda: [(o["base"], o["added"]) for o in state()["order"]]
         path_order = lambda: [o["base"] for o in state()["order"] if not o["added"] and o["base"] < state()["pathLen"]]
         list_order = lambda: [o["base"] for o in state()["order"] if not o["added"]]
+        liked = lambda: top.evaluate("savedSongs().length")
         queue_id = bar.evaluate("DATA.id")
         count_reruns(page)
         s = state()
@@ -98,13 +113,13 @@ try:
         log(f"   Right -> song {r + 1}, Left -> song {l + 1} (expected 2 then 1: {(r, l) == (1, 0)})")
         page.keyboard.press("m"); m = state()["muted"]; page.keyboard.press("m")
         log(f"   M mutes {m} and unmutes {not state()['muted']}")
-        saved0 = top.evaluate("window.actions.saved().length"); page.keyboard.press("l"); time.sleep(0.4); saved1 = top.evaluate("window.actions.saved().length")
-        log(f"   L saves the song playing: {saved0} -> {saved1} | bar heart {bar.locator('#like').get_attribute('aria-pressed')}")
+        saved0 = liked(); page.keyboard.press("l"); time.sleep(0.4); saved1 = liked()
+        log(f"   L likes the song playing: {saved0} -> {saved1} | bar heart {bar.locator('#like').get_attribute('aria-pressed')} ({bar.locator('#like').get_attribute('title')!r})")
         page.keyboard.press("l"); time.sleep(0.3)
         box = page.get_by_label("How was your day?"); box.click(); before_keys = state()
         page.keyboard.type("m l "); page.keyboard.press("ArrowLeft"); time.sleep(0.4); after_keys = state()
         log(f"   typing 'm l ' + Left in the text box: box {box.input_value()!r} | muted {after_keys['muted']} | paused {after_keys['paused']} | same song {after_keys['current'] == before_keys['current']} "
-            f"| saved {top.evaluate('window.actions.saved().length')}")
+            f"| liked {liked()}")
         box.fill(""); page.locator(".greeting h1").click()
         path.locator(".row").nth(2).click(); time.sleep(1); path.locator(".row").nth(2).press("Space"); time.sleep(0.4)
         log(f"   Space on the playing row (in the song list) pauses it: {state()['paused']} (song {state()['current'] + 1})")
@@ -146,11 +161,11 @@ try:
         last = path.locator(".row").last; to_middle(path, last); last.locator(".more").click(); time.sleep(0.3)
         mb, bb = path.locator("#menu").bounding_box(), last.locator(".more").bounding_box()
         log(f"   on the last row the menu opens above the button: {mb['y'] + mb['height'] <= bb['y']}"); page.keyboard.press("Escape")
-        search = path.locator("#search"); to_middle(path, search)
+        search = named_frame(page, "topbar").locator("#q")
         word = re.sub(r"[^a-z]", "", path.evaluate("DATA.tracks[9].title").lower())[:4]
         search.click(); search.type(word); time.sleep(0.4)
         shown = path.locator(".row:not([hidden]) .title").all_inner_texts()
-        log(f"search {word!r}: {len(shown)} of {path.locator('.row').count()} shown ({path.locator('#matches').inner_text()!r}) | all match "
+        log(f"search (top bar) {word!r}: {len(shown)} of {path.locator('.row').count()} shown ({path.locator('#matches').inner_text()!r}) | all match "
             f"{all(word in (t + ' ' + a).lower() for t, a in zip(shown, path.locator('.row:not([hidden]) .artist').all_inner_texts()))} | Space typed into the box, music still playing {playing()}")
         search.fill("zzqqxx"); time.sleep(0.3); none = (path.locator(".row:not([hidden])").count(), path.locator("#nomatch").is_visible())
         search.fill(""); time.sleep(0.3)
@@ -182,33 +197,45 @@ try:
         log(f"repeat off at the end of the list: stops {s['paused']} on the last song {s['pos'] == len(s['order']) - 1}")
         while state()["repeat"] != "all": bar.locator("#repeat").click()
 
-        # --- MY PLAYLIST
-        log("== MY PLAYLIST")
+        # --- LIKED SONGS, PLAYLISTS AND THE LIBRARY
+        log("== LIKED SONGS, PLAYLISTS AND THE LIBRARY")
         bar.evaluate("window.player.playAt(0)"); time.sleep(1.5)
-        badge = lambda: top.locator("#badge").inner_text() if top.locator("#badge").is_visible() else "hidden"
-        log(f"top button: {top.locator('#openlist').get_attribute('aria-label')!r}, badge {badge()}")
+        log(f"sidebar before: {sidebar(page)}")
         for i in (1, 6):
             row = path.locator(".row").nth(i); to_middle(path, row); row.locator(".heart").click(); time.sleep(0.3)
-        row = path.locator(".row").nth(9); to_middle(path, row); row.locator(".more").click(); path.locator("#menu .mi", has_text="Add to My playlist").click(); time.sleep(0.3)
-        log(f"2 hearts + the menu: badge {badge()} | filled hearts {path.locator('.heart[aria-pressed=true]').count()} | toast {page.locator('#moodtune-toast').inner_text()!r}")
-        stored = top.evaluate("JSON.parse(localStorage.getItem('moodtune.saved'))")
-        log(f"   stored in localStorage: {len(stored)} songs, fields {sorted(stored[0])} | nothing else stored: {sorted(top.evaluate('Object.keys(localStorage)'))}")
-        top.locator("#openlist").click(); time.sleep(0.6)
-        log(f"drawer: {top.locator('#dtitle').inner_text()!r} | songs {top.locator('.song .title').all_inner_texts()} | covers the window {page.locator('.st-key-topactions iframe').bounding_box()} | playing {playing()}")
-        shot(page, "14_my_playlist")
-        top.locator(".song").nth(1).locator(".play").click(); time.sleep(1.5); s = state()
-        log(f"play saved song 2: now {bar.locator('#nowtitle').inner_text()!r} (added {s['order'][s['pos']]['added']}) | drawer closed {top.locator('#overlay').is_hidden()} | path order {path_order()}")
-        top.locator("#openlist").click(); time.sleep(0.4); top.locator("#playall").click(); time.sleep(1.5); s = state()
+        row = path.locator(".row").nth(9); to_middle(path, row); row.locator(".more").click(); path.locator("#menu .mi", has_text="Add to playlist").click(); time.sleep(0.3)
+        sub = path.locator("#menu .mi").all_inner_texts()
+        path.locator("#menu .mi", has_text="My playlist").click(); time.sleep(0.3)
+        log(f"2 hearts + Add to playlist > My playlist (submenu {sub}): sidebar {sidebar(page)} | filled hearts {path.locator('.heart[aria-pressed=true]').count()} "
+            f"| toast {page.locator('#moodtune-toast').inner_text()!r}")
+        stored = top.evaluate("({ liked: JSON.parse(localStorage.getItem('moodtune.saved')), lists: JSON.parse(localStorage.getItem('moodtune.playlists')), "
+                              "recent: JSON.parse(localStorage.getItem('moodtune.recent')), keys: Object.keys(localStorage).sort() })")
+        log(f"   stored in localStorage: liked {len(stored['liked'])} songs, fields {sorted(stored['liked'][0])} | playlists {[(p['name'], len(p['songs'])) for p in stored['lists']]}, "
+            f"song fields {sorted(stored['lists'][0]['songs'][0])} | recently played {len(stored['recent'])}, fields {sorted(stored['recent'][0])} | keys {stored['keys']}")
+        runs0, t0 = reruns(page), state()["time"]
+        named_frame(page, "navlists").locator(".item", has_text="Liked songs").click()
+        page.wait_for_selector(".st-key-library iframe", timeout=30000); lib = named_frame(page, "library"); time.sleep(1.5)
+        log(f"sidebar > Liked songs: Library open on {lib.evaluate('window.library.current()')!r} | rows {lib.locator('.row .title').all_inner_texts()} "
+            f"| same queue {bar.evaluate('DATA.id') == queue_id} | playing {playing()} ({t0:.1f}s -> {state()['time']:.1f}s)")
+        shot(page, "14_library")
+        lib.locator(".row").nth(1).locator(".pill").click(); time.sleep(1.5); s = state()
+        log(f"play liked song 2: now {bar.locator('#nowtitle').inner_text()!r} (added {s['order'][s['pos']]['added']}) | row marked playing {lib.locator('.row.playing .title').all_inner_texts()} | path order {path_order()}")
+        lib.locator("#vplay").click(); time.sleep(1.5); s = state()
         log(f"Play all: now {bar.locator('#nowtitle').inner_text()!r} | added songs in the queue {sum(o['added'] for o in s['order'])} | list order unchanged {list_order() == sorted(list_order())}")
-        top.locator("#openlist").click(); time.sleep(0.4); top.locator(".song").nth(0).locator(".remove").click(); time.sleep(0.3)
-        log(f"remove one: badge {badge()} | rows {top.locator('.song').count()}"); page.keyboard.press("Escape"); time.sleep(0.3)
-        log(f"   Escape closes the drawer: {top.locator('#overlay').is_hidden()} | top iframe back to {page.locator('.st-key-topactions iframe').bounding_box()['height']}px")
+        lib.locator("#back").click(); time.sleep(0.4); lib.locator(".coll", has_text="My playlist").click(); time.sleep(0.5)
+        n0 = lib.locator(".row").count()
+        lib.locator(".row").nth(0).locator(".more").click(); time.sleep(0.2); lib.locator("#menu .mi", has_text="Remove from My playlist").click(); time.sleep(0.4)
+        log(f"My playlist: {n0} song(s) -> Remove from My playlist -> {lib.locator('.row').count()} | empty note {lib.locator('#empty').inner_text()!r} | sidebar {sidebar(page)}")
+        go(page, "home"); path = path_frame(page)
+        log(f"back on Home: same queue {bar.evaluate('DATA.id') == queue_id} | playing {playing()} | hearts filled {path.locator('.heart[aria-pressed=true]').count()} | app reruns for the trip {reruns(page) - runs0}")
 
-        # --- SETTINGS AND ABOUT
+        # --- SETTINGS AND ABOUT (the avatar's menu)
         log("== SETTINGS")
         bar.evaluate("window.player.playAt(1)"); time.sleep(1.5)
         runs0, t0 = reruns(page), state()["time"]
-        top.locator("#opensettings").click(); time.sleep(0.5)
+        top.locator("#avatar").click(); time.sleep(0.4)
+        log(f"avatar menu: {[t.strip() for t in top.locator('#pmenu .pi').all_inner_texts()]} | covers the window {page.locator('.st-key-topactions iframe').bounding_box()['height']}px")
+        top.locator("#m-settings").click(); time.sleep(0.5)
         log(f"settings: {top.locator('#dtitle').inner_text()!r} | defaults {top.locator('input[role=switch]').evaluate_all('xs => xs.map(x => x.id + `=` + x.checked)')} repeat {top.locator('input[name=repeat]:checked').get_attribute('value')}")
         shot(page, "16_settings")
         top.locator("label.setting", has_text="Autoplay").click(); time.sleep(0.3)
@@ -223,7 +250,8 @@ try:
         top.locator("#openabout").click(); time.sleep(0.4)
         about = top.locator("#v-about").inner_text()
         log(f"About: {top.locator('#dtitle').inner_text()!r} | sections {top.locator('#v-about h3').all_inner_texts()} | mentions: "
-            + ", ".join(f"{k} {k in about}" for k in ("Muse", "gauthamvijayaraj", "Apache 2.0", "iTunes", "30-second", "63.2%", "FER2013", "Fear and sad", "as labelled", "never saved", "only for this visit", "this browser")))
+            + ", ".join(f"{k} {k in about}" for k in ("Muse", "gauthamvijayaraj", "Apache 2.0", "iTunes", "30-second", "63.2%", "FER2013", "Fear and sad", "as labelled",
+                                                      "Meet me here", "never saved", "only for this visit", "without times", "this browser")))
         shot(page, "17_about")
         top.locator("#back").click(); time.sleep(0.3); log(f"   back -> {top.locator('#dtitle').inner_text()!r}")
         page.keyboard.press("Escape"); time.sleep(0.4)
@@ -233,14 +261,14 @@ try:
         log(f"repeat button after the setting: {state()['repeat']}")
         cur = state()["current"]; bar.evaluate("window.player.audio.currentTime = window.player.audio.duration - 1"); time.sleep(3); s = state()
         log(f"autoplay off: stops at the end of the song {s['paused']} (same song {s['current'] == cur})")
-        page.reload(); page.wait_for_selector(".st-key-playerbar iframe", timeout=180000)
+        page.reload(); page.wait_for_selector(".st-key-path iframe", timeout=180000)
         bar, path, top = bar_frame(page), path_frame(page), actions_frame(page); time.sleep(2.5)
-        log(f"after a reload: saved songs kept {top.evaluate('window.actions.saved().length')} (badge {badge()}) | repeat {state()['repeat']} | emotions open "
+        log(f"after a reload: liked songs kept {liked()} | sidebar {sidebar(page)} | repeat {state()['repeat']} | emotions open "
             f"{page.locator('.st-key-moodcard details').get_attribute('open') is not None} | larger text {page.evaluate('document.documentElement.classList.contains(`moodtune-large`)')}")
-        top.locator("#opensettings").click(); time.sleep(0.4)
-        top.locator("#s-clear").click(); time.sleep(0.2); confirm = top.locator("#confirmtext2").inner_text()
-        top.locator("#clearyes2").click(); time.sleep(0.3)
-        log(f"Settings > Clear my saved songs: {confirm!r} -> badge {badge()} | {top.locator('#s-count').inner_text()!r}")
+        top.locator("#avatar").click(); time.sleep(0.3); top.locator("#m-settings").click(); time.sleep(0.4)
+        top.locator("#s-clear").click(); time.sleep(0.2); confirm = top.locator("#confirmtext").inner_text()
+        top.locator("#confirmyes").click(); time.sleep(0.3)
+        log(f"Settings > Clear liked songs: {confirm!r} -> {liked()} liked | {top.locator('#s-count').inner_text()!r} | sidebar {sidebar(page)}")
         for name in ("Autoplay", "Show all 7", "Larger text"):
             top.locator("label.setting", has_text=name).click(); time.sleep(0.2)
         top.locator(".seg label", has_text="All").click(); time.sleep(0.2)
@@ -253,9 +281,9 @@ try:
         page.set_viewport_size({"width": 390, "height": 844}); time.sleep(1.5)
         wide = page.evaluate("[document.documentElement.scrollWidth, document.querySelector('[data-testid=stMain]').scrollWidth, innerWidth]")
         visible = bar.locator("#bar button").evaluate_all("bs => bs.filter(b => b.offsetParent).map(b => b.id)")
-        log(f"no sideways scroll {max(wide[:2]) <= wide[2]} | bar buttons shown {visible} | top buttons {top.locator('#buttons').inner_text().strip()!r} (icons only: {top.locator('.label').first.is_hidden()})")
-        top.locator("#openlist").click(); time.sleep(0.5)
-        log(f"   drawer fits: {top.locator('#drawer').bounding_box()['width']} px wide"); page.keyboard.press("Escape"); time.sleep(0.3)
+        log(f"no sideways scroll {max(wide[:2]) <= wide[2]} | bar buttons shown {visible} | avatar shown {top.locator('#avatar').is_visible()}")
+        top.locator("#avatar").click(); time.sleep(0.3); top.locator("#m-settings").click(); time.sleep(0.5)
+        log(f"   Settings drawer fits: {top.locator('#drawer').bounding_box()['width']} px wide"); page.keyboard.press("Escape"); time.sleep(0.3)
         ctx.close()
 
         # --- localStorage throws
@@ -267,15 +295,16 @@ try:
         for i in (1, 2):
             row = path.locator(".row").nth(i); to_middle(path, row); row.locator(".heart").click(); time.sleep(0.3)
         page.locator(".greeting h1").click(); page.keyboard.press("l"); time.sleep(0.3)
-        log(f"2 hearts + L: badge {badge()} | hearts filled {path.locator('.heart[aria-pressed=true]').count()}")
-        top.locator("#openlist").click(); time.sleep(0.4); n = top.locator(".song").count()
-        top.locator(".song").nth(1).locator(".play").click(); time.sleep(1.5)
-        log(f"   drawer lists {n} songs | play one: now {bar.locator('#nowtitle').inner_text()!r}, playing {not bar.evaluate('window.player.audio.paused')}")
-        top.locator("#opensettings").click(); time.sleep(0.3); top.locator("label.setting", has_text="Autoplay").click(); time.sleep(0.3)
+        log(f"2 hearts + L: sidebar {sidebar(page)} | hearts filled {path.locator('.heart[aria-pressed=true]').count()}")
+        named_frame(page, "navlists").locator(".item", has_text="Liked songs").click()
+        page.wait_for_selector(".st-key-library iframe", timeout=30000); lib = named_frame(page, "library"); time.sleep(1.5)
+        n = lib.locator(".row").count(); lib.locator(".row").nth(1).locator(".pill").click(); time.sleep(1.5)
+        log(f"   the Library (after a page change) lists {n} liked songs | play one: now {bar.locator('#nowtitle').inner_text()!r}, playing {not bar.evaluate('window.player.audio.paused')}")
+        top.locator("#avatar").click(); time.sleep(0.3); top.locator("#m-settings").click(); time.sleep(0.3); top.locator("label.setting", has_text="Autoplay").click(); time.sleep(0.3)
         log(f"   a setting still applies (in memory): autoplay {top.evaluate('window.actions.settings().autoplay')}")
         top.locator("label.setting", has_text="Autoplay").click(); page.keyboard.press("Escape")
         page.reload(); page.wait_for_selector(".st-key-playerbar iframe", timeout=180000); top = actions_frame(page); time.sleep(1.5)
-        log(f"   after a reload the in-memory copy is gone (as expected): {top.evaluate('window.actions.saved().length')} songs | page errors {page.errors}")
+        log(f"   after a reload the in-memory copy is gone (as expected): {top.evaluate('savedSongs().length')} songs | page errors {page.errors}")
         ctx.close()
         browser.close()
 finally:

@@ -8,8 +8,9 @@ outside (song titles, the user's words) never goes through here.
 import html
 from datetime import datetime, timedelta, timezone
 
+import mood
+
 APP_NAME = "MOOD TUNE"
-TAGLINE = "Music that meets your mood"
 
 # The app's own mark: four sound-wave bars, lavender on deep purple.
 LOGO_SVG = ('<svg class="logo" viewBox="0 0 40 40" width="38" height="38" role="img" aria-label="MOOD TUNE logo">'
@@ -31,21 +32,59 @@ PAGE_CSS = """
   #MainMenu, footer, header[data-testid="stHeader"], [data-testid="stToolbar"],
   [data-testid="stDecoration"], [data-testid="stStatusWidget"] { display:none !important; }
   .stApp { background:var(--cream); }
-  [data-testid="stMainBlockContainer"] { max-width:1180px; padding:18px 28px 132px; }
   h1, h2, h3 { font-family:var(--serif) !important; }
   /* no anchor-link icons next to the page's headings */
   [data-testid="stHeaderActionElements"] { display:none !important; }
 
-  /* 1. top bar and greeting */
-  .st-key-topbar { border-bottom:1px solid var(--line); padding-bottom:12px; }
-  .app-head { display:flex; align-items:center; gap:12px; }
-  .app-head .logo { flex:none; }
-  .app-name { font-family:var(--serif); font-size:22px; font-weight:700; color:var(--purple); letter-spacing:.06em; line-height:1.1; }
-  .app-tagline { font-size:13px; color:var(--muted); margin-top:2px; }
+  /* the shell: a slim top bar, a sidebar on the left, and the page between them and the player bar */
+  :root { --top:64px; --nav:244px; --nav-mini:84px; }
+  [data-testid="stMain"] { padding-left:var(--nav); transition:padding-left .2s ease; }
+  html.mt-nav-mini [data-testid="stMain"] { padding-left:var(--nav-mini); }
+  [data-testid="stMainBlockContainer"] { max-width:1180px; padding:calc(var(--top) + 14px) 28px 132px; }
+  /* the page's style block and the three pinned parts take no room, so cancel the gap after each */
+  [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]:first-child,
+  [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]:has(> .st-key-topbar),
+  [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]:has(> .st-key-nav),
+  [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"]:has(> .st-key-playerbar) { margin-bottom:-1rem; }
+
+  /* 1. top bar: menu button, logo and search (a component), "Songs in", the avatar (a component) */
+  .st-key-topbar { position:fixed; top:0; left:0; right:0; height:var(--top); z-index:1000; background:var(--cream);
+                   border-bottom:1px solid var(--line); padding:0 14px 0 10px; flex-wrap:nowrap; }
+  [data-testid="stLayoutWrapper"]:has(> .st-key-topleft) { flex:1 1 auto; min-width:0; }
+  .st-key-topleft iframe, .st-key-topactions iframe { display:block; width:100%; height:56px; border:none; }
+  [data-testid="stLayoutWrapper"]:has(> .st-key-topactions) { flex:none; width:56px; }
+  .st-key-language { flex:none; width:auto; }
   .st-key-language [data-testid="stSelectbox"] { display:flex; flex-direction:row; align-items:center; justify-content:flex-end; gap:10px; }
   .st-key-language [data-testid="stWidgetLabel"] { margin:0; min-height:0; flex:none; }
   .st-key-language [data-testid="stWidgetLabel"] p { font-size:14px; color:var(--muted); }
   .st-key-language [data-testid="stSelectbox"] > div:last-child { width:150px; flex:none; }
+
+  /* 2. sidebar: Home / Explore / Library (Streamlit buttons), then New playlist and your playlists (a component) */
+  .st-key-nav { position:fixed; top:var(--top); left:0; bottom:86px; width:var(--nav); z-index:998; background:var(--cream);
+                padding:12px 12px 0; gap:2px; flex-wrap:nowrap; overflow:hidden; transition:width .2s ease, transform .2s ease; }
+  .st-key-nav .stButton button { justify-content:flex-start; gap:0; border:none; border-radius:12px; padding:9px 16px; min-height:44px;
+                                 background:transparent; color:var(--ink); box-shadow:none; }
+  .st-key-nav .stButton button:hover { background:rgba(45,42,82,.06); color:var(--purple); }
+  .st-key-nav .stButton button[kind="primary"], .st-key-nav .stButton button[data-testid="stBaseButton-primary"] {
+       background:var(--lav-soft); color:var(--purple); }
+  .st-key-nav .stButton button > div { width:100%; justify-content:flex-start; }
+  .st-key-nav .stButton button p { font-size:15px; font-weight:500; }
+  .st-key-nav .stButton button[kind="primary"] p { font-weight:700; }
+  .st-key-nav .stButton button [data-testid="stIconMaterial"] { font-size:23px; margin-right:16px; }
+  .st-key-nav .stButton button:focus-visible { outline:3px solid var(--lavender); outline-offset:1px; }
+  .st-key-nav [data-testid="stLayoutWrapper"]:has(> .st-key-navlists) { flex:1 1 auto; min-height:0; display:flex; }
+  .st-key-navlists { flex:1 1 auto; min-height:0; border-top:1px solid var(--line); margin-top:10px; padding-top:12px; }
+  .st-key-navlists [data-testid="stElementContainer"] { flex:1 1 auto !important; height:auto !important; min-height:0; }
+  .st-key-navlists iframe { display:block; width:100%; height:100% !important; border:none; }
+  /* folded: icons with a small label under them */
+  html.mt-nav-mini .st-key-nav { width:var(--nav-mini); padding:12px 6px 0; }
+  html.mt-nav-mini .st-key-nav .stButton button { flex-direction:column; padding:10px 2px 8px; min-height:66px; justify-content:center; }
+  html.mt-nav-mini .st-key-nav .stButton button > div { justify-content:center; }
+  html.mt-nav-mini .st-key-nav .stButton button > div > span { flex-direction:column; gap:5px; }
+  html.mt-nav-mini .st-key-nav .stButton button [data-testid="stIconMaterial"] { margin:0; }
+  html.mt-nav-mini .st-key-nav .stButton button p { font-size:11px; }
+  html.mt-nav-mini .st-key-nav [data-testid="stLayoutWrapper"]:has(> .st-key-navlists) { display:none; }
+  #moodtune-navshade { display:none; }
   .greeting { margin:26px 0 4px; }
   .greeting .date { font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:600; }
   .greeting h1 { font-size:34px; font-weight:600; color:var(--ink); margin:4px 0 0; padding:0; letter-spacing:-.01em; }
@@ -173,12 +212,60 @@ PAGE_CSS = """
   /* keep things scrolled to (or focused with the keyboard) clear of the player bar */
   [data-testid="stMain"] { scroll-padding-bottom:110px; scroll-padding-top:16px; }
   .st-key-playerbar iframe { display:block; width:100%; height:86px; border:none; }
-  /* the top bar's My playlist button (a component; its drawer pins the iframe over the window) */
-  [data-testid="stLayoutWrapper"]:has(> .st-key-topactions) { flex:none; width:232px; margin-right:-6px; }
-  /* Settings > Larger text: the page's cards are drawn 15% bigger (the top bar and the player bar keep their size) */
+  /* Settings > Larger text: the page's cards are drawn 15% bigger (the top bar, sidebar and player bar keep their size) */
   html.moodtune-large .greeting, html.moodtune-large .st-key-hero, html.moodtune-large .st-key-notices,
-  html.moodtune-large .st-key-moodcard, html.moodtune-large .st-key-choice, html.moodtune-large .st-key-path { zoom:1.15; }
-  .st-key-topactions iframe { display:block; width:100%; height:50px; border:none; }
+  html.moodtune-large .st-key-moodcard, html.moodtune-large .st-key-choice, html.moodtune-large .st-key-path,
+  html.moodtune-large .page-head, html.moodtune-large .st-key-explore, html.moodtune-large .st-key-explorelist,
+  html.moodtune-large .st-key-library { zoom:1.15; }
+
+  /* Explore and Library */
+  .page-head { margin:22px 0 6px; }
+  .page-head h1 { font-size:34px; font-weight:600; color:var(--ink); margin:0; padding:0; letter-spacing:-.01em; }
+  .page-head p { color:var(--muted); font-size:15px; margin:6px 0 0; max-width:70ch; }
+  .section-head { margin:18px 0 2px; }
+  .section-head h2 { font-size:22px; font-weight:600; color:var(--ink); margin:0; padding:0; }
+  .section-head p { color:var(--muted); font-size:13.5px !important; margin:4px 0 0 !important; }
+  .st-key-moodcards, .st-key-langcards { display:grid !important; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:12px; }
+  .st-key-langcards { grid-template-columns:repeat(auto-fill, minmax(176px, 1fr)); }
+  [class*="st-key-xcard_"] { position:relative; }
+  .xcard { border:2px solid var(--line); border-radius:18px; background:#fff; padding:14px 16px; min-height:112px; height:100%;
+           transition:border-color .15s, box-shadow .15s, background .15s; }
+  .xcard .accent { width:34px; height:5px; border-radius:999px; margin-bottom:12px; }
+  .xcard .emoji { font-size:26px; line-height:1; float:right; }
+  .xcard h3 { font-size:18px; font-weight:600; margin:0; padding:0; color:var(--ink); text-transform:capitalize; }
+  .xcard .native { font-size:14px; color:var(--muted); margin-top:2px; }
+  .xcard p { font-size:12.5px; color:var(--muted); margin:6px 0 0; }
+  .xcard .modes { display:block; font-size:12px; font-weight:600; margin-top:8px; color:var(--purple); line-height:1.45; }
+  .xcard .modes span { display:block; }
+  .xcard .modes.only { display:inline-block; border-radius:999px; padding:2px 9px; background:var(--terra-soft); color:var(--terra-ink); }
+  .xcard.on { border-color:var(--purple); background:#fbfaff; box-shadow:0 6px 18px rgba(45,42,82,.12); }
+  [class*="st-key-xcard_"]:hover .xcard:not(.on) { border-color:#cfc8ef; }
+  [class*="st-key-xcard_"] [data-testid="stMarkdown"], [class*="st-key-xcard_"] [data-testid="stMarkdownContainer"] { margin-bottom:0 !important; height:100%; }
+  [class*="st-key-xcard_"] [data-testid="stElementContainer"]:has(.stButton) { position:absolute; inset:0; z-index:2; margin:0; }
+  [class*="st-key-xcard_"] .stButton, [class*="st-key-xcard_"] .stButton button { width:100%; height:100%; }
+  [class*="st-key-xcard_"] .stButton button { opacity:0; cursor:pointer; }
+  [class*="st-key-xcard_"]:has(button:focus-visible) .xcard { outline:3px solid var(--lavender); outline-offset:3px; }
+  .st-key-explorelist { margin-top:14px; }
+  .st-key-explorelist iframe, .st-key-library iframe { display:block; width:100%; border:none; }
+  .st-key-explorelist [data-testid="stElementContainer"], .st-key-library [data-testid="stElementContainer"] { height:auto !important; }
+  .st-key-library { margin-top:8px; }
+
+  /* the name dialog (New playlist, Rename, Your name), drawn on the page by the components */
+  #moodtune-dialog { position:fixed; inset:0; z-index:1004; display:flex; align-items:center; justify-content:center; padding:16px; }
+  #moodtune-dialog .mtd-shade { position:absolute; inset:0; background:rgba(43,40,64,.4); }
+  #moodtune-dialog .mtd-box { position:relative; width:min(420px, 100%); background:var(--cream); border-radius:20px; padding:22px 22px 18px;
+                              box-shadow:0 24px 60px rgba(45,42,82,.3); }
+  #moodtune-dialog h2 { font-size:24px; font-weight:600; margin:0 0 14px; padding:0; color:var(--ink); }
+  #moodtune-dialog .mtd-label { display:block; font-size:13px; color:var(--muted); font-weight:600; margin:0 0 6px; }
+  #moodtune-dialog input { width:100%; border:1px solid var(--line); border-radius:12px; padding:11px 14px; font:inherit; font-size:15px;
+                           background:#fff; color:var(--ink); }
+  #moodtune-dialog input:focus { outline:3px solid var(--lavender); border-color:transparent; }
+  #moodtune-dialog .mtd-hint { font-size:12.5px; color:var(--muted); margin:8px 0 16px; }
+  #moodtune-dialog .mtd-actions { display:flex; justify-content:flex-end; gap:8px; }
+  #moodtune-dialog button { border-radius:999px; font:inherit; font-size:14px; font-weight:600; padding:9px 18px; cursor:pointer;
+                            border:1px solid var(--line); background:#fff; color:var(--ink); }
+  #moodtune-dialog .mtd-ok { background:var(--purple); color:#fff; border-color:var(--purple); }
+  #moodtune-dialog button:focus-visible { outline:3px solid var(--lavender); outline-offset:2px; }
   /* short messages from the song list and the player ("Added to the queue", "Link copied") */
   #moodtune-toast { position:fixed; left:50%; bottom:104px; transform:translateX(-50%); z-index:1003; pointer-events:none;
                     background:var(--purple); color:#fff; font-size:14px; padding:10px 18px; border-radius:999px; max-width:calc(100vw - 32px);
@@ -190,25 +277,57 @@ PAGE_CSS = """
   /* alerts */
   .st-key-notices [data-testid="stAlert"] { border-radius:14px; }
 
+  /* narrow windows: the sidebar slides in over the page (the hamburger), with a shade behind it */
+  @media (max-width: 760px) {
+    [data-testid="stMain"], html.mt-nav-mini [data-testid="stMain"] { padding-left:0; }
+    .st-key-nav, html.mt-nav-mini .st-key-nav { width:264px; padding:12px 12px 0; transform:translateX(-105%); z-index:1001;
+                                                box-shadow:14px 0 40px rgba(45,42,82,.18); visibility:hidden; }
+    html.mt-nav-open .st-key-nav { transform:none; visibility:visible; }
+    html.mt-nav-open #moodtune-navshade { display:block; position:fixed; inset:0; z-index:1000; background:rgba(43,40,64,.32); }
+    .st-key-language [data-testid="stWidgetLabel"] { display:none; }
+    .st-key-language [data-testid="stSelectbox"] > div:last-child { width:112px; }
+    .st-key-topbar { padding:0 8px 0 4px; }
+  }
   @media (max-width: 640px) {
-    [data-testid="stMainBlockContainer"] { padding:12px 16px 116px; }
+    [data-testid="stMainBlockContainer"] { padding:calc(var(--top) + 6px) 16px 116px; }
+    .page-head h1 { font-size:28px; }
+    .st-key-moodcards { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+    .st-key-langcards { grid-template-columns:repeat(2, minmax(0, 1fr)); }
     .greeting h1 { font-size:28px; }
     .st-key-hero { padding:22px 16px; border-radius:22px; }
     .st-key-hero h2 { font-size:30px; }
     .st-key-moodcard, .st-key-choice { padding:20px 16px; border-radius:20px; }
     .mood-title { font-size:25px; } .mood-head .emoji { font-size:42px; }
     .mood-grid { grid-template-columns:minmax(0,1fr); gap:18px; } .gauge-box { max-width:230px; margin:0 auto; }
-    .app-tagline { display:none; }
-    [data-testid="stLayoutWrapper"]:has(> .st-key-topactions) { width:132px; }
-    .st-key-language { min-width:0; flex:1 1 auto; }
   }
 </style>
 """
 
 
-def topbar_html():
-    return (f'<div class="app-head">{LOGO_SVG}<div><div class="app-name">{APP_NAME}</div>'
-            f'<div class="app-tagline">{TAGLINE}</div></div></div>')
+def page_head_html(title, text):
+    return f'<div class="page-head"><h1>{html.escape(title)}</h1><p>{html.escape(text)}</p></div>'
+
+
+def section_head_html(title, text):
+    return f'<div class="section-head"><h2>{html.escape(title)}</h2><p>{html.escape(text)}</p></div>'
+
+
+# Explore's tiles. Each is drawn here and covered by a transparent Streamlit
+# button (see the CSS), like the choice cards.
+def mood_tile_html(emotion, count, selected):
+    """A mood tile: its colour, emoji, name and how many songs it has (with a preview, in the chosen language)."""
+    return (f'<div class="xcard mood{" on" if selected else ""}" aria-hidden="true">'
+            f'<span class="emoji">{mood.EMOJI[emotion]}</span><div class="accent" style="background:{mood.COLOURS[emotion]}"></div>'
+            f'<h3>{emotion}</h3><p>{count:,} song{"" if count == 1 else "s"}</p></div>')
+
+
+def language_tile_html(name, native, count, uplift, selected):
+    """A language tile: its name (and in its own script), how many songs, and which of the two modes it offers."""
+    native_html = f'<div class="native">{html.escape(native)}</div>' if native != name else '<div class="native">&nbsp;</div>'
+    modes = ('<span class="modes"><span>✓ Lift my mood</span><span>✓ Meet me here</span></span>' if uplift
+             else '<span class="modes only">Meet me here only</span>')
+    return (f'<div class="xcard lang{" on" if selected else ""}" aria-hidden="true"><h3>{html.escape(name)}</h3>{native_html}'
+            f'<p>{count:,} song{"" if count == 1 else "s"} with a preview</p>{modes}</div>')
 
 
 def local_now(tz_name=None, offset_minutes=None, now=None):

@@ -19,12 +19,15 @@ To run the app, type the following command in the terminal.
 
 ### Streamlit version
 
-`requirements.txt` pins Streamlit to **1.64.0**. The page's song list, player
-bar and top-bar buttons are three `st.components.v1.html` components (see
-`player.py`), and Streamlit has announced that `st.components.v1.html` will
-be removed in a later version (1.64 already logs a warning suggesting
-`st.iframe`). Moving to a newer Streamlit means porting those components
-first; until then, keep the pin.
+`requirements.txt` pins Streamlit to **1.64.0**. The player bar, the song
+lists and the shell's parts (the top bar's search and avatar, the sidebar's
+playlists, the Library) are `st.components.v1.html` components (see
+`player.py` and `shell.py`), and Streamlit has announced that
+`st.components.v1.html` will be removed in a later version (1.64 already logs
+a warning suggesting `st.iframe`). They also rely on being on the same origin
+as the page (they share data through it and the sidebar's playlists press the
+Library button on it). Moving to a newer Streamlit means porting those
+components first; until then, keep the pin.
 
 ### Page design
 
@@ -34,10 +37,39 @@ served through Streamlit's static file serving, so the page looks the same
 offline. The page's CSS and HTML pieces are in `ui.py`. Screenshots are in
 `docs/screenshots/`.
 
-### Player, My playlist and Settings
+### Layout: top bar, sidebar and pages
 
-Everything below runs in the browser (`player.py`), so the music keeps
-playing while the app reruns, and none of it is sent to the server.
+A music-app layout with MOOD TUNE's own name, logo and colours:
+
+- **Top bar** (pinned): a menu button, the logo, a search box that filters
+  the songs on the page by title or artist as you type, "Songs in", and an
+  avatar. The avatar shows the first letter of the name you give it in its
+  menu (optional, kept in this browser), or a person icon; the menu also
+  opens Settings and About.
+- **Sidebar:** Home, Explore and Library, then "New playlist" and your
+  playlists (Liked songs, My playlist, the ones you made, Recently played).
+  The menu button folds it to icons (remembered in this browser); on a
+  narrow screen it slides in over the page instead.
+- **Home:** the mood scan, the reading, the two cards and the songs, as
+  before.
+- **Explore:** browse by mood (the seven song buckets) and by language,
+  each tile with how many songs have a preview. Telugu and Malayalam say
+  "Meet me here only" (too few songs for "Lift my mood"). A pick shows up to
+  30 of those songs at random.
+- **Library:** Liked songs, My playlist and your other playlists, and
+  Recently played, as cards; each opens as a list with Play all, and
+  Rename / Delete (your own playlists) or Clear.
+
+Moving between the pages never stops the music: the player bar keeps its
+place on the page, and the words typed on Home stay in the box. Songs
+played from Explore or the Library start straight away and go in after the
+song playing, like "Play next"; the queue from your mood carries on after
+them.
+
+### Player, Liked songs, playlists and Settings
+
+Everything below runs in the browser (`player.py`, `shell.py`), so the music
+keeps playing while the app reruns, and none of it is sent to the server.
 
 - **Player bar:** previous / play / next, shuffle, repeat (off / all / this
   song), a progress bar to click or drag, mute and volume, and a queue panel
@@ -45,23 +77,26 @@ playing while the app reruns, and none of it is sent to the server.
   Uplift's 5-song path is never shuffled, and shuffle stays greyed out until
   the path has finished.
 - **Keyboard:** Space = play/pause, Right / Left = next / previous,
-  M = mute, L = save the song playing. Keys typed into a text box are
+  M = mute, L = like the song playing. Keys typed into a text box are
   ignored.
-- **Song list:** a search box (title or artist), a heart per song, and a
-  "..." menu: Play next, Add to queue, Add to / Remove from My playlist,
-  Open on Spotify / Last.fm, Copy link. Songs added with Play next or Add to
-  queue are tagged "Added by you" in the queue and go after the current song;
-  the list's order and Uplift's path never change.
-- **My playlist** (top bar, with a count badge): play, remove, Play all,
-  Clear. Saved songs keep only title, artist, link, preview URL, artwork URL
-  and language, in the browser's localStorage; if localStorage is blocked,
-  an in-memory copy is used until the page is reloaded.
-- **Settings** (the gear): autoplay next song, the starting repeat mode,
-  showing all 7 emotions by default, larger text, and clearing the saved
-  songs. None of these changes the queue, so they never rerun the app or
-  stop the music; only "Songs in" and the Lift / Meet cards rebuild the
-  queue. **About MOOD TUNE** covers what the app does, its data sources and
-  licences, its limits and what it keeps.
+- **Song lists:** a heart per song (Liked songs) and a "..." menu: Play
+  next, Add to queue, Add to / Remove from Liked songs, Add to playlist (any
+  playlist, or a new one), Open on Spotify / Last.fm, Copy link. Songs added
+  with Play next or Add to queue are tagged "Added by you" in the queue and
+  go after the current song; the list's order and Uplift's path never
+  change.
+- **What is kept, and where:** Liked songs, playlists and Recently played
+  (the last 50 songs started, newest first) keep only each song's title,
+  artist, link, preview URL, artwork URL and language: never a mood, a scan
+  or a time. With your name, the settings, the volume and the folded
+  sidebar, they live in the browser's localStorage; if localStorage is
+  blocked, an in-memory copy is used until the page is reloaded.
+- **Settings** (the avatar's menu): autoplay next song, the starting repeat
+  mode, showing all 7 emotions by default, larger text, and clearing Liked
+  songs or Recently played. None of these changes the queue, so they never
+  rerun the app or stop the music; only "Songs in" and the Lift / Meet cards
+  rebuild the queue. **About MOOD TUNE** covers what the app does, its data
+  sources and licences, its limits and what it keeps.
 
 ## Libraries
 
