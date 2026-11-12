@@ -14,7 +14,7 @@ Saves screenshots of the top of Home and of Quick picks.
 """
 import os, time
 from playwright.sync_api import sync_playwright
-from pagekit import OUT, bar_frame, image_files, log, named_frame, new_images, path_frame, start_server, stop
+from pagekit import OUT, theme_report, bar_frame, image_files, log, named_frame, new_images, path_frame, start_server, stop
 
 PORT = 8624
 
@@ -54,6 +54,7 @@ try:
         state = lambda: bar.evaluate("window.player.state()")
         queue_id = bar.evaluate("DATA.id")
         log("== LAYOUT")
+        log(f"theme: {theme_report(page, bar, path, picks(page))}")
         log(f"top to bottom: chips {top(page, '.st-key-chips')} < greeting {top(page, '.greeting')} < card {top(page, '.st-key-hero')} < Quick picks "
             f"{top(page, '.st-key-quickpicks')} < choice {top(page, '.st-key-choice')} < songs {top(page, '.st-key-path')}")
         hero = page.locator(".st-key-hero")

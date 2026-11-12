@@ -4,7 +4,8 @@ The app has two modes. By default it picks one automatically (Uplift when the
 mood is low, otherwise Resonance). Under "What do you need from music?" the
 page shows a card for each, tags the one it would pick "Recommended", and
 lets the listener choose either. A chosen card stays when the text or the
-language changes, and goes back to Auto on a new scan ("Tap to scan again" or
+language changes, and goes back to the default mode (Auto, unless Settings > Default mode
+says otherwise) on a new scan ("Tap to scan again" or
 a new photo):
 
 - **Meet me here (Resonance):** recommends songs from the bucket of the

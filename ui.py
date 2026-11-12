@@ -26,7 +26,9 @@ BAR_NAMES = {"face": "Face", "text": "Text", "combined": "Combined"}
 
 PAGE_CSS = """
 <style>
-  :root { --cream:#f6f3ee; --card:#ffffff; --ink:#2b2840; --muted:#625e78; --line:#e7e1d8; --purple:#2d2a52;
+  :root { --hero:#2d2a52; --field:#fff; --hover:#f4f1fb; --hover-soft:rgba(45,42,82,.06); --on-purple:#fff; --card2:#fcfbf8;
+          --rail:#eeeaf6; --uplift-on:#fffaf7;
+          --cream:#f6f3ee; --card:#ffffff; --ink:#2b2840; --muted:#625e78; --line:#e7e1d8; --purple:#2d2a52;
           --purple-2:#3a3668; --lavender:#b9b0e8; --lav-soft:#eeebfa; --terra:#b85c38; --terra-soft:#f8e9e1; --terra-ink:#7a3a20;
           --serif:"Fraunces", Georgia, "Times New Roman", serif; }
   #MainMenu, footer, header[data-testid="stHeader"], [data-testid="stToolbar"],
@@ -64,7 +66,7 @@ PAGE_CSS = """
                 padding:12px 12px 0; gap:2px; flex-wrap:nowrap; overflow:hidden; transition:width .2s ease, transform .2s ease; }
   .st-key-nav .stButton button { justify-content:flex-start; gap:0; border:none; border-radius:12px; padding:9px 16px; min-height:44px;
                                  background:transparent; color:var(--ink); box-shadow:none; }
-  .st-key-nav .stButton button:hover { background:rgba(45,42,82,.06); color:var(--purple); }
+  .st-key-nav .stButton button:hover { background:var(--hover-soft); color:var(--purple); }
   .st-key-nav .stButton button[kind="primary"], .st-key-nav .stButton button[data-testid="stBaseButton-primary"] {
        background:var(--lav-soft); color:var(--purple); }
   .st-key-nav .stButton button > div { width:100%; justify-content:flex-start; }
@@ -90,7 +92,7 @@ PAGE_CSS = """
   .greeting h1 { font-size:34px; font-weight:600; color:var(--ink); margin:4px 0 0; padding:0; letter-spacing:-.01em; }
 
   /* 2. hero card */
-  .st-key-hero { background:var(--purple); border-radius:26px; padding:34px 34px 30px; gap:22px;
+  .st-key-hero { background:var(--hero); border-radius:26px; padding:34px 34px 30px; gap:22px;
                  box-shadow:0 2px 4px rgba(45,42,82,.08), 0 18px 40px rgba(45,42,82,.18); }
   .st-key-hero h2 { color:#fbf8f3; font-size:38px; font-weight:600; margin:0; padding:0; line-height:1.1; letter-spacing:-.01em; }
   .hero-sub { color:#ddd8f5; font-size:16.5px !important; margin:12px 0 4px !important; }
@@ -119,15 +121,17 @@ PAGE_CSS = """
   .st-key-hero [data-testid="stWidgetLabel"] p { color:#f1edfb; font-size:15px; font-weight:500; }
   .st-key-hero [data-testid="stTextInput"] [data-baseweb="input"] { background:#fff; border-radius:12px; border:2px solid transparent; }
   .st-key-hero [data-testid="stTextInput"] [data-baseweb="input"]:focus-within { border-color:var(--lavender); }
-  .st-key-hero [data-testid="stTextInput"] input { color:var(--ink); background:#fff; font-size:15px; padding:12px 14px; }
+  .st-key-hero [data-testid="stTextInput"] input { color:#2b2840; background:#fff; font-size:15px; padding:12px 14px; }
   .st-key-hero [data-testid="InputInstructions"] { color:var(--muted); }
   .st-key-hero [data-testid="stForm"] { border:none; padding:0; }
   .st-key-hero button { border-radius:999px !important; font-weight:600; padding:8px 18px; min-height:42px; }
   .st-key-hero button[kind="primaryFormSubmit"], .st-key-hero button[data-testid="stBaseButton-primaryFormSubmit"] {
-       background:var(--lavender); color:var(--purple); border:none; }
-  .st-key-hero button[kind="primaryFormSubmit"]:hover { background:#cdc6f1; color:var(--purple); }
-  .st-key-rescan button { background:#fff; color:var(--purple); border:none; }
-  .st-key-rescan button:hover { background:#f1edfb; color:var(--purple); }
+       background:var(--lavender); color:#2d2a52; border:none; }
+  .st-key-hero button[kind="primaryFormSubmit"]:hover { background:#cdc6f1; color:#2d2a52; }
+  .st-key-rescan button { background:#fff; color:#2d2a52; border:none; }
+  /* a button's label follows the button's colour (Streamlit colours the label's text block separately) */
+  button [data-testid="stMarkdownContainer"], button [data-testid="stMarkdownContainer"] p { color:inherit !important; }
+  .st-key-rescan button:hover { background:#f1edfb; color:#2d2a52; }
   .st-key-facetile [data-testid="stPopoverButton"] { background:transparent; color:#f1edfb; border:1px solid rgba(255,255,255,.4); }
   .st-key-facetile [data-testid="stPopoverButton"]:hover { border-color:#fff; color:#fff; background:rgba(255,255,255,.06); }
   .st-key-hero button:focus-visible { outline:3px solid var(--lavender); outline-offset:2px; }
@@ -157,11 +161,11 @@ PAGE_CSS = """
   .leans { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:14px 26px; max-width:560px; }
   .lean-top { display:flex; justify-content:space-between; font-size:13.5px; color:var(--muted); margin-bottom:6px; }
   .lean-top b { color:var(--ink); font-variant-numeric:tabular-nums; }
-  .lean .rail { background:#eeeaf6; border-radius:4px; height:8px; overflow:hidden; }
+  .lean .rail { background:var(--rail); border-radius:4px; height:8px; overflow:hidden; }
   .lean .fill { height:100%; border-radius:4px; background:#7b6fd0; }
   .lean[data-source="face"] .fill { background:#8d88a6; }
   .blend { font-size:13px !important; color:var(--muted); margin:12px 0 0 !important; }
-  .st-key-moodcard [data-testid="stExpander"] details { border:1px solid var(--line); border-radius:14px; background:#fcfbf8; }
+  .st-key-moodcard [data-testid="stExpander"] details { border:1px solid var(--line); border-radius:14px; background:var(--card2); }
   .st-key-moodcard [data-testid="stExpander"] summary p { font-weight:600; color:var(--purple); }
   .legend { display:flex; gap:16px; font-size:12.5px; color:var(--muted); margin:2px 0 14px; flex-wrap:wrap; }
   .legend i { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:6px; vertical-align:-1px; }
@@ -169,7 +173,7 @@ PAGE_CSS = """
   .ename { font-size:14px; text-transform:capitalize; color:var(--ink); }
   .ebars { display:flex; flex-direction:column; gap:4px; }
   .bar { display:grid; grid-template-columns:1fr 42px; gap:10px; align-items:center; }
-  .bar .rail { background:#eeeaf6; border-radius:4px; height:7px; overflow:hidden; }
+  .bar .rail { background:var(--rail); border-radius:4px; height:7px; overflow:hidden; }
   .bar .fill { height:100%; border-radius:4px; }
   .bar .pct { font-size:12px; color:var(--muted); text-align:right; font-variant-numeric:tabular-nums; }
   .bar.combined .rail { height:10px; } .bar.combined .pct { color:var(--ink); font-weight:600; }
@@ -179,7 +183,7 @@ PAGE_CSS = """
   .st-key-choice h2 { font-size:26px; font-weight:600; color:var(--ink); margin:0; padding:0; }
   .choice-sub { color:var(--muted); font-size:14.5px !important; margin:8px 0 6px !important; }
   .st-key-choice_uplift, .st-key-choice_resonance { position:relative; }
-  .choice-card { border:2px solid var(--line); border-radius:18px; padding:18px 20px; min-height:128px; background:#fff;
+  .choice-card { border:2px solid var(--line); border-radius:18px; padding:18px 20px; min-height:128px; background:var(--card);
                  transition:border-color .15s, box-shadow .15s, background .15s; }
   .choice-card .icon { font-size:24px; line-height:1; }
   .choice-card h3 { font-size:21px; font-weight:600; margin:8px 0 0; padding:0; color:var(--ink); }
@@ -187,8 +191,8 @@ PAGE_CSS = """
   .choice-card .tag { display:inline-block; font-size:11.5px; font-weight:600; letter-spacing:.04em; border-radius:999px;
                       padding:3px 10px; background:var(--lav-soft); color:var(--purple); float:right; }
   .choice-card .fallback { margin-top:10px; font-size:13px; color:var(--terra-ink); background:var(--terra-soft); border-radius:10px; padding:8px 11px; }
-  .choice-card.uplift.on { border-color:var(--terra); background:#fffaf7; box-shadow:0 6px 18px rgba(184,92,56,.14); }
-  .choice-card.resonance.on { border-color:var(--purple); background:#fbfaff; box-shadow:0 6px 18px rgba(45,42,82,.12); }
+  .choice-card.uplift.on { border-color:var(--terra); background:var(--uplift-on); box-shadow:0 6px 18px rgba(184,92,56,.14); }
+  .choice-card.resonance.on { border-color:var(--purple); background:var(--hover); box-shadow:0 6px 18px rgba(45,42,82,.12); }
   .choice-card .check { display:none; font-size:12.5px; font-weight:600; margin-top:10px; }
   .choice-card.on .check { display:block; } .choice-card.uplift .check { color:var(--terra-ink); } .choice-card.resonance .check { color:var(--purple); }
   .st-key-choice_uplift:hover .choice-card:not(.on), .st-key-choice_resonance:hover .choice-card:not(.on) { border-color:#cfc8ef; }
@@ -222,11 +226,11 @@ PAGE_CSS = """
   .st-key-chips { flex-wrap:wrap; row-gap:8px; padding:2px 2px 6px; margin:4px 0 0; align-items:center; }
   .st-key-chips::-webkit-scrollbar { display:none; }
   .st-key-chips [data-testid="stElementContainer"] { flex:none; width:auto !important; }
-  .st-key-chips .stButton button { border-radius:10px; min-height:36px; padding:5px 14px; border:1px solid var(--line); background:#fff;
+  .st-key-chips .stButton button { border-radius:10px; min-height:36px; padding:5px 14px; border:1px solid var(--line); background:var(--field);
                                    color:var(--ink); box-shadow:none; white-space:nowrap; }
   .st-key-chips .stButton button p { font-size:14px; font-weight:500; white-space:nowrap; }
-  .st-key-chips .stButton button:hover { border-color:var(--lavender); background:#fbfaff; color:var(--purple); }
-  .st-key-chips .stButton button[kind="primary"] { background:var(--purple); border-color:var(--purple); color:#fff; }
+  .st-key-chips .stButton button:hover { border-color:var(--lavender); background:var(--hover); color:var(--purple); }
+  .st-key-chips .stButton button[kind="primary"] { background:var(--purple); border-color:var(--purple); color:var(--on-purple); }
   .st-key-chips .stButton button[kind="primary"] p { font-weight:600; }
   .st-key-chips .stButton button:focus-visible { outline:3px solid var(--lavender); outline-offset:2px; }
   .chip-sep { display:block; width:1px; height:26px; background:var(--line); margin:0 6px; }
@@ -250,7 +254,7 @@ PAGE_CSS = """
   .st-key-moodcards, .st-key-langcards { display:grid !important; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:12px; }
   .st-key-langcards { grid-template-columns:repeat(auto-fill, minmax(176px, 1fr)); }
   [class*="st-key-xcard_"] { position:relative; }
-  .xcard { border:2px solid var(--line); border-radius:18px; background:#fff; padding:14px 16px; min-height:112px; height:100%;
+  .xcard { border:2px solid var(--line); border-radius:18px; background:var(--card); padding:14px 16px; min-height:112px; height:100%;
            transition:border-color .15s, box-shadow .15s, background .15s; }
   .xcard .accent { width:34px; height:5px; border-radius:999px; margin-bottom:12px; }
   .xcard .emoji { font-size:26px; line-height:1; float:right; }
@@ -260,7 +264,7 @@ PAGE_CSS = """
   .xcard .modes { display:block; font-size:12px; font-weight:600; margin-top:8px; color:var(--purple); line-height:1.45; }
   .xcard .modes span { display:block; }
   .xcard .modes.only { display:inline-block; border-radius:999px; padding:2px 9px; background:var(--terra-soft); color:var(--terra-ink); }
-  .xcard.on { border-color:var(--purple); background:#fbfaff; box-shadow:0 6px 18px rgba(45,42,82,.12); }
+  .xcard.on { border-color:var(--purple); background:var(--hover); box-shadow:0 6px 18px rgba(45,42,82,.12); }
   [class*="st-key-xcard_"]:hover .xcard:not(.on) { border-color:#cfc8ef; }
   [class*="st-key-xcard_"] [data-testid="stMarkdown"], [class*="st-key-xcard_"] [data-testid="stMarkdownContainer"] { margin-bottom:0 !important; height:100%; }
   [class*="st-key-xcard_"] [data-testid="stElementContainer"]:has(.stButton) { position:absolute; inset:0; z-index:2; margin:0; }
@@ -280,17 +284,17 @@ PAGE_CSS = """
   #moodtune-dialog h2 { font-size:24px; font-weight:600; margin:0 0 14px; padding:0; color:var(--ink); }
   #moodtune-dialog .mtd-label { display:block; font-size:13px; color:var(--muted); font-weight:600; margin:0 0 6px; }
   #moodtune-dialog input { width:100%; border:1px solid var(--line); border-radius:12px; padding:11px 14px; font:inherit; font-size:15px;
-                           background:#fff; color:var(--ink); }
+                           background:var(--field); color:var(--ink); }
   #moodtune-dialog input:focus { outline:3px solid var(--lavender); border-color:transparent; }
   #moodtune-dialog .mtd-hint { font-size:12.5px; color:var(--muted); margin:8px 0 16px; }
   #moodtune-dialog .mtd-actions { display:flex; justify-content:flex-end; gap:8px; }
   #moodtune-dialog button { border-radius:999px; font:inherit; font-size:14px; font-weight:600; padding:9px 18px; cursor:pointer;
-                            border:1px solid var(--line); background:#fff; color:var(--ink); }
-  #moodtune-dialog .mtd-ok { background:var(--purple); color:#fff; border-color:var(--purple); }
+                            border:1px solid var(--line); background:var(--field); color:var(--ink); }
+  #moodtune-dialog .mtd-ok { background:var(--purple); color:var(--on-purple); border-color:var(--purple); }
   #moodtune-dialog button:focus-visible { outline:3px solid var(--lavender); outline-offset:2px; }
   /* short messages from the song list and the player ("Added to the queue", "Link copied") */
   #moodtune-toast { position:fixed; left:50%; bottom:104px; transform:translateX(-50%); z-index:1003; pointer-events:none;
-                    background:var(--purple); color:#fff; font-size:14px; padding:10px 18px; border-radius:999px; max-width:calc(100vw - 32px);
+                    background:var(--purple); color:var(--on-purple); font-size:14px; padding:10px 18px; border-radius:999px; max-width:calc(100vw - 32px);
                     box-shadow:0 10px 30px rgba(45,42,82,.25); opacity:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   #moodtune-toast.show { animation:moodtune-toast 2.8s ease forwards; }
   @keyframes moodtune-toast { 0% { opacity:0; transform:translate(-50%, 8px); } 8%, 82% { opacity:1; transform:translate(-50%, 0); } 100% { opacity:0; } }
@@ -326,6 +330,51 @@ PAGE_CSS = """
   }
 </style>
 """
+
+
+# Settings > Theme > Dark, for the page itself (the components have their own, in player.DARK_CSS).
+# __D__ stands for the selector that turns it on (see page_css).
+DARK_PAGE_CSS = """
+<style>
+  __D__ {
+          --hero:#262246; --purple-2:#302b59; --field:#2a2649; --hover:#2b2750; --hover-soft:rgba(255,255,255,.08); --on-purple:#191630;
+          --card2:#1b1833; --rail:#3a3560; --uplift-on:#2f211d;
+          --cream:#15132a; --card:#211e3b; --ink:#ece9f7; --muted:#aaa4c6; --line:#3a3560; --purple:#c3b9f2;
+          --lav-soft:#322d5a; --terra:#e0845f; --terra-soft:#3a2721; --terra-ink:#f2b49a; }
+  __D__ .stApp, __D__ [data-testid="stAppViewContainer"], __D__ [data-testid="stMain"] { background:var(--cream); color:var(--ink); }
+  __D__ [data-testid="stMarkdownContainer"], __D__ [data-testid="stWidgetLabel"] p, __D__ [data-testid="stText"] { color:var(--ink); }
+  __D__ [data-testid="stCaptionContainer"] { color:var(--muted); }
+  __D__ .st-key-hero [data-testid="stMarkdownContainer"] { color:#f1edfb; }
+  __D__ [data-testid="stSelectbox"] [role="group"] { background:var(--field); border-color:var(--line); color:var(--ink); }
+  __D__ [data-testid="stSelectbox"] input, __D__ [data-testid="stSelectbox"] button { color:var(--ink); }
+  __D__ [role="listbox"], __D__ [role="listbox"] ul { background:var(--card) !important; color:var(--ink); }
+  __D__ [role="option"] { background:var(--card); color:var(--ink); }
+  __D__ [role="option"][aria-selected="true"], __D__ [role="option"]:hover { background:var(--lav-soft) !important; }
+  __D__ [data-testid="stPopoverBody"] { background:var(--card); color:var(--ink); border-color:var(--line); }
+  __D__ [data-testid="stFileUploaderDropzone"] { background:var(--card2); color:var(--ink); }
+  __D__ [data-testid="stFileUploaderDropzone"] small, __D__ [data-testid="stFileUploaderDropzone"] span { color:var(--muted); }
+  __D__ [data-testid="stExpander"] details { border-color:var(--line); }
+  __D__ [data-testid="stExpander"] summary, __D__ [data-testid="stExpander"] summary svg { color:var(--purple); }
+  __D__ [data-testid="stAlertContainer"] { background:#2b2750; color:var(--ink); }
+  __D__ [data-testid="stAlertContainer"] p, __D__ [data-testid="stAlertContainer"] svg { color:var(--ink); }
+  __D__ .stButton button[kind="secondary"], __D__ [data-testid="stBaseButton-secondary"] { background:var(--field); color:var(--ink); border-color:var(--line); }
+  __D__ .st-key-rescan button { background:#fff !important; color:#2d2a52 !important; border-color:#fff !important; }
+  __D__ .st-key-nav .stButton button { color:var(--ink); }
+  __D__ .st-key-nav .stButton button[kind="primary"] { background:var(--lav-soft); color:var(--purple); }
+  __D__ .st-key-hero .st-key-moodcard { border:1px solid var(--line); }
+  __D__ .gauge path:first-child { stroke:var(--rail); } __D__ .gauge path:last-child { stroke:var(--purple); }
+  __D__ .bar.combined .fill, __D__ .legend i.combined { background:var(--purple) !important; }
+  __D__ .band-light { background:#203a29; color:#a9dbb7; }
+</style>
+"""
+
+
+def page_css(dark_first=False):
+    """The page's CSS. The components put the class mt-dark (Settings > Theme > Dark) or
+    mt-light on the page; with dark_first (the theme cookie says dark), the dark theme
+    also applies before they have, so the first paint is already dark."""
+    selector = ":is(html.mt-dark, html:not(.mt-light))" if dark_first else "html.mt-dark"
+    return PAGE_CSS + DARK_PAGE_CSS.replace("__D__", selector)
 
 
 def page_head_html(title, text):
@@ -479,7 +528,7 @@ def mood_card_html(card, low):
 
 def bars_html(bars):
     """The Face / Text / Combined bars for all seven emotions, sorted by the combined value."""
-    legend = "".join(f'<span><i style="background:{BAR_COLOURS[g["key"]]}"></i>{BAR_NAMES[g["key"]]}</span>'
+    legend = "".join(f'<span><i class="{g["key"]}" style="background:{BAR_COLOURS[g["key"]]}"></i>{BAR_NAMES[g["key"]]}</span>'
                      for g in bars["groups"])
     rows = []
     for k, emotion in enumerate(bars["emotions"]):

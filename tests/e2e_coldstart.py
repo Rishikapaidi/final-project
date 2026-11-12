@@ -3,7 +3,7 @@ import os, subprocess, sys, time, urllib.request
 from playwright.sync_api import sync_playwright
 from pagekit import legend, read_card
 
-HERE = os.path.dirname(os.path.abspath(__file__)); S = os.path.join(HERE, "output"); os.makedirs(S, exist_ok=True); ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); PY = sys.executable
+HERE = os.path.dirname(os.path.abspath(__file__)); from pagekit import OUT as S; ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); PY = sys.executable
 RUN = sys.argv[1] if len(sys.argv) > 1 else "1"; PORT = str(8570 + int(RUN))
 TEXT = "I miss her so much, everything feels empty and pointless now."
 FLAG = r"Running|load_songs|load_face_model|load_text_model|summarise_scan|text_probabilities|webcam_frames|build_queue|build_view|read_faces|cache_resource|cache_data"

@@ -3,7 +3,41 @@ import os, subprocess, sys, tempfile, time, urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-OUT = os.path.join(HERE, "output"); os.makedirs(OUT, exist_ok=True)
+# TEST_THEME=dark runs the browser tests with Settings > Theme > Dark saved, as a listener's
+# choice would be (in localStorage, in the page's in-memory copy, and in the prefs cookie the
+# server reads when the app opens); their logs and screenshots then go to output/dark.
+THEME = os.environ.get("TEST_THEME", "light")
+OUT = os.path.join(HERE, "output", "dark") if THEME == "dark" else os.path.join(HERE, "output")
+os.makedirs(OUT, exist_ok=True)
+DARK_INIT = """(() => {
+  if (window !== window.top) return;
+  const dark = JSON.stringify({ theme: "dark" });
+  try { if (!localStorage.getItem("moodtune.settings")) localStorage.setItem("moodtune.settings", dark); } catch (e) {}
+  const memory = window.__moodtuneMemory || (window.__moodtuneMemory = {});
+  if (!memory["moodtune.settings"]) memory["moodtune.settings"] = dark;
+  if (!/moodtune_prefs=/.test(document.cookie)) document.cookie = "moodtune_prefs=" + encodeURIComponent("theme=dark&lang=English&mode=auto") + "; path=/";
+})();"""
+if THEME == "dark":
+    from playwright.sync_api._generated import Browser
+    _new_context, _new_page = Browser.new_context, Browser.new_page
+
+    def _dark_context(self, *a, **k):
+        context = _new_context(self, *a, **k)
+        context.add_init_script(DARK_INIT)
+        return context
+
+    def _dark_page(self, *a, **k):
+        page = _new_page(self, *a, **k)
+        page.context.add_init_script(DARK_INIT)
+        return page
+
+    Browser.new_context, Browser.new_page = _dark_context, _dark_page
+
+
+def theme_report(page, *frames):
+    """What the page and the given component frames show: the page's theme class and background, and each frame's dark class."""
+    page_side = page.evaluate("[document.documentElement.classList.contains('mt-dark') ? 'dark' : 'light', getComputedStyle(document.querySelector('.stApp')).backgroundColor]")
+    return f"page {page_side[0]} ({page_side[1]}) | components dark: {[f.evaluate('document.documentElement.classList.contains(`dark`)') for f in frames]}"
 PY = sys.executable
 NEGATIVE = ["sad", "angry", "fear", "disgust"]
 IMAGE_EXT = (".jpg", ".jpeg", ".png", ".bmp", ".webp", ".gif")

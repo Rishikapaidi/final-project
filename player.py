@@ -171,7 +171,7 @@ def render_path(queue, message):
     title = path_title(queue["journey"]) if queue["mode"] == "Uplift" else "Songs for this moment"
     payload = _payload(queue, mode=queue["mode"], title=title, message=message, subtitle=queue["subtitle"],
                        note=queue["note"] or "", journey=queue["journey"])
-    return PATH_HTML.replace("__FONTS__", FONT_CSS).replace("__DATA__", payload)
+    return PATH_HTML.replace("__THEME__", THEME_HEAD).replace("__FONTS__", FONT_CSS).replace("__DATA__", payload)
 
 
 def render_bar(queue):
@@ -185,8 +185,23 @@ def render_bar(queue):
     "all" the queue loops from queue["loop_from"] (after an Uplift journey,
     the "keep listening" songs).
     """
-    return BAR_HTML.replace("__FONTS__", FONT_CSS).replace("__DATA__", _payload(queue, mode=queue["mode"]))
+    return BAR_HTML.replace("__THEME__", THEME_HEAD).replace("__FONTS__", FONT_CSS).replace("__DATA__", _payload(queue, mode=queue["mode"]))
 
+
+# Settings > Theme > Dark: the same tokens with dark values (each component page
+# gets the class "dark" on its <html>; the page itself is styled in ui.py).
+DARK_CSS = """
+  html.dark {
+          --cream:#15132a; --card:#211e3b; --ink:#ece9f7; --muted:#aaa4c6; --line:#3a3560; --purple:#c3b9f2;
+          --lav-soft:#322d5a; --terra:#e0845f; --terra-soft:#3a2721; --terra-ink:#f2b49a;
+          --field:#2a2649; --hover:#2b2750; --hover-soft:rgba(255,255,255,.08); --on-purple:#191630; --purple-hover:#d8d1fa;
+          --art-bg:#2c2848; --card2:#1b1833; --bar-bg:rgba(27,24,49,.97); --track:#3a3560; --switch-off:#4a4570;
+          --danger:#f19a9a; --veil:rgba(255,255,255,.07); }
+"""
+# Before anything is drawn: the dark class if the saved theme is dark (no light flash).
+THEME_HEAD = ('<script>(function(){var d=false;try{d=JSON.parse(localStorage.getItem("moodtune.settings")||"{}").theme==="dark";}'
+              'catch(e){try{var m=window.parent.__moodtuneMemory||{};d=JSON.parse(m["moodtune.settings"]||"{}").theme==="dark";}catch(e2){}}'
+              'if(d)document.documentElement.classList.add("dark");})();</script>')
 
 # The bundled fonts (static/fonts, served at app/static/). The component pages
 # are srcdoc iframes, so relative URLs resolve against the app's own address.
@@ -195,9 +210,12 @@ FONT_CSS = """
   @font-face { font-family:"Inter"; src:url("app/static/fonts/Inter-latin-variable.woff2") format("woff2"); font-weight:100 900; font-display:swap; }
   :root { --cream:#f6f3ee; --card:#ffffff; --ink:#2b2840; --muted:#625e78; --line:#e7e1d8; --purple:#2d2a52;
           --lavender:#b9b0e8; --lav-soft:#eeebfa; --terra:#b85c38; --terra-soft:#f8e9e1; --terra-ink:#7a3a20;
+          --field:#fff; --hover:var(--hover); --hover-soft:rgba(45,42,82,.07); --on-purple:#fff; --purple-hover:var(--purple-hover);
+          --art-bg:var(--art-bg); --card2:#fcfbf8; --bar-bg:rgba(255,253,249,.97); --track:var(--track); --switch-off:#d9d4e6;
+          --danger:#9b2f2f; --veil:rgba(255,255,255,.7);
           --serif:"Fraunces", Georgia, "Times New Roman", serif;
           --sans:"Inter", "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif; }
-"""
+""" + DARK_CSS
 
 # Shared by the scripts of all three pages (the song list, the player bar and
 # the top bar's buttons).
@@ -358,14 +376,34 @@ function setProfileName(name) { save(PROFILE, { name: name.trim().slice(0, 40) }
 // Settings (in the profile menu). None of them changes the queue, so they
 // never rerun the app: each component reads them here.
 const SETTINGS = "moodtune.settings";
-const DEFAULTS = { autoplay: true, repeat: "all", emotions: false, large: false };
+const LANGS = ["English", "Hindi", "Tamil", "Telugu", "Malayalam", "Korean"];
+const MODES = ["auto", "resonance", "uplift"];
+// language and mode are the defaults the app starts with (the server reads them from a cookie, see shell.py)
+const DEFAULTS = { autoplay: true, repeat: "all", emotions: false, large: false, theme: "light", language: "English", mode: "auto" };
 function settings() {
   const s = load(SETTINGS, {}), out = Object.assign({}, DEFAULTS);
   if (s && typeof s === "object") for (const k in DEFAULTS) if (typeof s[k] === typeof DEFAULTS[k]) out[k] = s[k];
   if (!["off", "all", "one"].includes(out.repeat)) out.repeat = DEFAULTS.repeat;
+  if (!["light", "dark"].includes(out.theme)) out.theme = DEFAULTS.theme;
+  if (!LANGS.includes(out.language)) out.language = DEFAULTS.language;
+  if (!MODES.includes(out.mode)) out.mode = DEFAULTS.mode;
   return out;
 }
 function setSetting(key, value) { const s = settings(); s[key] = value; save(SETTINGS, s); changed("settings"); }
+function applyTheme() { document.documentElement.classList.toggle("dark", settings().theme === "dark"); }
+applyTheme(); on("settings", applyTheme);
+
+// Open a collection in the Library (Liked songs "liked", Recently played "recent", or a playlist id):
+// straight away if the Library is on the page, otherwise by pressing its sidebar button.
+function openInLibrary(id) {
+  try {
+    const page = window.parent;
+    page.__moodtuneOpen = id;
+    if (page.document.querySelector(".st-key-library iframe")) { hub.postMessage({ type: "openCollection", id }); return; }
+    const b = page.document.querySelector(".st-key-nav_library button");
+    if (b) b.click();
+  } catch (e) {}
+}
 
 // The search box in the top bar filters the song list on the page, in the
 // browser. The query is kept on the page (not stored), so a list that
@@ -409,7 +447,7 @@ function askName(o) {
 # Library). Each list says what Play next / Add to queue do, and may add a
 # "Remove from ..." item. The page needs an empty <div id="menu" role="menu" hidden>.
 MENU_CSS = """
-  #menu { position:absolute; z-index:5; min-width:230px; max-width:300px; background:#fff; border:1px solid var(--line); border-radius:14px; padding:6px;
+  #menu { position:absolute; z-index:5; min-width:230px; max-width:300px; background:var(--field); border:1px solid var(--line); border-radius:14px; padding:6px;
           box-shadow:0 14px 40px rgba(45,42,82,.2); }
   #menu[hidden] { display:none; }
   #menu .mi { display:block; width:100%; text-align:left; border:none; background:none; font:inherit; font-size:14px; color:var(--ink);
@@ -503,7 +541,7 @@ const channel = new BroadcastChannel("moodtune:" + DATA.id);
 """ + BASE_JS
 
 PATH_HTML = r"""<!DOCTYPE html>
-<html><head><meta charset="utf-8">
+<html><head><meta charset="utf-8">__THEME__
 <style>
 __FONTS__
   * { box-sizing:border-box; }
@@ -518,7 +556,7 @@ __FONTS__
   .note { margin:14px 0 0; font-size:13.5px; line-height:1.5; color:var(--ink); background:var(--lav-soft); border-radius:12px; padding:10px 14px; }
   #bigplay { width:52px; height:52px; border-radius:50%; border:none; background:var(--purple); cursor:pointer; flex:none;
              display:flex; align-items:center; justify-content:center; box-shadow:0 6px 16px rgba(45,42,82,.25); transition:transform .12s; }
-  #bigplay:hover { transform:scale(1.05); } #bigplay svg { width:20px; height:20px; fill:#fff; }
+  #bigplay:hover { transform:scale(1.05); } #bigplay svg { width:20px; height:20px; fill:var(--on-purple); }
   svg.s { fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
   #bigplay:focus-visible, .pill:focus-visible, .lastfm:focus-visible, .row:focus-visible, summary:focus-visible { outline:3px solid var(--lavender); outline-offset:2px; }
   /* Uplift: the warm terracotta panel holding the journey */
@@ -527,7 +565,7 @@ __FONTS__
   .uplift h2 { color:var(--terra-ink); }
   .uplift #bigplay { background:var(--terra); box-shadow:0 6px 16px rgba(184,92,56,.3); }
   .steps { display:flex; flex-wrap:wrap; gap:6px; margin:12px 0 0; padding:0; list-style:none; }
-  .steps li { font-size:12.5px; color:var(--terra-ink); background:rgba(255,255,255,.7); border-radius:999px; padding:3px 11px; text-transform:capitalize; }
+  .steps li { font-size:12.5px; color:var(--terra-ink); background:var(--veil); border-radius:999px; padding:3px 11px; text-transform:capitalize; }
   .steps li.arrow { background:none; padding:3px 0; }
   .section { color:var(--muted); font-size:12px; letter-spacing:.1em; text-transform:uppercase; font-weight:600; margin:20px 6px 6px; }
   .uplift #panel .section { color:var(--terra-ink); margin-top:16px; }
@@ -536,35 +574,36 @@ __FONTS__
   .row[hidden], .section[hidden] { display:none !important; }
   .icon-btn { width:34px; height:34px; border:none; background:none; border-radius:999px; color:var(--muted); cursor:pointer;
               display:flex; align-items:center; justify-content:center; padding:0; }
-  .icon-btn:hover, .icon-btn[aria-expanded="true"] { color:var(--purple); background:rgba(45,42,82,.07); }
+  .icon-btn:hover, .icon-btn[aria-expanded="true"] { color:var(--purple); background:var(--hover-soft); }
   .icon-btn svg { width:19px; height:19px; } .icon-btn:focus-visible { outline:3px solid var(--lavender); outline-offset:1px; }
   .heart[aria-pressed="true"] { color:var(--terra); } .heart[aria-pressed="true"] svg { fill:currentColor; }
   /* the top bar's search: how many songs match */
   #matches { font-size:13px; color:var(--muted); margin:14px 0 0; } #matches[hidden] { display:none; }
   #nomatch { color:var(--muted); font-size:14px; padding:14px 8px 6px; }
-__MENU_CSS__  .row:hover { background:#f4f1fb; } .uplift #panel .row:hover { background:rgba(255,255,255,.6); }
-  .row.playing { background:var(--lav-soft); } .uplift #panel .row.playing { background:#fff; }
+__MENU_CSS__  .row:hover { background:var(--hover); } .uplift #panel .row:hover { background:var(--veil); }
+  .row.playing { background:var(--lav-soft); } .uplift #panel .row.playing { background:var(--field); }
   .num { text-align:center; color:var(--muted); font-size:14.5px; font-variant-numeric:tabular-nums; }
   .row.playing .num, .row.playing .title { color:var(--purple); font-weight:600; }
   .uplift #panel .row.playing .title, .uplift #panel .row.playing .num { color:var(--terra-ink); }
-  .art { width:48px; height:48px; border-radius:10px; background:#ebe6dc; object-fit:cover; display:block; }
+  .art { width:48px; height:48px; border-radius:10px; background:var(--art-bg); object-fit:cover; display:block; }
   .noart { display:flex; align-items:center; justify-content:center; color:#8f8aa3; font-size:20px; }
   .meta { min-width:0; } .title { font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .artist { font-size:13px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
-  .tag { font-size:11.5px; color:var(--muted); border:1px solid var(--line); background:#fff; border-radius:999px; padding:2px 9px; white-space:nowrap; text-transform:capitalize; }
-  .pill { border:none; background:var(--purple); color:#fff; font-weight:600; font-size:12.5px; border-radius:999px; font-family:var(--sans);
+  .tag { font-size:11.5px; color:var(--muted); border:1px solid var(--line); background:var(--field); border-radius:999px; padding:2px 9px; white-space:nowrap; text-transform:capitalize; }
+  .pill { border:none; background:var(--purple); color:var(--on-purple); font-weight:600; font-size:12.5px; border-radius:999px; font-family:var(--sans);
           padding:6px 14px; cursor:pointer; white-space:nowrap; min-width:76px; }
-  .pill:hover { background:#433e78; }
+  .pill:hover { background:var(--purple-hover); }
   .uplift #panel .pill { background:var(--terra); } .uplift #panel .pill:hover { background:#a04d2d; }
   .eq { display:inline-flex; gap:2px; align-items:flex-end; height:14px; }
   .eq i { width:3px; background:currentColor; animation:eq .9s ease-in-out infinite; }
   .eq i:nth-child(2) { animation-delay:.25s; } .eq i:nth-child(3) { animation-delay:.5s; }
   .paused .eq i { animation-play-state:paused; }
   @keyframes eq { 0%,100% { height:4px; } 50% { height:14px; } }
-  details.journey { background:rgba(255,255,255,.75); border-radius:12px; margin:14px 0 6px; padding:0 14px; }
+  details.journey { background:var(--veil); border-radius:12px; margin:14px 0 6px; padding:0 14px; }
   details.journey summary { cursor:pointer; padding:11px 0; font-size:13.5px; font-weight:600; color:var(--terra-ink); }
   details.journey .cap { color:var(--muted); font-size:12px; margin:0 0 12px; }
   .empty { color:var(--muted); padding:30px 8px; }
+  html.dark #chart text { fill:var(--muted); } html.dark #chart line { stroke:var(--line); }
   @media (max-width: 640px) {
     #card { padding:20px 14px 12px; border-radius:18px; } h2 { font-size:25px; }
     .uplift #panel { padding:18px 12px 10px; margin:-4px -4px 6px; }
@@ -725,7 +764,7 @@ window.playlist = { state: () => ({ current, paused }) };
 """.replace("__COMMON__", COMMON_JS).replace("__MENU__", MENU_JS).replace("__MENU_CSS__", MENU_CSS)
 
 BAR_HTML = r"""<!DOCTYPE html>
-<html><head><meta charset="utf-8">
+<html><head><meta charset="utf-8">__THEME__
 <style>
 __FONTS__
   * { box-sizing:border-box; }
@@ -733,11 +772,11 @@ __FONTS__
   /* While the queue is open the iframe fills the window: the shade (a click on it closes the queue) and the panel sit above the bar. */
   #shade { position:absolute; left:0; right:0; top:0; bottom:86px; display:none; background:rgba(43,40,64,.16); }
   body.queue-open #shade { display:block; }
-  #bar { position:absolute; left:0; right:0; bottom:0; height:86px; background:rgba(255,253,249,.97); border-top:1px solid var(--line);
+  #bar { position:absolute; left:0; right:0; bottom:0; height:86px; background:var(--bar-bg); border-top:1px solid var(--line);
          box-shadow:0 -6px 24px rgba(45,42,82,.08); display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) minmax(0,1fr);
          align-items:center; gap:18px; padding:0 22px; }
   #now { display:flex; align-items:center; gap:12px; min-width:0; }
-  .art { width:52px; height:52px; border-radius:10px; background:#ebe6dc; object-fit:cover; flex:none; display:block; }
+  .art { width:52px; height:52px; border-radius:10px; background:var(--art-bg); object-fit:cover; flex:none; display:block; }
   .noart { display:flex; align-items:center; justify-content:center; color:#8f8aa3; font-size:20px; }
   .meta { min-width:0; } .title { font-size:14.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .artist { font-size:12.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
@@ -745,7 +784,7 @@ __FONTS__
   .controls { display:flex; align-items:center; gap:14px; }
   button { background:none; border:none; cursor:pointer; padding:7px; display:flex; align-items:center; justify-content:center;
            border-radius:999px; color:var(--muted); position:relative; font-family:var(--sans); }
-  button:hover { color:var(--purple); background:rgba(45,42,82,.06); }
+  button:hover { color:var(--purple); background:var(--hover-soft); }
   button svg { width:18px; height:18px; }
   svg.f { fill:currentColor; }
   svg.s { fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
@@ -754,11 +793,11 @@ __FONTS__
   button[aria-disabled="true"] { opacity:.35; cursor:not-allowed; }
   button[aria-disabled="true"]:hover { background:none; color:var(--muted); }
   button:focus-visible, input:focus-visible, #track:focus-visible, .qrow:focus-visible { outline:3px solid var(--lavender); outline-offset:2px; }
-  #toggle { width:42px; height:42px; background:var(--purple); color:#fff; } #toggle:hover { background:#433e78; color:#fff; }
+  #toggle { width:42px; height:42px; background:var(--purple); color:var(--on-purple); } #toggle:hover { background:var(--purple-hover); color:var(--on-purple); }
   #toggle svg { width:16px; height:16px; }
   .progress { display:flex; align-items:center; gap:10px; width:100%; font-size:11.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
   #track { flex:1; height:16px; cursor:pointer; position:relative; touch-action:none; display:flex; align-items:center; }
-  #track::before { content:""; position:absolute; left:0; right:0; height:5px; background:#e5e0f2; border-radius:3px; }
+  #track::before { content:""; position:absolute; left:0; right:0; height:5px; background:var(--track); border-radius:3px; }
   #fill { position:relative; height:5px; width:0; background:var(--purple); border-radius:3px; }
   #knob { position:absolute; top:2px; left:0; width:12px; height:12px; margin-left:-6px; border-radius:50%; background:var(--purple); opacity:0; transition:opacity .15s; }
   #track:hover #knob, #track.drag #knob, #track:focus-visible #knob { opacity:1; }
@@ -776,11 +815,11 @@ __FONTS__
   #qlist { overflow:auto; padding:0 10px 14px; }
   .qhead { font-size:11.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-weight:600; margin:12px 10px 6px; }
   .qrow { display:grid; grid-template-columns:40px minmax(0,1fr) auto; align-items:center; gap:12px; padding:6px 8px; border-radius:10px; cursor:pointer; }
-  .qrow:hover { background:#f4f1fb; } .qrow.now { background:var(--lav-soft); cursor:default; }
+  .qrow:hover { background:var(--hover); } .qrow.now { background:var(--lav-soft); cursor:default; }
   .qrow .art { width:40px; height:40px; border-radius:8px; }
   .qrow .title { font-size:14px; font-weight:500; } .qrow .artist { font-size:12px; }
   .byyou { display:inline-block; font-size:11px; color:var(--purple); background:var(--lav-soft); border-radius:999px; padding:1px 8px; margin-top:4px; }
-  .qrow.now .byyou { background:#fff; }
+  .qrow.now .byyou { background:var(--field); }
   .qempty { color:var(--muted); font-size:13.5px; padding:4px 10px 8px; margin:0; }
   @media (max-width: 760px) {
     #bar { grid-template-columns:minmax(0,1fr) auto auto; gap:4px; padding:0 8px 0 12px; }

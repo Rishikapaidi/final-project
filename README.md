@@ -43,9 +43,13 @@ A music-app layout with MOOD TUNE's own name, logo and colours:
 
 - **Top bar** (pinned): a menu button, the logo, a search box that filters
   the songs on the page by title or artist as you type, "Songs in", and an
-  avatar. The avatar shows the first letter of the name you give it in its
-  menu (optional, kept in this browser), or a person icon; the menu also
-  opens Settings and About.
+  avatar, which shows the first letter of the name you give it (optional,
+  kept in this browser) or a person icon. Its menu: the name and "Local
+  profile" (a pencil changes the name), Settings, Liked songs and History
+  (open the Library), Keyboard shortcuts, Privacy, About MOOD TUNE, Send
+  feedback (the project's GitHub Issues page, in a new tab; the address is
+  `FEEDBACK_URL` in `shell.py`) and Reset profile (after a confirm, clears
+  everything MOOD TUNE keeps in this browser, and the settings cookie).
 - **Sidebar:** Home, Explore and Library, then "New playlist" and your
   playlists (Liked songs, My playlist, the ones you made, Recently played).
   The menu button folds it to icons (remembered in this browser); on a
@@ -106,14 +110,24 @@ keeps playing while the app reruns, and none of it is sent to the server.
   (the last 50 songs started, newest first) keep only each song's title,
   artist, link, preview URL, artwork URL and language: never a mood, a scan
   or a time. With your name, the settings, the volume and the folded
-  sidebar, they live in the browser's localStorage; if localStorage is
+  sidebar, they live in the browser's localStorage (the settings cookie
+  above is the one exception); if localStorage is
   blocked, an in-memory copy is used until the page is reloaded.
-- **Settings** (the avatar's menu): autoplay next song, the starting repeat
-  mode, showing all 7 emotions by default, larger text, and clearing Liked
-  songs or Recently played. None of these changes the queue, so they never
-  rerun the app or stop the music; only "Songs in" and the Lift / Meet cards
-  rebuild the queue. **About MOOD TUNE** covers what the app does, its data
-  sources and licences, its limits and what it keeps.
+- **Settings** (the avatar's menu): Theme (Light, the default, or Dark),
+  larger text, showing all 7 emotions by default, Default language and
+  Default mode (Auto, "Meet me here" or "Lift my mood"), autoplay next song,
+  the starting repeat mode, and clearing Liked songs or Recently played.
+  None of these changes the queue, so they never rerun the app or stop the
+  music; only "Songs in" and the Lift / Meet cards rebuild the queue. The
+  theme switches straight away. The default language and mode apply from the
+  next time MOOD TUNE opens ("Songs in" starts with the language, and each
+  new reading starts with the mode). **About MOOD TUNE** covers what the app
+  does, its data sources and licences, its limits and what it keeps;
+  **Privacy** says what is kept where.
+- **The settings cookie:** so the app can open with them, the theme, default
+  language and default mode are also kept in a cookie (`moodtune_prefs`),
+  the only thing the server reads from the browser. It is removed when all
+  three are back at their defaults, and by Reset profile.
 
 ## Libraries
 

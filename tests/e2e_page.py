@@ -7,7 +7,7 @@ the narrow layout.
 """
 import os, sys, time
 from playwright.sync_api import sync_playwright
-from pagekit import (named_frame, OUT, bar_frame, describe_card, full_shot, image_files, log, new_images, path_frame,
+from pagekit import (named_frame, theme_report, OUT, bar_frame, describe_card, full_shot, image_files, log, new_images, path_frame,
                      player_state, players, read_card, set_bars_open, start_server, stop, wait_for_text_bars)
 
 SAD_TEXT = "I miss her so much, everything feels empty and pointless now."
@@ -71,6 +71,7 @@ with sync_playwright() as pw:
                 waited = wait_for_text_bars(page)
                 log(f"   Text bars appeared {waited:.1f}s after Enter" if waited is not None else "   NO Text bars after 60 s")
             bar = bar_frame(page); path = path_frame(page); time.sleep(1.5)
+            log(f"theme: {theme_report(page, bar, path, named_frame(page, 'topbar'), named_frame(page, 'actions'), named_frame(page, 'navlists'), named_frame(page, 'quickpicks'))}")
             card = read_card(page)
             log(f"mood card: {describe_card(card)}")
             log(f"   sentence {card['sentence']!r}")

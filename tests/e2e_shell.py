@@ -16,7 +16,7 @@ New playlist dialog.
 """
 import os, time
 from playwright.sync_api import sync_playwright
-from pagekit import (OUT, bar_frame, count_reruns, image_files, log, named_frame, new_images, path_frame, reruns,
+from pagekit import (OUT, theme_report, bar_frame, count_reruns, image_files, log, named_frame, new_images, path_frame, reruns,
                      start_server, stop)
 
 PORT = 8622
@@ -130,6 +130,7 @@ try:
         page.locator("#mtd-input").fill("Rainy day"); shot(page, "21_new_playlist")
         page.locator("#moodtune-dialog .mtd-ok").click()
         page.wait_for_selector(SELECTOR["library"], timeout=30000); lib = named_frame(page, "library"); time.sleep(1.5)
+        log(f"   theme on the Library: {theme_report(page, lib, nav)}")
         log(f"   -> Library open on {lib.locator('#vtitle').inner_text()!r} | empty note {lib.locator('#empty').inner_text()!r} | sidebar {list(sidebar(page))}")
         lib.locator("#vrename").click(); page.wait_for_timeout(300); page.locator("#mtd-input").fill("Rainy days"); page.locator("#moodtune-dialog .mtd-ok").click(); time.sleep(0.5)
         log(f"   Rename -> {lib.locator('#vtitle').inner_text()!r} | sidebar {list(sidebar(page))}")

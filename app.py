@@ -12,6 +12,7 @@ import math
 import os
 import time
 import uuid
+from urllib.parse import parse_qs, unquote
 
 import cv2
 import numpy as np
@@ -318,12 +319,36 @@ def choose(mode):
 
 
 def new_scan(scan):
-    """Store a new scan (webcam or photo). A new face reading goes back to Auto,
-    so a card chosen for the old reading doesn't stick; a change of text or
-    language alone keeps the chosen card."""
+    """Store a new scan (webcam or photo). A new face reading goes back to the
+    default mode (Auto unless Settings say otherwise), so a card chosen for the
+    old reading doesn't stick; a change of text or language alone keeps the
+    chosen card."""
     state["scan"] = scan
     state["scan_id"] = state.get("scan_id", 0) + 1
-    state["mode_choice"] = "Auto"
+    state["mode_choice"] = state.get("prefs", {}).get("mode", "Auto")
+
+
+# Settings > Theme, Default language and Default mode are kept in the browser
+# and in this cookie (written by shell.render_profile), so the app can open
+# with them. Nothing else from the browser reaches the server.
+PREFS_COOKIE = "moodtune_prefs"
+DEFAULT_MODES = {"auto": "Auto", "resonance": "Resonance", "uplift": "Uplift"}
+
+
+def cookie_prefs():
+    """{"theme": "light" | "dark", "language": a LANGUAGES name or None, "mode": a MODES name}
+    from the prefs cookie (defaults if it is missing or not understood)."""
+    try:
+        raw = st.context.cookies.get(PREFS_COOKIE) or ""
+    except Exception:
+        raw = ""
+    if not isinstance(raw, str):   # e.g. no browser behind the session (Streamlit's AppTest)
+        raw = ""
+    values = parse_qs(unquote(raw))
+    get = lambda key: (values.get(key) or [""])[0]
+    return {"theme": "dark" if get("theme") == "dark" else "light",
+            "language": get("lang") if get("lang") in LANGUAGES else None,
+            "mode": DEFAULT_MODES.get(get("mode"), "Auto")}
 
 
 def read_photo(photo):
@@ -640,14 +665,19 @@ def library_page():
         components.html(shell.render_library(), height=LIBRARY_HEIGHT)
 
 
-st.markdown(ui.PAGE_CSS, unsafe_allow_html=True)
+state = st.session_state
+# Read once per visit: the theme for the first paint, and the defaults for "Songs in" and the mode.
+if "prefs" not in state:
+    state["prefs"] = cookie_prefs()
+    if state["prefs"]["language"]:
+        state["language"] = state["prefs"]["language"]
+st.markdown(ui.page_css(dark_first=state["prefs"]["theme"] == "dark"), unsafe_allow_html=True)
 
 if not os.path.exists(SONGS_FILE):
     st.error("Song file not found. Build it once with:  python scripts/prepare_songs.py")
     st.stop()
 songs = load_songs()
-state = st.session_state
-state.setdefault("mode_choice", "Auto")
+state.setdefault("mode_choice", state["prefs"]["mode"])
 state.setdefault("page", "home")
 page = state["page"]
 

@@ -5,7 +5,7 @@ from PIL import Image
 from playwright.sync_api import sync_playwright
 from pagekit import bar_frame, full_shot, legend, path_frame, player_state, read_card, wait_for_text_bars
 
-HERE = os.path.dirname(os.path.abspath(__file__)); S = os.path.join(HERE, "output"); os.makedirs(S, exist_ok=True); ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); PY = sys.executable; PORT = "8586"
+HERE = os.path.dirname(os.path.abspath(__file__)); from pagekit import OUT as S; ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); PY = sys.executable; PORT = "8586"
 def log(*a): print("RESULT", *a, flush=True)
 NO_FACE_NOTE = ["No face was found in this picture, so your mood comes from your words.", "Tip: face the light, with the window in front of you, not behind."]
 SIZE_JS = "e => e.naturalWidth + 'x' + e.naturalHeight"
