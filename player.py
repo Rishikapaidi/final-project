@@ -829,6 +829,9 @@ const pathLen = DATA.mode === "Uplift" ? tracks.filter(t => t.section === "journ
 // songs added with "Play next" / "Add to queue" (added = true), which leave
 // the order once they have been played.
 let order = tracks.map((t, i) => ({ t, base: i, added: false }));
+// A list that replaced the mood queue (Home's mood chips): its label, or "" while the mood queue plays.
+// Its songs have base -1; picking a song of the mood list (or a new queue) brings the mood queue back.
+let context = "";
 let repeatDefault = settings().repeat;
 let pos = -1, failures = 0, shuffle = false, repeat = repeatDefault, pathDone = pathLen === 0, queueOpen = false;
 const fmt = s => { s = Math.max(0, Math.floor(s || 0)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
@@ -850,7 +853,8 @@ function refreshVolume() {
 }
 
 const now = () => (pos >= 0 ? order[pos] : null);
-function lastPathPos() { let p = -1; order.forEach((e, k) => { if (!e.added && e.base < pathLen) p = k; }); return p; }
+const isPath = e => !e.added && e.base >= 0 && e.base < pathLen;
+function lastPathPos() { let p = -1; order.forEach((e, k) => { if (isPath(e)) p = k; }); return p; }
 // What is playing: to the Home list (by its place in the list) and to every other list on the page (by its link).
 function announce() {
   const c = now();
@@ -890,8 +894,28 @@ function playAt(p) {
   addRecent(order[pos].t);
   refresh();
 }
-function playBase(i) { const p = order.findIndex(e => !e.added && e.base === i); if (p >= 0) playAt(p); }
-function loopStart() { const p = order.findIndex(e => !e.added && e.base === DATA.loopFrom); return p < 0 ? 0 : p; }
+function playBase(i) {
+  let p = order.findIndex(e => !e.added && e.base === i);
+  if (p < 0 && context && tracks[i]) { restoreMood(); p = order.findIndex(e => !e.added && e.base === i); }
+  if (p >= 0) playAt(p);
+}
+function loopStart() {
+  if (context) return 0;
+  const p = order.findIndex(e => !e.added && e.base === DATA.loopFrom); return p < 0 ? 0 : p;
+}
+// Replace the queue with a list (a mood chip) and play its first song.
+function replaceQueue(songs, label) {
+  songs = (songs || []).filter(validSong);
+  if (!songs.length) return;
+  context = label || "Your pick"; shuffle = false; pathDone = true; pos = -1;
+  order = songs.map(s => ({ t: songTrack(s), base: -1, added: false }));
+  playAt(0);
+}
+// Back to the mood queue (its songs in list order; the song playing carries on until the next one).
+function restoreMood() {
+  context = ""; shuffle = false; pos = -1; pathDone = pathLen === 0;
+  order = tracks.map((t, i) => ({ t, base: i, added: false }));
+}
 // auto: the song ended by itself. Repeat "off" then stops at the end of the
 // queue; the Next button always goes on (from the start of the loop).
 function next(auto) {
@@ -912,7 +936,7 @@ function setShuffle(on) {
   if (on && !pathDone) return false;
   shuffle = on;
   const slots = [];
-  for (let k = pos + 1; k < order.length; k++) if (!order[k].added && order[k].base >= pathLen) slots.push(k);
+  for (let k = pos + 1; k < order.length; k++) if (!order[k].added && !isPath(order[k])) slots.push(k);
   const items = slots.map(k => order[k]);
   if (on) for (let k = items.length - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); [items[k], items[j]] = [items[j], items[k]]; }
   else items.sort((a, b) => a.base - b.base);
@@ -965,7 +989,7 @@ function qrow(e, p, isNow) {
 function renderQueue() {
   const list = $("qlist"), keep = list.scrollTop;
   list.replaceChildren();
-  list.appendChild(el("div", "qhead", "Now playing"));
+  list.appendChild(el("div", "qhead", "Now playing" + (context ? " · " + context : "")));
   if (pos >= 0) list.appendChild(qrow(order[pos], pos, true)); else list.appendChild(el("p", "qempty", "Nothing yet. Press play or pick a song."));
   const rest = order.length - pos - 1;
   list.appendChild(el("div", "qhead", "Next up" + (rest ? " · " + rest : "")));
@@ -1064,6 +1088,7 @@ hub.addEventListener("message", e => {
   const m = e.data || {};
   if (m.type === "key") act(m.key);
   else if (m.type === "playSongs" || m.type === "playSaved") playSongs(m.songs);
+  else if (m.type === "replaceQueue") replaceQueue(m.songs, m.label);
   else if (m.type === "insertSongs") insertSongs(m.songs, m.where);
   else if (m.type === "hello") announce();
 });
@@ -1077,8 +1102,8 @@ channel.onmessage = e => {
 };
 refreshVolume(); refresh();
 window.player = {
-  audio, play: playBase, playAt, toggle, next: () => next(false), prev, setShuffle, cycleRepeat, setMuted, openQueue, insert, removeAt, playSongs, insertSongs,
-  state: () => ({ current: now() ? now().base : -1, pos, paused: audio.paused, time: audio.currentTime, src: audio.src, shuffle, repeat,
+  audio, play: playBase, playAt, toggle, next: () => next(false), prev, setShuffle, cycleRepeat, setMuted, openQueue, insert, removeAt, playSongs, insertSongs, replaceQueue,
+  state: () => ({ current: now() ? now().base : -1, pos, paused: audio.paused, time: audio.currentTime, src: audio.src, shuffle, repeat, context,
                   muted: audio.muted, pathDone, pathLen, queueOpen,
                   order: order.map(e => ({ base: e.base, added: e.added, title: e.t.title, link: e.t.lastfm })) }),
 };

@@ -880,11 +880,12 @@ window.quickpicks = { id: DATA.id, tracks: () => tracks.map(t => ({ title: t.tit
 
 
 # ---------------------------------------------------------------- one-off "play these songs" (Home's mood chips)
-def render_play_command(nonce, songs, message):
-    """A hidden page that tells the player bar to play `songs` (after the song
-    playing), once: the nonce is remembered on the page, so drawing it again on
-    a later rerun does nothing. songs: player._track dicts."""
-    data = {"nonce": nonce, "message": message,
+def render_play_command(nonce, songs, message, label):
+    """A hidden page that tells the player bar to replace its queue with `songs`
+    and play the first, once: the nonce is remembered on the page, so drawing it
+    again on a later rerun does nothing. songs: player._track dicts; label: what
+    the queue panel calls the list."""
+    data = {"nonce": nonce, "message": message, "label": label,
             "songs": [{"title": t["title"], "artist": t["artist"], "link": t["lastfm"], "preview": t["preview"],
                        "art": t["art"] or "", "language": t["language"]} for t in songs]}
     return _page("", "", PLAYCMD_JS, data)
@@ -895,7 +896,7 @@ let done = {};
 try { const page = window.parent; done = page.__moodtunePlayed || (page.__moodtunePlayed = {}); } catch (e) {}
 if (!done[DATA.nonce]) {
   done[DATA.nonce] = 1;
-  hub.postMessage({ type: "playSongs", songs: DATA.songs });
+  hub.postMessage({ type: "replaceQueue", songs: DATA.songs, label: DATA.label });
   if (DATA.message) toast(DATA.message);
 }
 window.playcommand = { nonce: DATA.nonce, count: DATA.songs.length };

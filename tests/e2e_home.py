@@ -4,9 +4,11 @@ With a sad face: the chips row at the top (six languages, seven moods), the
 "Detect my mood" card holding the scan, the words and the reading, and Quick
 picks (12 songs of the top emotion in "Songs in", three columns, Play all, a
 tile plays its song, the search box). A language chip only picks the
-language; a mood chip plays that mood in that language (the same songs as
-Explore's pick), once: later reruns and a trip to the Library and back don't
-play it again. With no face: Quick picks shows a mix before there is a
+language; a mood chip replaces the player's queue with that mood in that
+language (Explore's pick, in its order) and plays the first, once: later
+reruns and a trip to the Library and back don't play it again; a song from
+Home's list brings the mood queue back. Quick picks stay the same through
+reruns and page changes and differ from Explore's first 12. With no face: Quick picks shows a mix before there is a
 reading, and the reading's placeholder sits in the card until words arrive.
 Saves screenshots of the top of Home and of Quick picks.
 """
@@ -79,28 +81,38 @@ try:
         log(f"search {word!r}: {qp.locator('.tile:not([hidden])').count()} of {tiles.count()} tiles shown"); named_frame(page, "topbar").locator("#q").fill(""); time.sleep(0.3)
 
         log("== CHIPS")
+        qp_id = picks(page).evaluate("DATA.id")
         page.locator(".st-key-chip_lang_tamil button").click(); time.sleep(2); s1 = state()
         log(f"Tamil chip: selected {page.locator('[class*=st-key-chip_lang_] button[kind=primary]').inner_text()!r} | nothing new played (same song {s1['current'] == s['current']}, "
-            f"added {sum(o['added'] for o in s1['order'])}) | 'Songs in' still {page.locator('.st-key-language input').input_value()!r} | same queue {bar.evaluate('DATA.id') == queue_id}")
+            f"same order {s1['order'] == s['order']}) | 'Songs in' still {page.locator('.st-key-language input').input_value()!r} | same queue {bar.evaluate('DATA.id') == queue_id} "
+            f"| Quick picks unchanged by the rerun {picks(page).evaluate('DATA.id') == qp_id}")
         page.locator(".st-key-chip_mood_happy button").click(); time.sleep(3); s2 = state()
-        played = [o for o in s2["order"][s2["pos"]:] if o["added"]][:30]
-        log(f"Happy chip: now {s2['order'][s2['pos']]['title']!r} | playing {not s2['paused']} | toast {page.locator('#moodtune-toast').inner_text()!r} "
-            f"| chip marked {[t.strip() for t in page.locator('[class*=st-key-chip_mood_] button[kind=primary]').all_inner_texts()]} | mood queue still there {bar.evaluate('DATA.id') == queue_id}")
-        links = bar.evaluate("window.player.state().order.filter(o => o.added).map(o => o.link)")
-        langs_played = bar.evaluate("[...new Set(window.player.state().order.slice(window.player.state().pos).filter(o => o.added).map(o => o.title))].length")
+        chip_links = [o["link"] for o in s2["order"]]
+        art = bar.locator("#nowart").evaluate("e => e.tagName + ' ' + (e.src || '').slice(0, 30)")
+        log(f"Happy chip replaces the queue: {len(s2['order'])} songs, none 'added' {not any(o['added'] for o in s2['order'])} | plays the first {s2['pos'] == 0 and not s2['paused']} "
+            f"| queue panel label {s2['context']!r} | toast {page.locator('#moodtune-toast').inner_text()!r} | chip marked {[t.strip() for t in page.locator('[class*=st-key-chip_mood_] button[kind=primary]').all_inner_texts()]}")
+        log(f"   the bar shows the song: {bar.locator('#nowtitle').inner_text()!r} = first song {bar.locator('#nowtitle').inner_text() == s2['order'][0]['title']} | art {art!r}")
         page.locator(".st-key-chip_lang_english button").click(); time.sleep(2); s3 = state()
-        log(f"a rerun after it (English chip) plays nothing again: same song {s3['current'] == s2['current'] and s3['pos'] == s2['pos']} | added {sum(o['added'] for o in s3['order'])} "
-            f"(was {sum(o['added'] for o in s2['order'])})")
+        log(f"a rerun after it (English chip) plays nothing again: same song {s3['pos'] == s2['pos'] and s3['order'][s3['pos']]['link'] == s2['order'][s2['pos']]['link']} "
+            f"| same list {[o['link'] for o in s3['order']] == chip_links}")
         page.locator(".st-key-nav_library button").click(); page.wait_for_selector(".st-key-library iframe", timeout=30000); time.sleep(1)
         page.locator(".st-key-nav_home button").click(); page.wait_for_selector(".st-key-path iframe", timeout=30000); time.sleep(2); s4 = state()
-        log(f"   nor does a trip to the Library and back: same song {s4['order'][s4['pos']]['link'] == s3['order'][s3['pos']]['link']} | added {sum(o['added'] for o in s4['order'])}")
+        log(f"   nor does a trip to the Library and back: same song {s4['order'][s4['pos']]['link'] == s3['order'][s3['pos']]['link']} | same list {[o['link'] for o in s4['order']] == chip_links} "
+            f"| Quick picks the same {picks(page).evaluate('DATA.id') == qp_id}")
         page.locator(".st-key-nav_explore button").click(); page.wait_for_selector(".st-key-explorelist iframe", timeout=30000)
         page.locator(".st-key-xcard_lang_tamil button").click(); time.sleep(2.5); page.locator(".st-key-xcard_mood_happy button").click(); time.sleep(3)
         ex = named_frame(page, "songlist")
         ex_links = ex.evaluate("DATA.tracks.map(t => t.lastfm)"); ex_info = ex.evaluate("[[...new Set(DATA.tracks.map(t => t.bucket))], [...new Set(DATA.tracks.map(t => t.language))]]")
-        log(f"   the chip played Explore's Happy / Tamil pick: {ex.locator('#title').inner_text()!r} {ex_info} | same songs, same order "
-            f"{[l for l in links if l in ex_links] == ex_links[:len([l for l in links if l in ex_links])] and set(ex_links) <= set(links)}")
+        log(f"   the chip's list is Explore's Happy / Tamil pick: {ex.locator('#title').inner_text()!r} {ex_info} | same songs, same order {chip_links == ex_links}")
+        page.locator(".st-key-xcard_lang_english button").click(); time.sleep(2.5); page.locator(".st-key-xcard_mood_sad button").click(); time.sleep(3)
+        ex_first = named_frame(page, "songlist").evaluate("DATA.tracks.slice(0, 12).map(t => t.lastfm)")
         page.locator(".st-key-nav_home button").click(); page.wait_for_selector(".st-key-path iframe", timeout=30000); time.sleep(1.5)
+        qp_links = [t["link"] for t in picks(page).evaluate("window.quickpicks.tracks()")]
+        log(f"Quick picks (sad, English) against Explore's first 12 for sad / English: {len(set(qp_links) & set(ex_first))} in common | same as before the trips "
+            f"{picks(page).evaluate('DATA.id') == qp_id}")
+        path = path_frame(page); path.locator(".row").nth(3).locator(".pill").click(); time.sleep(2); s5 = state()
+        log(f"a song of Home's list brings the mood queue back: label {s5['context']!r} | {len(s5['order'])} songs = the list's {len(s5['order']) == path.evaluate('DATA.tracks.length')} "
+            f"| playing song 4 {s5['current'] == 3 and not s5['paused']} | same queue {bar.evaluate('DATA.id') == queue_id}")
         page.locator(".st-key-chips").scroll_into_view_if_needed(); page.evaluate("document.querySelector('[data-testid=stMain]').scrollTo(0, 0)"); time.sleep(0.5)
         shot(page, "22_home_top")
 

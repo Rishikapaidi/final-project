@@ -396,8 +396,9 @@ def play_chip(mood, language):
 
 def chips_row(language):
     """Home's row of chips: a language (starting as "Songs in"), then the seven moods.
-    A mood chip plays up to EXPLORE_TRACKS songs of that mood in that language
-    (the same pick as Explore's), after the song playing; the mood queue carries on."""
+    A mood chip replaces the player's queue with up to EXPLORE_TRACKS songs of that
+    mood in that language (the same pick as Explore's) and plays the first; picking
+    a song of the mood list, or a new reading, brings the mood queue back."""
     lang = state.get("chip_language") or language
     played = state.get("chip_play")
     with st.container(key="chips", horizontal=True, gap="small"):
@@ -414,16 +415,33 @@ def chips_row(language):
         if played:
             picked = explore_list(played["language"], played["mood"])["tracks"]
             in_lang = "" if played["language"] == "English" else f" in {played['language']}"
+            label = f"{played['mood'].capitalize()} songs{in_lang}"
             message = (f"Playing {played['mood']} songs{in_lang}" if picked
                        else f"No {played['mood']} songs{in_lang} have a saved preview yet")
-            components.html(shell.render_play_command(played["nonce"], picked, message), height=0)
+            components.html(shell.render_play_command(played["nonce"], picked, message, label), height=0)
+
+
+def quick_pick_list(language, emotion):
+    """QUICK_PICKS songs picked at random from the playable songs of that language (and
+    emotion), kept for the session so reruns show the same ones. They avoid Explore's
+    first QUICK_PICKS when the pool has enough other songs, so the two differ."""
+    lists = state.setdefault("quick_picks", {})
+    if (emotion, language) not in lists:
+        rows = explore_rows(language, emotion)
+        shown = {t["lastfm"] for t in explore_list(language, emotion)["tracks"][:QUICK_PICKS]}
+        others = rows[~rows.lastfm_url.isin(shown).values]
+        pool = others if len(others) >= QUICK_PICKS else rows
+        picked = player.playable_songs(pool, QUICK_PICKS, np.random.default_rng())
+        lists[(emotion, language)] = {"id": uuid.uuid4().hex, "tracks": [
+            player._track(song, preview, section="mood", number=n) for n, (song, preview) in enumerate(picked, 1)]}
+    return lists[(emotion, language)]
 
 
 def quick_picks(slot, language, emotion=None):
     """Quick picks: QUICK_PICKS songs of the reading's top emotion in "Songs in", or a
     mix of that language before there is a reading."""
-    picked = explore_list(language, emotion)
-    tracks = picked["tracks"][:QUICK_PICKS]
+    picked = quick_pick_list(language, emotion)
+    tracks = picked["tracks"]
     in_lang = "" if language == "English" else f" in {language}"
     if emotion:
         title, subtitle = f"{emotion.capitalize()} songs{in_lang}", "Picked for your mood reading."

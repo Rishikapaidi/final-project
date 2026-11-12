@@ -52,15 +52,19 @@ A music-app layout with MOOD TUNE's own name, logo and colours:
   narrow screen it slides in over the page instead.
 - **Home**, from the top:
   - a row of **chips**: six languages, then the seven moods. A language chip
-    picks the language (it starts as "Songs in"); a mood chip plays up to 30
-    songs of that mood in that language (Explore's pick for it), straight
-    away, with the mood queue carrying on after them;
+    picks the language (it starts as "Songs in"); a mood chip replaces the
+    player's queue with up to 30 songs of that mood in that language
+    (Explore's pick for it) and plays the first (the queue panel names the
+    list); picking a song from Home's list, or a new reading, brings the mood
+    queue back;
   - the **Detect my mood** card: the face scan and your words side by side,
     and the reading under them (the "X% low" gauge, the headline, how low
     face and text lean, "See all 7 emotions");
   - **Quick picks**: 12 songs in a grid (3 columns on a wide window) with
-    Play all, from the reading's top emotion in "Songs in", or a mix of that
-    language before there is a reading;
+    Play all, picked at random from the reading's top emotion in "Songs in"
+    (or a mix of that language before there is a reading). The pick is kept
+    for the visit, so reruns don't reshuffle it, and it avoids Explore's first
+    12 for the same mood and language;
   - the two cards ("Lift my mood", "Meet me here") and the songs or Uplift's
     path, as before.
 - **Explore:** browse by mood (the seven song buckets) and by language,
