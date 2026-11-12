@@ -174,7 +174,7 @@ def render_path(queue, message):
     return PATH_HTML.replace("__THEME__", THEME_HEAD).replace("__FONTS__", FONT_CSS).replace("__DATA__", payload)
 
 
-def render_bar(queue):
+def render_bar(queue, mood=None, related=None):
     """The player bar (the only <audio> on the page), as one HTML page.
 
     app.py pins it to the bottom of the window with CSS. Controls: shuffle
@@ -184,8 +184,18 @@ def render_bar(queue):
     keyboard shortcuts. When a song ends the next one starts; with repeat
     "all" the queue loops from queue["loop_from"] (after an Uplift journey,
     the "keep listening" songs).
+
+    The now-playing view (the song's art or title, or the expand button)
+    covers the page above the bar: large art, title, artist and language, and
+    tabs Up next (the play order; a click plays that song), Mood (mood: the
+    reading's headline, its "X% low" band and the mood card's sentence about
+    the songs) and Related (related: songs of the queue's language and the
+    reading's top emotion that are not in the queue; a click plays one). It
+    only reads the play order and calls the same functions as the bar's own
+    buttons, so it never changes the order, the path or the music.
     """
-    return BAR_HTML.replace("__THEME__", THEME_HEAD).replace("__FONTS__", FONT_CSS).replace("__DATA__", _payload(queue, mode=queue["mode"]))
+    payload = _payload(queue, mode=queue["mode"], mood=mood, related=related or [])
+    return BAR_HTML.replace("__THEME__", THEME_HEAD).replace("__FONTS__", FONT_CSS).replace("__DATA__", payload)
 
 
 # Settings > Theme > Dark: the same tokens with dark values (each component page
@@ -821,6 +831,53 @@ __FONTS__
   .byyou { display:inline-block; font-size:11px; color:var(--purple); background:var(--lav-soft); border-radius:999px; padding:1px 8px; margin-top:4px; }
   .qrow.now .byyou { background:var(--field); }
   .qempty { color:var(--muted); font-size:13.5px; padding:4px 10px 8px; margin:0; }
+  /* the now-playing button (the song's art and title) and the expand arrow */
+  #nowopen { display:flex; align-items:center; gap:12px; min-width:0; padding:4px 8px 4px 4px; margin-left:-4px; border-radius:12px; text-align:left; color:var(--ink); }
+  #nowopen:hover { background:var(--hover-soft); color:var(--ink); }
+  #nowopen .meta { min-width:0; }
+  #expand svg { width:18px; height:18px; }
+  /* the now-playing view: over the page, above the bar */
+  #np { position:absolute; left:0; right:0; top:0; bottom:86px; display:none; flex-direction:column; background:var(--cream); }
+  body.np-open #np { display:flex; } body.np-open #shade, body.np-open #queue { display:none; }
+  .nphead { display:flex; align-items:center; justify-content:space-between; padding:14px 18px 0 28px; flex:none; }
+  .nphead .kicker { font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:600; }
+  .npbody { flex:1; min-height:0; display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1fr); gap:40px; padding:10px 40px 24px; }
+  .npleft { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:0; text-align:center; }
+  #npart { width:min(100%, calc(100vh - 330px), 460px); aspect-ratio:1; border-radius:20px; overflow:hidden; background:var(--art-bg);
+           box-shadow:0 18px 50px rgba(45,42,82,.25); flex:none; }
+  #npart .art { width:100%; height:100%; border-radius:0; }
+  #npart .noart { font-size:64px; }
+  #nptitle { font-family:var(--serif); font-weight:600; font-size:30px; line-height:1.15; margin:22px 0 0; max-width:100%; overflow-wrap:anywhere; }
+  #npartist { font-size:16px; color:var(--muted); margin:6px 0 0; }
+  #nplang { display:inline-block; font-size:12.5px; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:2px 10px; margin-top:10px; }
+  #nplang[hidden] { display:none; }
+  #npctx { font-size:13px; color:var(--muted); margin:8px 0 0; }
+  .npright { display:flex; flex-direction:column; min-height:0; background:var(--card); border:1px solid var(--line); border-radius:22px; overflow:hidden; }
+  .tabs { display:flex; gap:4px; padding:10px 10px 0; border-bottom:1px solid var(--line); flex:none; }
+  .tab { font-size:14.5px; font-weight:600; color:var(--muted); padding:10px 16px; border-radius:10px 10px 0 0; position:relative; }
+  .tab[aria-selected="true"] { color:var(--purple); }
+  .tab[aria-selected="true"]::after { content:""; position:absolute; left:12px; right:12px; bottom:-1px; height:3px; border-radius:3px; background:var(--purple); }
+  .pane { overflow:auto; padding:6px 10px 16px; flex:1; min-height:0; } .pane[hidden] { display:none; }
+  .pnote { font-size:13px; color:var(--muted); margin:10px 10px 4px; line-height:1.5; }
+  .step { display:inline-block; font-size:11px; color:var(--terra-ink); background:var(--terra-soft); border-radius:999px; padding:1px 8px; margin-top:4px; }
+  .mood { padding:14px 12px; }
+  .mood .head { display:flex; align-items:center; gap:14px; }
+  .mood .emoji { font-size:44px; line-height:1; }
+  .mood h3 { font-family:var(--serif); font-weight:600; font-size:26px; margin:0; }
+  .mood .low { display:flex; align-items:center; gap:10px; margin:16px 0 0; font-size:15px; }
+  .mood .low b { font-family:var(--serif); font-size:28px; font-weight:600; }
+  .mood .band { font-size:12.5px; font-weight:600; border-radius:999px; padding:3px 12px; background:var(--lav-soft); color:var(--purple); }
+  .mood p { font-size:14.5px; line-height:1.6; margin:12px 0 0; }
+  .mood .why { border-top:1px solid var(--line); padding-top:12px; }
+  @media (max-width: 760px) {
+    #np { overflow:auto; }
+    .npbody { display:block; padding:4px 16px 20px; }
+    .npleft { margin-bottom:18px; }
+    #npart { width:min(70vw, 280px); }
+    #nptitle { font-size:24px; }
+    .npright { min-height:360px; }
+    #expand { display:none; }
+  }
   @media (max-width: 760px) {
     #bar { grid-template-columns:minmax(0,1fr) auto auto; gap:4px; padding:0 8px 0 12px; }
     .art { width:44px; height:44px; }
@@ -831,14 +888,32 @@ __FONTS__
 </style></head>
 <body>
 <div id="shade"></div>
+<section id="np" role="dialog" aria-modal="true" aria-labelledby="nptitle">
+  <header class="nphead"><span class="kicker">Now playing</span><button id="npclose" title="Close (Esc)" aria-label="Close the now-playing view"></button></header>
+  <div class="npbody">
+    <div class="npleft"><div id="npart"></div><h2 id="nptitle">Nothing playing</h2><p id="npartist"></p><span id="nplang" hidden></span><p id="npctx"></p></div>
+    <div class="npright">
+      <div class="tabs" role="tablist" aria-label="Now playing">
+        <button class="tab" role="tab" id="tab-up" aria-controls="pane-up" aria-selected="true">Up next</button>
+        <button class="tab" role="tab" id="tab-mood" aria-controls="pane-mood" aria-selected="false" tabindex="-1">Mood</button>
+        <button class="tab" role="tab" id="tab-rel" aria-controls="pane-rel" aria-selected="false" tabindex="-1">Related</button>
+      </div>
+      <div class="pane" role="tabpanel" id="pane-up" aria-labelledby="tab-up"></div>
+      <div class="pane" role="tabpanel" id="pane-mood" aria-labelledby="tab-mood" hidden></div>
+      <div class="pane" role="tabpanel" id="pane-rel" aria-labelledby="tab-rel" hidden></div>
+    </div>
+  </div>
+</section>
 <section id="queue" role="dialog" aria-label="Queue">
   <header><h2>Queue</h2><button id="qclose" title="Close the queue" aria-label="Close the queue"></button></header>
   <div id="qlist"></div>
 </section>
 <div id="bar">
-  <div id="now"><div class="art noart" id="nowart" aria-hidden="true">&#9835;</div>
-    <div class="meta"><div class="title" id="nowtitle">Nothing playing</div><div class="artist" id="nowartist">Press play or pick a song</div></div>
-    <button id="like" aria-pressed="false" hidden></button></div>
+  <div id="now"><button id="nowopen" title="Open the now-playing view" aria-label="Open the now-playing view" aria-haspopup="dialog" aria-expanded="false">
+      <div class="art noart" id="nowart" aria-hidden="true">&#9835;</div>
+      <div class="meta"><div class="title" id="nowtitle">Nothing playing</div><div class="artist" id="nowartist">Press play or pick a song</div></div></button>
+    <button id="like" aria-pressed="false" hidden></button>
+    <button id="expand" title="Open the now-playing view" aria-label="Open the now-playing view" aria-haspopup="dialog" aria-expanded="false"></button></div>
   <div id="center">
     <div class="controls">
       <button id="shuffle" aria-label="Shuffle" aria-pressed="false"></button>
@@ -918,6 +993,7 @@ function refresh() {
   rp.title = rp.ariaLabel = REPEAT_TITLES[repeat];
   $("queuebtn").classList.toggle("on", queueOpen);
   if (queueOpen) renderQueue();
+  if (npOpen) renderNow();
   announce();
 }
 
@@ -998,15 +1074,99 @@ function removeAt(p) { if (p > pos && order[p] && order[p].added) { order.splice
 // The queue panel: while it is open the iframe itself is pinned to the whole
 // window (Streamlit's wrapper keeps the bar's height, so growing inside it
 // would push the panel off the bottom of the screen).
+// The queue panel and the now-playing view: while either is open the iframe is pinned to the whole window.
+let npOpen = false, npTab = "up", npOpener = null;
+function pinFrame() {
+  const f = window.frameElement, on = queueOpen || npOpen;
+  if (!f) return;
+  Object.assign(f.style, on ? { position: "fixed", left: "0", bottom: "0", width: "100%", height: "100vh", zIndex: "1001" }
+                            : { position: "", left: "", bottom: "", width: "", height: BAR_HEIGHT + "px", zIndex: "" });
+  // the bar's container sits under the top bar (999 < 1000); while pinned it goes above it
+  const holder = f.closest(".st-key-playerbar");
+  if (holder) holder.style.zIndex = on ? "1001" : "";
+}
 function openQueue(on) {
+  if (on && npOpen) openNow(false);
   queueOpen = on;
   document.body.classList.toggle("queue-open", on);
   $("queuebtn").setAttribute("aria-expanded", on);
-  const f = window.frameElement;
-  if (f) Object.assign(f.style, on ? { position: "fixed", left: "0", bottom: "0", width: "100%", height: "100vh", zIndex: "1001" }
-                                   : { position: "", left: "", bottom: "", width: "", height: BAR_HEIGHT + "px", zIndex: "" });
+  pinFrame();
   refresh();
   (on ? $("qclose") : $("queuebtn")).focus();
+}
+// The now-playing view. It reads the play order and plays through playAt / playSongs, like the bar's own buttons.
+function openNow(on, opener) {
+  if (on && queueOpen) openQueue(false);
+  npOpen = on;
+  document.body.classList.toggle("np-open", on);
+  ["nowopen", "expand"].forEach(id => $(id).setAttribute("aria-expanded", on));
+  pinFrame();
+  if (on) { npOpener = opener || $("nowopen"); renderNow(); $("npclose").focus(); }
+  else if (npOpener) { npOpener.focus(); npOpener = null; }
+}
+function showTab(name, focus) {
+  npTab = name;
+  [["up", "tab-up", "pane-up"], ["mood", "tab-mood", "pane-mood"], ["rel", "tab-rel", "pane-rel"]].forEach(([n, tab, pane]) => {
+    const on = n === name; $(tab).setAttribute("aria-selected", on); $(tab).tabIndex = on ? 0 : -1; $(pane).hidden = !on;
+  });
+  renderNow();
+  if (focus) $("tab-" + name).focus();
+}
+function renderNow() {
+  if (!npOpen) return;
+  const c = now();
+  $("npart").replaceChildren(c ? artNode(c.t, "art") : artNode({}, "art"));
+  $("nptitle").textContent = c ? c.t.title : "Nothing playing";
+  $("npartist").textContent = c ? c.t.artist : "Press play, or pick a song from Up next.";
+  $("nplang").hidden = !(c && c.t.language); $("nplang").textContent = c && c.t.language ? c.t.language : "";
+  $("npctx").textContent = context ? "Playing " + context + ", from a mood chip" : (DATA.mood ? "From your mood reading" : "");
+  if (npTab === "up") renderUpNext(); else if (npTab === "mood") renderMood(); else renderRelated();
+}
+function renderUpNext() {
+  const pane = $("pane-up"), keep = pane.scrollTop;
+  pane.replaceChildren();
+  if (pathLen && !context) pane.appendChild(el("p", "pnote", "Your " + pathLen + "-song path plays in this order. Shuffle never moves its songs."));
+  pane.appendChild(el("div", "qhead", "Now playing"));
+  if (pos >= 0) pane.appendChild(npRow(order[pos], pos, true)); else pane.appendChild(el("p", "qempty", "Nothing yet. Pick a song below."));
+  const rest = order.length - pos - 1;
+  pane.appendChild(el("div", "qhead", "Next up" + (rest ? " · " + rest : "")));
+  if (!rest) pane.appendChild(el("p", "qempty", repeat === "off" ? "That's the end of the list." : "Then the list starts again."));
+  for (let p = pos + 1; p < order.length; p++) pane.appendChild(npRow(order[p], p, false));
+  pane.scrollTop = keep;
+}
+function npRow(e, p, isNow) {
+  const r = qrow(e, p, isNow), meta = r.querySelector(".meta");
+  if (isPath(e) && !context) { const step = el("span", "step", "Path · step " + (e.base + 1)); meta.appendChild(step); }
+  r.dataset.pos = p;
+  return r;
+}
+function renderMood() {
+  const pane = $("pane-mood"), m = DATA.mood;
+  pane.replaceChildren();
+  const box = el("div", "mood"); pane.appendChild(box);
+  if (!m) { box.appendChild(el("p", null, "No mood reading yet. Look at the camera on Home, or tell MOOD TUNE how your day was.")); return; }
+  const head = el("div", "head"); const emo = el("span", "emoji", m.emoji); emo.setAttribute("aria-hidden", "true"); head.appendChild(emo);
+  head.appendChild(el("h3", null, m.headline)); box.appendChild(head);
+  const low = el("div", "low"); low.appendChild(el("b", null, m.low + "%")); low.appendChild(el("span", null, "low")); low.appendChild(el("span", "band", m.band));
+  box.appendChild(low);
+  box.appendChild(el("p", null, m.band_sentence));
+  box.appendChild(el("p", "why", m.message));
+  if (context) box.appendChild(el("p", "pnote", "Playing now: " + context + ", from a mood chip. Pick a song from Home's list to go back to these songs."));
+}
+function renderRelated() {
+  const pane = $("pane-rel"), m = DATA.mood, inQueue = new Set(order.map(e => e.t.lastfm));
+  const songs = (DATA.related || []).filter(t => !inQueue.has(t.lastfm));
+  pane.replaceChildren();
+  if (m) pane.appendChild(el("p", "pnote", "More " + m.emotion + " songs" + (m.language === "English" ? "" : " in " + m.language) + ", not in your queue. A song you pick plays straight away."));
+  if (!songs.length) { pane.appendChild(el("p", "qempty", "No other songs to suggest right now.")); return; }
+  songs.forEach(t => {
+    const r = el("div", "qrow rel"); r.tabIndex = 0; r.setAttribute("role", "button"); r.ariaLabel = "Play " + t.title + " by " + t.artist; r.dataset.link = t.lastfm;
+    r.appendChild(artNode(t, "art"));
+    const meta = el("div", "meta"); meta.appendChild(el("div", "title", t.title)); meta.appendChild(el("div", "artist", t.artist)); r.appendChild(meta);
+    const go = () => playSongs([songOf(t)]);
+    r.addEventListener("click", go); r.addEventListener("keydown", ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); go(); } });
+    pane.appendChild(r);
+  });
 }
 function qrow(e, p, isNow) {
   const r = el("div", "qrow" + (isNow ? " now" : ""));
@@ -1067,6 +1227,7 @@ function act(key) {
   else if (key === "mute") setMuted(!audio.muted); else if (key === "like") like();
 }
 function onKey(e) {
+  if (e.key === "Escape" && npOpen) { openNow(false); return; }
   if (e.key === "Escape" && queueOpen) { openQueue(false); return; }
   const key = shortcut(e);
   if (!key) return;
@@ -1132,6 +1293,16 @@ hub.addEventListener("message", e => {
   else if (m.type === "hello") announce();
 });
 $("qclose").addEventListener("click", () => openQueue(false));
+$("nowopen").addEventListener("click", () => openNow(!npOpen, $("nowopen")));
+$("expand").addEventListener("click", () => openNow(!npOpen, $("expand")));
+$("npclose").addEventListener("click", () => openNow(false));
+[["tab-up", "up"], ["tab-mood", "mood"], ["tab-rel", "rel"]].forEach(([id, n]) => $(id).addEventListener("click", () => showTab(n)));
+document.querySelector(".tabs").addEventListener("keydown", ev => {
+  const names = ["up", "mood", "rel"], k = names.indexOf(npTab);
+  if (ev.key === "ArrowRight" || ev.key === "ArrowLeft") { ev.preventDefault(); ev.stopPropagation(); showTab(names[(k + (ev.key === "ArrowRight" ? 1 : 2)) % 3], true); }
+});
+$("npclose").innerHTML = icon("close");
+$("expand").innerHTML = '<svg class="s" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 15 12 9 18 15"/></svg>';
 $("shade").addEventListener("click", () => openQueue(false));
 channel.onmessage = e => {
   const m = e.data;
@@ -1141,9 +1312,9 @@ channel.onmessage = e => {
 };
 refreshVolume(); refresh();
 window.player = {
-  audio, play: playBase, playAt, toggle, next: () => next(false), prev, setShuffle, cycleRepeat, setMuted, openQueue, insert, removeAt, playSongs, insertSongs, replaceQueue,
+  audio, play: playBase, playAt, toggle, next: () => next(false), prev, setShuffle, cycleRepeat, setMuted, openQueue, openNow, showTab, insert, removeAt, playSongs, insertSongs, replaceQueue,
   state: () => ({ current: now() ? now().base : -1, pos, paused: audio.paused, time: audio.currentTime, src: audio.src, shuffle, repeat, context,
-                  muted: audio.muted, pathDone, pathLen, queueOpen,
+                  muted: audio.muted, pathDone, pathLen, queueOpen, npOpen, npTab,
                   order: order.map(e => ({ base: e.base, added: e.added, title: e.t.title, link: e.t.lastfm })) }),
 };
 </script>

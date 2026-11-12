@@ -68,6 +68,7 @@ LANGUAGE_NAMES = {"English": "English", "Hindi": "हिन्दी", "Tamil": 
                   "Korean": "한국어"}
 EXPLORE_TRACKS = 30
 QUICK_PICKS = 12           # Home's Quick picks grid (3 columns of 4)
+RELATED_SONGS = 12         # the now-playing view's Related tab
 # The player bar with nothing to play yet (before a mood is read); songs from
 # Explore or the Library can still be played through it.
 IDLE_QUEUE = {"id": "idle", "tracks": [], "loop_from": 0, "mode": "Resonance"}
@@ -390,10 +391,34 @@ def current_queue(emotions, fused, language, text, face_probs, text_probs):
     wanted = requested_mode(mode_choice, fused)
     queue_key = (state.get("scan_id", 0), text.strip(), wanted, language)
     if state.get("queue_key") != queue_key:
-        state["queue"] = {**build_queue(songs, emotions, fused, mode_choice, language), "id": uuid.uuid4().hex}
+        state["queue"] = {**build_queue(songs, emotions, fused, mode_choice, language), "id": uuid.uuid4().hex,
+                          "language": language, "emotion": emotions[0]}
+        state["queue"]["related"] = related_songs(language, emotions[0], state["queue"]["tracks"])
         state["view"] = build_view(face_probs, text_probs, fused, state["queue"])
         state["queue_key"] = queue_key
     return state["queue"], state["view"], wanted
+
+
+def related_songs(language, emotion, tracks):
+    """The now-playing view's Related tab: up to RELATED_SONGS playable songs of the queue's
+    language and the reading's top emotion that are not in the queue (picked once, with it)."""
+    rows = explore_rows(language, emotion)
+    rows = rows[~rows.lastfm_url.isin({t["lastfm"] for t in tracks}).values]
+    return [player._track(song, preview, section="related", number=n)
+            for n, (song, preview) in enumerate(player.playable_songs(rows, RELATED_SONGS, np.random.default_rng()), 1)]
+
+
+def now_playing_mood(queue):
+    """The now-playing view's Mood tab, for the mood queue: the reading's headline, its
+    "X% low" band, and the mood card's sentence about the songs (the same words as Home)."""
+    view = state.get("view")
+    if not queue or queue is not state.get("queue") or not view:
+        return None
+    share = view["low"]["combined"]
+    band, sentence = ui.band(share)
+    return {"emoji": view["card"]["emoji"], "headline": view["card"]["headline"], "low": ui.percent(share),
+            "band": band, "band_sentence": sentence, "message": view["card"]["message"],
+            "emotion": queue.get("emotion", ""), "language": queue.get("language", "")}
 
 
 def background_queue(language):
@@ -721,7 +746,8 @@ queue = home_page(language) if page == "home" else background_queue(language)
 # new reading replaces it.
 player_queue = queue if queue is not None else state.get("queue")
 with bar_slot:
-    components.html(player.render_bar(player_queue if player_queue and player_queue["tracks"] else IDLE_QUEUE),
+    bar_queue = player_queue if player_queue and player_queue["tracks"] else IDLE_QUEUE
+    components.html(player.render_bar(bar_queue, mood=now_playing_mood(bar_queue), related=bar_queue.get("related")),
                     height=BAR_HEIGHT)
 if page == "explore":
     explore_page(language)

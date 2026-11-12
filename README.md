@@ -99,6 +99,17 @@ keeps playing while the app reruns, and none of it is sent to the server.
   ("Now playing", "Next up"). Shuffle only reorders the songs still to come;
   Uplift's 5-song path is never shuffled, and shuffle stays greyed out until
   the path has finished.
+- **Now playing:** the song's art or title in the player bar (or its arrow)
+  opens a view over the page, with the bar still at the bottom: large art,
+  title, artist and language, and three tabs. **Up next** is the play order
+  (Uplift's 5-song path in order and marked, never shuffled; a click plays
+  that song). **Mood** shows the reading's headline, its "X% low" band and
+  the mood card's sentence about the songs (the same words as Home).
+  **Related** lists up to 12 songs in the queue's language and the reading's
+  top emotion that are not in the queue; a click plays one. Esc or the close
+  button goes back to the page. It runs in the browser: the music doesn't
+  stop and the app doesn't rerun. On a narrow screen the tabs sit under the
+  art.
 - **Keyboard:** Space = play/pause, Right / Left = next / previous,
   M = mute, L = like the song playing. Keys typed into a text box are
   ignored.
