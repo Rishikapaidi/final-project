@@ -243,7 +243,7 @@ try:
         top.locator("label.setting", has_text="Show all 7").click(); time.sleep(0.6)
         exp = page.locator(".st-key-moodcard details").get_attribute("open") is not None
         top.locator("label.setting", has_text="Larger text").click(); time.sleep(0.6)
-        large = page.evaluate("[document.documentElement.classList.contains('moodtune-large'), getComputedStyle(document.querySelector('.st-key-moodcard')).zoom]")
+        large = page.evaluate("[document.documentElement.classList.contains('moodtune-large'), getComputedStyle(document.querySelector('.st-key-hero')).zoom]")
         s = state()
         log(f"   autoplay off, repeat 'This song' (player now {rep}), emotions shown ({exp}), larger text {large}")
         log(f"   music through 4 settings: playing {not s['paused']}, same song {s['current'] == 1}, time {t0:.1f} -> {s['time']:.1f} | same queue {bar.evaluate('DATA.id') == queue_id} | app reruns {reruns(page) - runs0}")

@@ -214,9 +214,31 @@ PAGE_CSS = """
   .st-key-playerbar iframe { display:block; width:100%; height:86px; border:none; }
   /* Settings > Larger text: the page's cards are drawn 15% bigger (the top bar, sidebar and player bar keep their size) */
   html.moodtune-large .greeting, html.moodtune-large .st-key-hero, html.moodtune-large .st-key-notices,
-  html.moodtune-large .st-key-moodcard, html.moodtune-large .st-key-choice, html.moodtune-large .st-key-path,
+  html.moodtune-large .st-key-choice, html.moodtune-large .st-key-path, html.moodtune-large .st-key-quickpicks,
   html.moodtune-large .page-head, html.moodtune-large .st-key-explore, html.moodtune-large .st-key-explorelist,
   html.moodtune-large .st-key-library { zoom:1.15; }
+
+  /* Home: the chips row, the reading inside the "Detect my mood" card, Quick picks */
+  .st-key-chips { flex-wrap:wrap; row-gap:8px; padding:2px 2px 6px; margin:4px 0 0; align-items:center; }
+  .st-key-chips::-webkit-scrollbar { display:none; }
+  .st-key-chips [data-testid="stElementContainer"] { flex:none; width:auto !important; }
+  .st-key-chips .stButton button { border-radius:10px; min-height:36px; padding:5px 14px; border:1px solid var(--line); background:#fff;
+                                   color:var(--ink); box-shadow:none; white-space:nowrap; }
+  .st-key-chips .stButton button p { font-size:14px; font-weight:500; white-space:nowrap; }
+  .st-key-chips .stButton button:hover { border-color:var(--lavender); background:#fbfaff; color:var(--purple); }
+  .st-key-chips .stButton button[kind="primary"] { background:var(--purple); border-color:var(--purple); color:#fff; }
+  .st-key-chips .stButton button[kind="primary"] p { font-weight:600; }
+  .st-key-chips .stButton button:focus-visible { outline:3px solid var(--lavender); outline-offset:2px; }
+  .chip-sep { display:block; width:1px; height:26px; background:var(--line); margin:0 6px; }
+  .st-key-chips [data-testid="stElementContainer"]:has(.chip-sep) [data-testid="stMarkdownContainer"] { margin:0 !important; }
+  [data-testid="stLayoutWrapper"]:has(> .st-key-playcmd) { display:none; }
+  .st-key-hero .st-key-moodcard { margin-top:4px; box-shadow:none; border:none; }
+  .result-wait { border:1px dashed rgba(255,255,255,.28); border-radius:20px; padding:20px 22px; color:#e3def7; }
+  .result-wait b { display:block; font-size:15.5px; color:#fbf8f3; font-weight:600; }
+  .result-wait span { display:block; font-size:13.5px; margin-top:4px; color:#cfc8ef; }
+  .st-key-quickpicks { margin-top:10px; }
+  .st-key-quickpicks iframe { display:block; width:100%; border:none; }
+  .st-key-quickpicks [data-testid="stElementContainer"] { height:auto !important; }
 
   /* Explore and Library */
   .page-head { margin:22px 0 6px; }
@@ -287,6 +309,8 @@ PAGE_CSS = """
     .st-key-language [data-testid="stWidgetLabel"] { display:none; }
     .st-key-language [data-testid="stSelectbox"] > div:last-child { width:112px; }
     .st-key-topbar { padding:0 8px 0 4px; }
+    /* the chips scroll sideways in one row */
+    .st-key-chips { flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none; }
   }
   @media (max-width: 640px) {
     [data-testid="stMainBlockContainer"] { padding:calc(var(--top) + 6px) 16px 116px; }
@@ -359,8 +383,12 @@ def greeting_html(local):
     return f'<div class="greeting"><div class="date">{date}</div><h1>{greeting(local)}</h1></div>'
 
 
-HERO_HTML = ('<div><h2>How are you, really?</h2>'
-             '<p class="hero-sub">MOOD TUNE combines your expression and your words.</p></div>')
+HERO_HTML = ('<div><h2>Detect my mood</h2>'
+             '<p class="hero-sub">MOOD TUNE reads your expression and your words together.</p></div>')
+
+# Under the scan and the words, before there is a reading.
+RESULT_WAIT_HTML = ('<div class="result-wait"><b>Your mood reading appears here</b>'
+                    '<span>Look at the camera, or tell MOOD TUNE how your day was.</span></div>')
 
 
 def scan_screen(title, detail=""):

@@ -790,3 +790,113 @@ openCollection(start); fit();
 hub.postMessage({ type: "hello" });
 window.library = { open: openCollection, current: () => openId, collections };
 """
+
+
+# ---------------------------------------------------------------- Quick picks (Home)
+def render_quickpicks(list_id, title, subtitle, tracks):
+    """Home's Quick picks: a grid of songs (art, title, artist; 3 columns on a wide
+    window) with Play all. A tile plays its song through the player bar, after the
+    song playing, like Play next."""
+    data = {"id": list_id, "title": title, "subtitle": subtitle,
+            "tracks": [{k: t[k] for k in ("title", "artist", "lastfm", "link_label", "language", "bucket", "preview", "art")} for t in tracks]}
+    return _page(QUICKPICKS_CSS, QUICKPICKS_BODY, QUICKPICKS_JS, data)
+
+
+QUICKPICKS_CSS = """
+  html, body { overflow:hidden; }
+  #card { background:var(--card); border:1px solid var(--line); border-radius:22px; padding:22px 22px 16px;
+          box-shadow:0 1px 2px rgba(45,42,82,.05), 0 8px 26px rgba(45,42,82,.07); margin:2px 2px 14px; }
+  .head { display:flex; align-items:center; gap:16px; justify-content:space-between; margin:0 4px 14px; }
+  .kicker { font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:600; margin:0 0 4px; }
+  h2 { font-family:var(--serif); font-weight:600; font-size:26px; line-height:1.15; margin:0; }
+  .sub { margin:4px 0 0; font-size:13.5px; color:var(--muted); }
+  #playall { display:inline-flex; align-items:center; gap:8px; border:1px solid var(--line); background:#fff; color:var(--ink); border-radius:999px;
+             font:inherit; font-size:14px; font-weight:600; padding:9px 18px; cursor:pointer; flex:none; }
+  #playall:hover { border-color:var(--lavender); } #playall svg { width:15px; height:15px; fill:currentColor; stroke:none; }
+  #grid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:4px 14px; }
+  .tile { display:grid; grid-template-columns:52px minmax(0, 1fr); align-items:center; gap:12px; padding:7px 8px; border-radius:12px;
+          cursor:pointer; border:none; background:none; font:inherit; color:var(--ink); text-align:left; width:100%; }
+  .tile:hover { background:#f4f1fb; } .tile.playing { background:var(--lav-soft); }
+  .tile[hidden] { display:none; }
+  .cover { position:relative; width:52px; height:52px; }
+  .art { width:52px; height:52px; border-radius:9px; background:#ebe6dc; object-fit:cover; display:block; }
+  .noart { display:flex; align-items:center; justify-content:center; color:#8f8aa3; font-size:20px; }
+  .cover .over { position:absolute; inset:0; border-radius:9px; background:rgba(28,25,52,.45); display:flex; align-items:center; justify-content:center;
+                 opacity:0; transition:opacity .12s; }
+  .cover .over svg { width:18px; height:18px; fill:#fff; }
+  .tile:hover .over, .tile:focus-visible .over, .tile.playing .over { opacity:1; }
+  .meta { min-width:0; } .title { font-size:14.5px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tile.playing .title { color:var(--purple); font-weight:700; }
+  .artist { font-size:12.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
+  #nomatch { color:var(--muted); font-size:14px; padding:10px 6px 4px; } #nomatch[hidden] { display:none; }
+  @media (max-width: 860px) { #grid { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 520px) { #grid { grid-template-columns:minmax(0, 1fr); } #card { padding:18px 12px 12px; border-radius:18px; }
+                              h2 { font-size:22px; } .head { flex-wrap:wrap; } }
+"""
+QUICKPICKS_BODY = """
+<div id="card">
+  <div class="head"><div><p class="kicker">Quick picks</p><h2 id="title"></h2><p class="sub" id="sub"></p></div>
+    <button id="playall"></button></div>
+  <div id="grid" role="list"></div>
+  <div id="nomatch" hidden>No quick picks match your search.</div>
+</div>
+"""
+QUICKPICKS_JS = r"""
+const tracks = DATA.tracks;
+let nowLink = "", nowPaused = true;
+$("title").textContent = DATA.title; $("sub").textContent = DATA.subtitle;
+$("playall").innerHTML = PLAY + "Play all";
+$("playall").addEventListener("click", () => hub.postMessage({ type: "playSongs", songs: tracks.map(songOf) }));
+tracks.forEach(t => {
+  const b = el("button", "tile"); b.dataset.link = t.lastfm; b.setAttribute("role", "listitem");
+  b.ariaLabel = "Play " + t.title + " by " + t.artist;
+  const cover = el("div", "cover"); cover.appendChild(artNode(t, "art"));
+  const over = el("div", "over"); over.setAttribute("aria-hidden", "true"); over.innerHTML = PLAY; cover.appendChild(over); b.appendChild(cover);
+  const meta = el("div", "meta"); meta.appendChild(el("div", "title", t.title)); meta.appendChild(el("div", "artist", t.artist)); b.appendChild(meta);
+  b.addEventListener("click", () => (t.lastfm === nowLink ? hub.postMessage({ type: "key", key: "space" }) : hub.postMessage({ type: "playSongs", songs: [songOf(t)] })));
+  $("grid").appendChild(b);
+});
+function refresh() {
+  document.querySelectorAll(".tile").forEach(b => {
+    const on = !!nowLink && b.dataset.link === nowLink;
+    b.classList.toggle("playing", on);
+    b.querySelector(".over").innerHTML = on && !nowPaused ? PAUSE : PLAY;
+  });
+}
+hub.addEventListener("message", e => { if (e.data && e.data.type === "now") { nowLink = e.data.link; nowPaused = e.data.paused; refresh(); } });
+function filter(q) {
+  let shown = 0;
+  document.querySelectorAll(".tile").forEach((b, k) => { const hit = matches(q, tracks[k]); b.hidden = !hit; if (hit) shown++; });
+  $("nomatch").hidden = !q || shown > 0;
+}
+onSearch(filter);
+function fit() { if (window.frameElement) window.frameElement.style.height = Math.ceil(document.documentElement.scrollHeight) + "px"; }
+new ResizeObserver(fit).observe(document.body);
+document.addEventListener("keydown", e => { const key = shortcut(e); if (!key) return; e.preventDefault(); if (key !== "held") hub.postMessage({ type: "key", key }); });
+if (searchQuery()) filter(searchQuery());
+refresh(); fit(); hub.postMessage({ type: "hello" });
+window.quickpicks = { id: DATA.id, tracks: () => tracks.map(t => ({ title: t.title, link: t.lastfm, language: t.language, bucket: t.bucket })) };
+"""
+
+
+# ---------------------------------------------------------------- one-off "play these songs" (Home's mood chips)
+def render_play_command(nonce, songs, message):
+    """A hidden page that tells the player bar to play `songs` (after the song
+    playing), once: the nonce is remembered on the page, so drawing it again on
+    a later rerun does nothing. songs: player._track dicts."""
+    data = {"nonce": nonce, "message": message,
+            "songs": [{"title": t["title"], "artist": t["artist"], "link": t["lastfm"], "preview": t["preview"],
+                       "art": t["art"] or "", "language": t["language"]} for t in songs]}
+    return _page("", "", PLAYCMD_JS, data)
+
+
+PLAYCMD_JS = r"""
+let done = {};
+try { const page = window.parent; done = page.__moodtunePlayed || (page.__moodtunePlayed = {}); } catch (e) {}
+if (!done[DATA.nonce]) {
+  done[DATA.nonce] = 1;
+  hub.postMessage({ type: "playSongs", songs: DATA.songs });
+  if (DATA.message) toast(DATA.message);
+}
+window.playcommand = { nonce: DATA.nonce, count: DATA.songs.length };
+"""

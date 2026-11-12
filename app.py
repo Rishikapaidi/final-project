@@ -55,6 +55,7 @@ TOP_HEIGHT = 56            # the top bar's two components
 NAVLISTS_HEIGHT = 360      # the sidebar's playlists (the page CSS stretches it to fill the sidebar)
 LIBRARY_HEIGHT = 640       # first heights; the Library and the Explore list grow to fit
 EXPLORE_LIST_HEIGHT = 900
+QUICKPICKS_HEIGHT = 360
 PHOTO_TYPES = ["jpg", "jpeg", "png"]
 # The sidebar's pages: key, label, icon.
 PAGES = [("home", "Home", ":material/home:"), ("explore", "Explore", ":material/explore:"),
@@ -65,6 +66,7 @@ LANGUAGE_NAMES = {"English": "English", "Hindi": "हिन्दी", "Tamil": 
                   "Telugu": "తెలుగు", "Malayalam": "മലയാളം",
                   "Korean": "한국어"}
 EXPLORE_TRACKS = 30
+QUICK_PICKS = 12           # Home's Quick picks grid (3 columns of 4)
 # The player bar with nothing to play yet (before a mood is read); songs from
 # Explore or the Library can still be played through it.
 IDLE_QUEUE = {"id": "idle", "tracks": [], "loop_from": 0, "mode": "Resonance"}
@@ -383,13 +385,66 @@ def background_queue(language):
     return current_queue(emotions, fused, language, text, scan["face_probs"], text_probs)[0]
 
 
+def pick_chip_language(name):
+    state["chip_language"] = name
+
+
+def play_chip(mood, language):
+    """A mood chip: play that mood's songs in the chip language (drawn once by chips_row)."""
+    state["chip_play"] = {"mood": mood, "language": language, "nonce": uuid.uuid4().hex}
+
+
+def chips_row(language):
+    """Home's row of chips: a language (starting as "Songs in"), then the seven moods.
+    A mood chip plays up to EXPLORE_TRACKS songs of that mood in that language
+    (the same pick as Explore's), after the song playing; the mood queue carries on."""
+    lang = state.get("chip_language") or language
+    played = state.get("chip_play")
+    with st.container(key="chips", horizontal=True, gap="small"):
+        for name in LANGUAGES:
+            st.button(name, key=f"chip_lang_{name.lower()}", on_click=pick_chip_language, args=(name,),
+                      type="primary" if name == lang else "secondary")
+        st.markdown('<span class="chip-sep" aria-hidden="true"></span>', unsafe_allow_html=True)
+        for emotion in EXPLORE_MOODS:
+            on = bool(played) and played["mood"] == emotion and played["language"] == lang
+            st.button(f"{mood.EMOJI[emotion]} {emotion.capitalize()}", key=f"chip_mood_{emotion}", on_click=play_chip,
+                      args=(emotion, lang), type="primary" if on else "secondary")
+    # The order to play, sent once to the player bar (always in the same place, so nothing after it moves).
+    with st.container(key="playcmd"):
+        if played:
+            picked = explore_list(played["language"], played["mood"])["tracks"]
+            in_lang = "" if played["language"] == "English" else f" in {played['language']}"
+            message = (f"Playing {played['mood']} songs{in_lang}" if picked
+                       else f"No {played['mood']} songs{in_lang} have a saved preview yet")
+            components.html(shell.render_play_command(played["nonce"], picked, message), height=0)
+
+
+def quick_picks(slot, language, emotion=None):
+    """Quick picks: QUICK_PICKS songs of the reading's top emotion in "Songs in", or a
+    mix of that language before there is a reading."""
+    picked = explore_list(language, emotion)
+    tracks = picked["tracks"][:QUICK_PICKS]
+    in_lang = "" if language == "English" else f" in {language}"
+    if emotion:
+        title, subtitle = f"{emotion.capitalize()} songs{in_lang}", "Picked for your mood reading."
+    else:
+        title, subtitle = f"A mix of songs{in_lang}", "Your picks follow your mood once it has been read."
+    with slot.container():
+        if tracks:
+            components.html(shell.render_quickpicks(picked["id"] + ":qp", title, subtitle, tracks), height=QUICKPICKS_HEIGHT)
+        else:
+            st.info(f"No songs{in_lang} have a saved preview yet.")
+
+
 def home_page(language):
-    """Greeting, the scan and your words, the mood reading, the choice cards and
-    the songs. Returns the queue, or None if there is no reading yet."""
+    """The chips, the greeting, the "Detect my mood" card (the scan, your words and
+    the reading), Quick picks, the choice cards and the songs. Returns the queue,
+    or None if there is no reading yet."""
+    chips_row(language)
     local = ui.local_now(st.context.timezone, st.context.timezone_offset)
     st.markdown(ui.greeting_html(local), unsafe_allow_html=True)
 
-    # The hero card: the face scan and the text box.
+    # The "Detect my mood" card: the face scan, the text box, and the reading under them.
     with st.container(key="hero"):
         st.markdown(ui.HERO_HTML, unsafe_allow_html=True)
         face_column, text_column = st.columns(2, gap="medium")
@@ -417,7 +472,13 @@ def home_page(language):
             reading_slot = st.empty()
             st.markdown('<p class="tile-foot">Up to 180 characters. Your words are read on this computer and kept only '
                         'for this visit.</p>', unsafe_allow_html=True)
+        result_slot = st.empty()
+        result_slot.markdown(ui.RESULT_WAIT_HTML, unsafe_allow_html=True)
     notices = st.container(key="notices")
+    with st.container(key="quickpicks"):
+        picks_slot = st.empty()
+    if "scan" not in state:
+        quick_picks(picks_slot, language)   # a default set while the first scan runs
 
     if tile_photo is not None and not read_photo(tile_photo):
         notices.warning("That file couldn't be read as a picture. Try a JPEG or PNG.")
@@ -451,6 +512,7 @@ def home_page(language):
 
     if fused is None:
         notices.warning("I couldn't see a face. Tap to scan again, upload a photo, or tell me how your day was.")
+        quick_picks(picks_slot, language)
         return None
 
     queue, view, wanted = current_queue(emotions, fused, language, user_text, face_probs, text_probs)
@@ -460,11 +522,13 @@ def home_page(language):
         notices.caption("The preview service is limiting requests right now, so some songs could not be checked. "
                         "Scan again in a minute for a fuller list.")
 
-    # The mood reading: "X% low" (the share Auto mode uses), and the same for face and text.
-    with st.container(key="moodcard"):
+    # The mood reading, in the card under the scan and the words: "X% low" (the
+    # share Auto mode uses), and the same for face and text.
+    with result_slot.container(key="moodcard"):
         st.markdown(ui.mood_card_html(view["card"], view["low"]), unsafe_allow_html=True)
         with st.expander("See all 7 emotions"):
             st.markdown(ui.bars_html(view["bars"]), unsafe_allow_html=True)
+    quick_picks(picks_slot, language, emotions[0])
 
     # What do you need from music? Auto stays the default, and the card it
     # would choose is tagged "Recommended".
