@@ -187,4 +187,37 @@ try:
         browser.close()
 finally:
     stop(server)
+
+# --- no face: the player keeps the last mood queue when Home has no reading
+server = start_server(PORT + 1, "blank", "shell_blank")
+try:
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(channel="msedge", headless=True)
+        page = browser.new_page(viewport={"width": 1440, "height": 900}); errors = []; page.on("pageerror", lambda e: errors.append(str(e)))
+        page.goto(f"http://localhost:{PORT + 1}"); page.wait_for_selector("[data-testid=stAlert]", timeout=180000)
+        log("== NO FACE: THE PLAYER KEEPS THE LAST MOOD QUEUE")
+        idle = bar_frame(page, idle=True).evaluate("DATA.id")
+        box = page.get_by_label("How was your day?"); box.fill("I miss her so much, everything feels empty."); box.press("Enter")
+        page.wait_for_selector(SELECTOR["home"], timeout=120000); bar = bar_frame(page); path = path_frame(page); time.sleep(1.5)
+        queue_id = bar.evaluate("DATA.id"); state = lambda: bar.evaluate("window.player.state()")
+        path.locator(".row").nth(0).locator(".pill").click(); time.sleep(2)
+        log(f"no face, then words: idle player before ({idle!r}) -> mood queue {queue_id != 'idle'} | playing {not state()['paused']}")
+        go(page, "library"); page.locator(".st-key-nav_home button").click(); page.wait_for_selector(".greeting", timeout=30000); time.sleep(1.5)
+        box = page.get_by_label("How was your day?"); box.fill(""); box.press("Enter"); page.wait_for_timeout(3000)
+        s = state()
+        log(f"back on Home, words cleared (no face, no words): alert {page.locator('[data-testid=stAlert]').first.inner_text()[:40]!r} | player keeps the queue "
+            f"{bar.evaluate('DATA.id') == queue_id} | still playing {not s['paused']} (song {s['current'] + 1}, {s['time']:.1f}s) | one player {page.locator('.st-key-playerbar iframe').count() == 1}")
+        page.get_by_role("button", name="Tap to scan again").click(); page.wait_for_timeout(9000)
+        s = state()
+        log(f"'Tap to scan again', still no face: player keeps the queue {bar.evaluate('DATA.id') == queue_id} | still playing {not s['paused']}")
+        box = page.get_by_label("How was your day?"); box.fill("Finally finished my exams, I feel amazing!"); box.press("Enter")
+        for _ in range(60):
+            page.wait_for_timeout(1000)
+            try:
+                if bar_frame(page, timeout=2).evaluate("DATA.id") != queue_id: break
+            except Exception: pass
+        log(f"a new reading (happy words) replaces it: new queue {bar_frame(page).evaluate('DATA.id') != queue_id} | page errors {errors}")
+        browser.close()
+finally:
+    stop(server)
 log(f"image files created or changed on disk by the app: {new_images(before)}")

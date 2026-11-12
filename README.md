@@ -61,7 +61,9 @@ A music-app layout with MOOD TUNE's own name, logo and colours:
   Rename / Delete (your own playlists) or Clear.
 
 Moving between the pages never stops the music: the player bar keeps its
-place on the page, and the words typed on Home stay in the box. Songs
+place on the page, and the words typed on Home stay in the box. If Home has
+no reading for a while (no face and no words, say after a scan that found no
+face), the player keeps the last mood queue until a new reading replaces it. Songs
 played from Explore or the Library start straight away and go in after the
 song playing, like "Play next"; the queue from your mood carries on after
 them.

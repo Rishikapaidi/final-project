@@ -596,8 +596,13 @@ bar_slot = st.container(key="playerbar")
 
 # 4. The page.
 queue = home_page(language) if page == "home" else background_queue(language)
+# With no reading right now (no face and no words, e.g. after "Tap to scan again"
+# found no face), the player keeps the last mood queue, and its music, until a
+# new reading replaces it.
+player_queue = queue if queue is not None else state.get("queue")
 with bar_slot:
-    components.html(player.render_bar(queue if queue and queue["tracks"] else IDLE_QUEUE), height=BAR_HEIGHT)
+    components.html(player.render_bar(player_queue if player_queue and player_queue["tracks"] else IDLE_QUEUE),
+                    height=BAR_HEIGHT)
 if page == "explore":
     explore_page(language)
 elif page == "library":
