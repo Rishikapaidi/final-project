@@ -102,6 +102,12 @@ try:
         t2 = state()["time"]; dur = bar.evaluate("window.player.audio.duration")
         log(f"seek: click at 50% -> {t1:.1f}s of {dur:.1f} | drag to 80% -> {t2:.1f}s | labels {bar.locator('#tcur').inner_text()} / {bar.locator('#tdur').inner_text()} "
             f"| ok {abs(t1 - dur * 0.5) < 1.5 and abs(t2 - dur * 0.8) < 1.5} | playing {playing()}")
+        rail = bar.evaluate("""() => { const r = id => document.getElementById(id).getBoundingClientRect(), cs = getComputedStyle(document.getElementById('track'), '::before');
+          return { rail: cs.backgroundColor, fill: getComputedStyle(document.getElementById('fill')).backgroundColor,
+                   between: r('tcur').right < r('track').left && r('track').right < r('tdur').left, gaps: [Math.round(r('track').left - r('tcur').right), Math.round(r('tdur').left - r('track').right)],
+                   width: Math.round(r('track').width), fillShare: Math.round(r('fill').width / r('track').width * 100) }; }""")
+        log(f"   the seek bar: rail {rail['rail']} (drawn {rail['rail'] not in ('rgba(0, 0, 0, 0)', 'transparent')}) | played part {rail['fill']} ({rail['fillShare']}%) "
+            f"| {rail['width']}px between the two times {rail['between']} (gaps {rail['gaps']}px)")
         bar.locator("#mute").click(); m1 = (state()["muted"], bar.locator("#mute").get_attribute("aria-pressed")); bar.locator("#mute").click(); m2 = state()["muted"]
         log(f"mute button: muted {m1[0]} (aria-pressed {m1[1]}) -> unmuted {not m2} | playing {playing()}")
 

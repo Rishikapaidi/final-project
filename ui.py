@@ -223,7 +223,8 @@ PAGE_CSS = """
   html.moodtune-large .st-key-library { zoom:1.15; }
 
   /* Home: the chips row, the reading inside the "Detect my mood" card, Quick picks */
-  .st-key-chips { flex-wrap:wrap; row-gap:8px; padding:2px 2px 6px; margin:4px 0 0; align-items:center; }
+  /* one row; it scrolls sideways when the window is too narrow for all seven */
+  .st-key-chips { flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none; padding:2px 2px 6px; margin:4px 0 0; align-items:center; }
   .st-key-chips::-webkit-scrollbar { display:none; }
   .st-key-chips [data-testid="stElementContainer"] { flex:none; width:auto !important; }
   .st-key-chips .stButton button { border-radius:10px; min-height:36px; padding:5px 14px; border:1px solid var(--line); background:var(--field);
@@ -233,8 +234,6 @@ PAGE_CSS = """
   .st-key-chips .stButton button[kind="primary"] { background:var(--purple); border-color:var(--purple); color:var(--on-purple); }
   .st-key-chips .stButton button[kind="primary"] p { font-weight:600; }
   .st-key-chips .stButton button:focus-visible { outline:3px solid var(--lavender); outline-offset:2px; }
-  .chip-sep { display:block; width:1px; height:26px; background:var(--line); margin:0 6px; }
-  .st-key-chips [data-testid="stElementContainer"]:has(.chip-sep) [data-testid="stMarkdownContainer"] { margin:0 !important; }
   [data-testid="stLayoutWrapper"]:has(> .st-key-playcmd) { display:none; }
   .st-key-hero .st-key-moodcard { margin-top:4px; box-shadow:none; border:none; }
   .result-wait { border:1px dashed rgba(255,255,255,.28); border-radius:20px; padding:20px 22px; color:#e3def7; }
@@ -313,8 +312,6 @@ PAGE_CSS = """
     .st-key-language [data-testid="stWidgetLabel"] { display:none; }
     .st-key-language [data-testid="stSelectbox"] > div:last-child { width:112px; }
     .st-key-topbar { padding:0 8px 0 4px; }
-    /* the chips scroll sideways in one row */
-    .st-key-chips { flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none; }
   }
   @media (max-width: 640px) {
     [data-testid="stMainBlockContainer"] { padding:calc(var(--top) + 6px) 16px 116px; }

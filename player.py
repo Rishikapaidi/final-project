@@ -195,7 +195,7 @@ DARK_CSS = """
           --cream:#15132a; --card:#211e3b; --ink:#ece9f7; --muted:#aaa4c6; --line:#3a3560; --purple:#c3b9f2;
           --lav-soft:#322d5a; --terra:#e0845f; --terra-soft:#3a2721; --terra-ink:#f2b49a;
           --field:#2a2649; --hover:#2b2750; --hover-soft:rgba(255,255,255,.08); --on-purple:#191630; --purple-hover:#d8d1fa;
-          --art-bg:#2c2848; --card2:#1b1833; --bar-bg:rgba(27,24,49,.97); --track:#3a3560; --switch-off:#4a4570;
+          --art-bg:#2c2848; --card2:#1b1833; --bar-bg:rgba(27,24,49,.97); --track:#4d4870; --switch-off:#4a4570;
           --danger:#f19a9a; --veil:rgba(255,255,255,.07); }
 """
 # Before anything is drawn: the dark class if the saved theme is dark (no light flash).
@@ -210,8 +210,8 @@ FONT_CSS = """
   @font-face { font-family:"Inter"; src:url("app/static/fonts/Inter-latin-variable.woff2") format("woff2"); font-weight:100 900; font-display:swap; }
   :root { --cream:#f6f3ee; --card:#ffffff; --ink:#2b2840; --muted:#625e78; --line:#e7e1d8; --purple:#2d2a52;
           --lavender:#b9b0e8; --lav-soft:#eeebfa; --terra:#b85c38; --terra-soft:#f8e9e1; --terra-ink:#7a3a20;
-          --field:#fff; --hover:var(--hover); --hover-soft:rgba(45,42,82,.07); --on-purple:#fff; --purple-hover:var(--purple-hover);
-          --art-bg:var(--art-bg); --card2:#fcfbf8; --bar-bg:rgba(255,253,249,.97); --track:var(--track); --switch-off:#d9d4e6;
+          --field:#fff; --hover:#f4f1fb; --hover-soft:rgba(45,42,82,.07); --on-purple:#fff; --purple-hover:#433e78;
+          --art-bg:#ebe6dc; --card2:#fcfbf8; --bar-bg:rgba(255,253,249,.97); --track:#d9d5e3; --switch-off:#d9d4e6;
           --danger:#9b2f2f; --veil:rgba(255,255,255,.7);
           --serif:"Fraunces", Georgia, "Times New Roman", serif;
           --sans:"Inter", "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif; }

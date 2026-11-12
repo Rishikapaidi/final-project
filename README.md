@@ -55,12 +55,14 @@ A music-app layout with MOOD TUNE's own name, logo and colours:
   The menu button folds it to icons (remembered in this browser); on a
   narrow screen it slides in over the page instead.
 - **Home**, from the top:
-  - a row of **chips**: six languages, then the seven moods. A language chip
-    picks the language (it starts as "Songs in"); a mood chip replaces the
-    player's queue with up to 30 songs of that mood in that language
-    (Explore's pick for it) and plays the first (the queue panel names the
-    list); picking a song from Home's list, or a new reading, brings the mood
-    queue back;
+  - a row of seven **mood chips** (one row on a wide screen; it scrolls
+    sideways on a narrow one). A chip replaces the player's queue with up to
+    30 songs of that mood in the "Songs in" language (Explore's pick for it)
+    and plays the first (the queue panel names the list); picking a song from
+    Home's list, or a new reading, brings the mood queue back. A chip looks
+    selected only while its songs are in the player (nothing is selected on
+    a fresh visit; a new reading or another "Songs in" clears it). The
+    language is chosen only with "Songs in";
   - the **Detect my mood** card: the face scan and your words side by side,
     and the reading under them (the "X% low" gauge, the headline, how low
     face and text lean, "See all 7 emotions");

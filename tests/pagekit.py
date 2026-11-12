@@ -34,10 +34,22 @@ if THEME == "dark":
     Browser.new_context, Browser.new_page = _dark_context, _dark_page
 
 
+# The colour tokens of the page (ui.py) and of the components (player.FONT_CSS / DARK_CSS).
+PAGE_TOKENS = ["--hero", "--field", "--hover", "--hover-soft", "--on-purple", "--card2", "--rail", "--uplift-on", "--cream", "--card",
+               "--ink", "--muted", "--line", "--purple", "--lav-soft", "--terra", "--terra-soft", "--terra-ink"]
+FRAME_TOKENS = ["--cream", "--card", "--ink", "--muted", "--line", "--purple", "--lav-soft", "--terra", "--terra-soft", "--terra-ink",
+                "--field", "--hover", "--hover-soft", "--on-purple", "--purple-hover", "--art-bg", "--card2", "--bar-bg", "--track",
+                "--switch-off", "--danger", "--veil"]
+MISSING = "names => names.filter(n => !getComputedStyle(document.documentElement).getPropertyValue(n).trim())"
+
+
 def theme_report(page, *frames):
-    """What the page and the given component frames show: the page's theme class and background, and each frame's dark class."""
+    """What the page and the given component frames show: the page's theme class and background, each
+    frame's dark class, and any colour token that resolves to nothing (a broken token draws nothing)."""
     page_side = page.evaluate("[document.documentElement.classList.contains('mt-dark') ? 'dark' : 'light', getComputedStyle(document.querySelector('.stApp')).backgroundColor]")
-    return f"page {page_side[0]} ({page_side[1]}) | components dark: {[f.evaluate('document.documentElement.classList.contains(`dark`)') for f in frames]}"
+    missing = page.evaluate(MISSING, PAGE_TOKENS) + [t for f in frames for t in f.evaluate(MISSING, FRAME_TOKENS)]
+    return (f"page {page_side[0]} ({page_side[1]}) | components dark: {[f.evaluate('document.documentElement.classList.contains(`dark`)') for f in frames]} "
+            f"| missing colour tokens: {sorted(set(missing)) or 'none'}")
 PY = sys.executable
 NEGATIVE = ["sad", "angry", "fear", "disgust"]
 IMAGE_EXT = (".jpg", ".jpeg", ".png", ".bmp", ".webp", ".gif")

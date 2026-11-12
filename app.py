@@ -410,40 +410,39 @@ def background_queue(language):
     return current_queue(emotions, fused, language, text, scan["face_probs"], text_probs)[0]
 
 
-def pick_chip_language(name):
-    state["chip_language"] = name
-
-
 def play_chip(mood, language):
-    """A mood chip: play that mood's songs in the chip language (drawn once by chips_row)."""
-    state["chip_play"] = {"mood": mood, "language": language, "nonce": uuid.uuid4().hex}
+    """A mood chip: play that mood's songs in that language (sent once by chips_row). The
+    mood queue it replaces is noted, so the chip stops looking selected once that queue
+    is rebuilt (a new reading, or another "Songs in")."""
+    state["chip_play"] = {"mood": mood, "language": language, "nonce": uuid.uuid4().hex,
+                          "queue_key": state.get("queue_key")}
 
 
-def chips_row(language):
-    """Home's row of chips: a language (starting as "Songs in"), then the seven moods.
-    A mood chip replaces the player's queue with up to EXPLORE_TRACKS songs of that
-    mood in that language (the same pick as Explore's) and plays the first; picking
-    a song of the mood list, or a new reading, brings the mood queue back."""
-    lang = state.get("chip_language") or language
+def chips_row(slot, language):
+    """Home's row of mood chips, drawn into `slot` (an st.empty at the top of Home). A
+    chip replaces the player's queue with up to EXPLORE_TRACKS songs of that mood in the
+    "Songs in" language (the same pick as Explore's) and plays the first; picking a song
+    of the mood list, or a new reading, brings the mood queue back. A chip looks selected
+    only while its songs are the ones it put in the player: nothing is selected on a fresh
+    visit. home_page draws the row once per run, after the reading is known, so a new
+    reading clears the selection straight away."""
     played = state.get("chip_play")
-    with st.container(key="chips", horizontal=True, gap="small"):
-        for name in LANGUAGES:
-            st.button(name, key=f"chip_lang_{name.lower()}", on_click=pick_chip_language, args=(name,),
-                      type="primary" if name == lang else "secondary")
-        st.markdown('<span class="chip-sep" aria-hidden="true"></span>', unsafe_allow_html=True)
-        for emotion in EXPLORE_MOODS:
-            on = bool(played) and played["mood"] == emotion and played["language"] == lang
-            st.button(f"{mood.EMOJI[emotion]} {emotion.capitalize()}", key=f"chip_mood_{emotion}", on_click=play_chip,
-                      args=(emotion, lang), type="primary" if on else "secondary")
-    # The order to play, sent once to the player bar (always in the same place, so nothing after it moves).
-    with st.container(key="playcmd"):
-        if played:
-            picked = explore_list(played["language"], played["mood"])["tracks"]
-            in_lang = "" if played["language"] == "English" else f" in {played['language']}"
-            label = f"{played['mood'].capitalize()} songs{in_lang}"
-            message = (f"Playing {played['mood']} songs{in_lang}" if picked
-                       else f"No {played['mood']} songs{in_lang} have a saved preview yet")
-            components.html(shell.render_play_command(played["nonce"], picked, message, label), height=0)
+    selected = (played["mood"] if played and played["language"] == language
+                and played["queue_key"] == state.get("queue_key") else None)
+    with slot.container():
+        with st.container(key="chips", horizontal=True, gap="small"):
+            for emotion in EXPLORE_MOODS:
+                st.button(f"{mood.EMOJI[emotion]} {emotion.capitalize()}", key=f"chip_mood_{emotion}", on_click=play_chip,
+                          args=(emotion, language), type="primary" if emotion == selected else "secondary")
+        # The order to play, sent once to the player bar (always in the same place, so nothing after it moves).
+        with st.container(key="playcmd"):
+            if played:
+                picked = explore_list(played["language"], played["mood"])["tracks"]
+                in_lang = "" if played["language"] == "English" else f" in {played['language']}"
+                label = f"{played['mood'].capitalize()} songs{in_lang}"
+                message = (f"Playing {played['mood']} songs{in_lang}" if picked
+                           else f"No {played['mood']} songs{in_lang} have a saved preview yet")
+                components.html(shell.render_play_command(played["nonce"], picked, message, label), height=0)
 
 
 def quick_pick_list(language, emotion):
@@ -483,7 +482,12 @@ def home_page(language):
     """The chips, the greeting, the "Detect my mood" card (the scan, your words and
     the reading), Quick picks, the choice cards and the songs. Returns the queue,
     or None if there is no reading yet."""
-    chips_row(language)
+    # The chips are drawn once per run: straight away while the first scan runs (nothing
+    # can be selected yet), otherwise at the end, once this run's reading is known.
+    chips_slot = st.empty()
+    chips_now = "scan" not in state
+    if chips_now:
+        chips_row(chips_slot, language)
     local = ui.local_now(st.context.timezone, st.context.timezone_offset)
     st.markdown(ui.greeting_html(local), unsafe_allow_html=True)
 
@@ -556,6 +560,8 @@ def home_page(language):
     if fused is None:
         notices.warning("I couldn't see a face. Tap to scan again, upload a photo, or tell me how your day was.")
         quick_picks(picks_slot, language)
+        if not chips_now:
+            chips_row(chips_slot, language)
         return None
 
     queue, view, wanted = current_queue(emotions, fused, language, user_text, face_probs, text_probs)
@@ -597,6 +603,8 @@ def home_page(language):
         else:
             # Cache-only by default: only songs already in data/songs/previews.csv can be played.
             st.info(f"No {language} songs with a saved preview match this mood yet. Try another language.")
+    if not chips_now:
+        chips_row(chips_slot, language)
     return queue
 
 
