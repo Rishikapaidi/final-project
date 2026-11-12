@@ -22,6 +22,7 @@ import streamlit.components.v1 as components
 
 from fusion import EMOTIONS, align_face, align_text, calibrate, fuse
 import face
+import face_models
 import mood
 import player
 import previews
@@ -85,9 +86,11 @@ def load_songs():
 
 @st.cache_resource(show_spinner=False)
 def load_face_model():
-    # TensorFlow is only imported inside face.build_model(), so the page can
-    # appear (with the scan screen) before it has finished loading.
-    return face.build_model(os.path.join(BASE_DIR, 'model.h5'))
+    """The face-expression model (face_models.py: the original CNN by default;
+    FACE_MODEL=ferplus or hsemotion to compare, falling back to the CNN if that
+    model can't be loaded). It is loaded after the page appears; TensorFlow is
+    only imported for the CNN."""
+    return face_models.load()
 
 
 def load_text_model():
@@ -145,13 +148,14 @@ def summarise_scan(frames):
         last = frame
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         for box in face.find_faces(gray, face_detector):
-            crops.append(face.crop(gray, box))
+            # each model builds its own crop of the same box, from the original frame
+            crops.append(model.prepare(frame, gray, box))
             if shown_box is None or box[2] * box[3] > shown_box[2] * shown_box[3]:
                 shown, shown_box = frame, box
     if not crops:
         return {"face_probs": None, "face_found": False, "frames": len(frames), "faces": 0,
                 "image": scan_picture(last, None, "") if last is not None else None}
-    face_probs = face.predict(model, crops).mean(axis=0)
+    face_probs = model.predict(crops).mean(axis=0)
     view = face_view(face_probs)
     label = f"{EMOTIONS[int(view.argmax())]} {view.max():.0%}"
     return {"face_probs": face_probs, "face_found": True, "frames": len(frames), "faces": len(crops),
@@ -565,7 +569,8 @@ def home_page(language):
         face_slot.markdown(ui.scan_screen("Listening to your mood...", "Reading your expression"), unsafe_allow_html=True)
         new_scan({**summarise_scan(frames), "source": "webcam"})
     scan = state["scan"]
-    face_slot.markdown(ui.face_tile_html(scan["image"], scan_note(scan), scan_tip(scan)), unsafe_allow_html=True)
+    face_slot.markdown(ui.face_tile_html(scan["image"], scan_note(scan), scan_tip(scan), model_name=load_face_model().name),
+                       unsafe_allow_html=True)
     face_probs = scan["face_probs"]
 
     # Each distinct text is read once per session. The first read also loads the

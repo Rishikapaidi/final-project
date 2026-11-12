@@ -105,6 +105,7 @@ PAGE_CSS = """
   .st-key-facetile, .st-key-texttile { background:var(--purple-2); border:1px solid rgba(255,255,255,.1); border-radius:20px;
                                       padding:20px; flex:1; gap:14px; }
   .tile-foot { color:#cfc8ef; font-size:12.5px !important; line-height:1.45; margin:0 !important; }
+  .tile-model { text-transform:none; letter-spacing:0; font-weight:500; opacity:.85; }
   .tile-label { font-size:12px !important; letter-spacing:.12em; text-transform:uppercase; color:#cfc8ef; font-weight:600; margin:0 !important; }
   .scanimg { width:100%; max-height:280px; object-fit:contain; border-radius:14px; display:block; background:#1f1c3d; }
   .scan-empty { height:200px; border-radius:14px; background:#25224a; display:flex; align-items:center; justify-content:center;
@@ -442,8 +443,9 @@ def scan_screen(title, detail=""):
             f'<div class="listening-detail">{detail}</div></div>')
 
 
-def face_tile_html(image, note, tip=None):
-    """The scan picture (an in-memory data URI, never a file), its note and an optional tip line under it."""
+def face_tile_html(image, note, tip=None, model_name=None):
+    """The scan picture (an in-memory data URI, never a file), its note and an optional tip line under it.
+    model_name: the face model that read it, shown after the label."""
     if image:
         body = f'<img class="scanimg" src="{image}" alt="The picture used for your scan, with the face box and label">'
     else:
@@ -452,7 +454,8 @@ def face_tile_html(image, note, tip=None):
     if note and tip:
         note_html = (f'<p class="tile-note with-tip">{html.escape(note)}</p>'
                      f'<p class="tile-note tile-tip">{html.escape(tip)}</p>')
-    return f'<p class="tile-label">Your expression</p>{body}{note_html}'
+    read_by = f'<span class="tile-model"> · read by {html.escape(model_name)}</span>' if model_name else ""
+    return f'<p class="tile-label">Your expression{read_by}</p>{body}{note_html}'
 
 
 READING_HTML = '<div class="reading"><span class="dot"></span>Reading your text...</div>'

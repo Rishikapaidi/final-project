@@ -1,115 +1,80 @@
-Face model (model.h5) on FER2013 PrivateTest, with the app's preprocessing (face.crop)
+Face-expression models on FER2013 PrivateTest, through the app's path (detector, the same box for every model)
 
-== (A) whole image (the model itself)
-faces scored: 3,589 | accuracy 63.2%
-              precision    recall  f1-score   support
+faces found by the app's detector: 2,441 of 3,589 (68%); all models are scored on these
+FER+ labels: 2,422 of these faces have an emotion as the FER+ majority (FER+ and the original label agree on 62.6% of the test set)
 
-       angry      0.543     0.509     0.526       491
-     disgust      0.729     0.636     0.680        55
-        fear      0.515     0.424     0.465       528
-       happy      0.772     0.875     0.820       879
-         sad      0.479     0.490     0.485       594
-    surprise      0.790     0.760     0.775       416
-     neutral      0.599     0.615     0.607       626
+== Summary
+                  ms / face accuracy (original) macro-F1 (original) accuracy (FER+) macro-F1 (FER+)
+model                                                                                              
+FER+                    6.5               60.2%               0.492           82.2%           0.659
+HSEmotion              24.2               55.3%               0.494           54.8%           0.466
+the original CNN        3.0               64.8%               0.607           63.5%           0.543
 
-    accuracy                          0.632      3589
-   macro avg      0.633     0.616     0.622      3589
-weighted avg      0.626     0.632     0.627      3589
+== Recall per emotion, original labels
+           FER+ HSEmotion the original CNN
+angry     40.6%     58.2%            51.4%
+disgust   24.4%     63.4%            46.3%
+fear       7.7%     44.4%            44.4%
+happy     88.3%     79.0%            87.5%
+sad       24.3%     41.7%            46.1%
+surprise  74.0%     38.8%            72.8%
+neutral   91.8%     49.0%            67.0%
 
-confusion matrix (rows = true, columns = predicted):
+== The failures seen on webcams, original labels
+                                      FER+ HSEmotion the original CNN
+angry / disgust / fear read as happy  4.0%      1.4%             4.7%
+happy read as neutral or sad          9.3%      3.2%             6.6%
+
+== Recall per emotion, FER+ labels
+           FER+ HSEmotion the original CNN
+angry     68.0%     67.5%            66.0%
+disgust   25.0%     63.9%            38.9%
+fear      29.5%     93.4%            63.9%
+happy     90.5%     77.6%            86.5%
+sad       50.4%     54.7%            43.6%
+surprise  84.4%     36.9%            73.4%
+neutral   92.6%     38.1%            48.3%
+
+== The failures seen on webcams, FER+ labels
+                                      FER+ HSEmotion the original CNN
+angry / disgust / fear read as happy  3.0%      1.0%             5.0%
+happy read as neutral or sad          6.2%      2.2%             4.9%
+
+== Confusion matrix, FER+ (FER+ labels; rows = true, columns = predicted)
           angry  disgust  fear  happy  sad  surprise  neutral
-angry       250        6    55     44   78         8       50
-disgust      11       35     4      0    4         1        0
-fear         62        4   224     31   95        46       66
-happy        20        0    15    769   32        14       29
-sad          61        0    71     66  291         7       98
-surprise     11        1    37     28    8       316       15
-neutral      45        2    29     58   99         8      385
+angry       138       10     0      7    5         7       36
+disgust       7        9     1      1    5         1       12
+fear          2        0    18      1    5        29        6
+happy         5        0     1    610    3        16       39
+sad           6        1     4      8  119         4       94
+surprise      6        0     5      8    2       270       29
+neutral       8        4     2     14   28        10      826
 
-how often each emotion is predicted vs how often it is the true label:
-          true  predicted true share predicted share predicted / true
-emotion                                                              
-angry      491        460      13.7%           12.8%             0.94
-disgust     55         48       1.5%            1.3%             0.87
-fear       528        435      14.7%           12.1%             0.82
-happy      879        996      24.5%           27.8%             1.13
-sad        594        607      16.6%           16.9%             1.02
-surprise   416        400      11.6%           11.1%             0.96
-neutral    626        643      17.4%           17.9%             1.03
-
-Haar found a face in 2,441 of 3,589 test images (68%); missed per emotion: angry 168, disgust 14, fear 190, happy 246, sad 273, surprise 104, neutral 153
-
-== (B) Haar crop, as the app does (faces Haar found)
-faces scored: 2,441 | accuracy 64.4%
-              precision    recall  f1-score   support
-
-       angry      0.535     0.517     0.526       323
-     disgust      0.657     0.561     0.605        41
-        fear      0.486     0.464     0.475       338
-       happy      0.853     0.864     0.859       633
-         sad      0.435     0.458     0.446       321
-    surprise      0.790     0.747     0.768       312
-     neutral      0.602     0.632     0.616       473
-
-    accuracy                          0.644      2441
-   macro avg      0.623     0.606     0.614      2441
-weighted avg      0.645     0.644     0.644      2441
-
-confusion matrix (rows = true, columns = predicted):
+== Confusion matrix, HSEmotion (FER+ labels; rows = true, columns = predicted)
           angry  disgust  fear  happy  sad  surprise  neutral
-angry       167        4    51     16   43         6       36
-disgust       8       23     4      1    2         1        2
-fear         43        3   157     12   47        31       45
-happy        11        1    12    547   17        13       32
-sad          46        2    37     15  147         6       68
-surprise      7        0    30     20    7       233       15
-neutral      30        2    32     30   75         5      299
+angry       137       13    39      3    0         4        7
+disgust       5       23     6      0    1         0        1
+fear          0        0    57      0    0         3        1
+happy         8       27    39    523    9        62        6
+sad          25       12    52      3  129         5       10
+surprise      5        1   187      2    0       118        7
+neutral     190       66    74     21  146        55      340
 
-how often each emotion is predicted vs how often it is the true label:
-          true  predicted true share predicted share predicted / true
-emotion                                                              
-angry      323        312      13.2%           12.8%             0.97
-disgust     41         35       1.7%            1.4%             0.85
-fear       338        323      13.8%           13.2%             0.96
-happy      633        641      25.9%           26.3%             1.01
-sad        321        338      13.2%           13.8%             1.05
-surprise   312        295      12.8%           12.1%             0.95
-neutral    473        497      19.4%           20.4%             1.05
-
-== (A) whole image, on the same faces as (B), for a like-for-like comparison
-faces scored: 2,441 | accuracy 66.7%
-              precision    recall  f1-score   support
-
-       angry      0.549     0.554     0.552       323
-     disgust      0.730     0.659     0.692        41
-        fear      0.557     0.464     0.506       338
-       happy      0.815     0.896     0.853       633
-         sad      0.465     0.430     0.447       321
-    surprise      0.793     0.776     0.784       312
-     neutral      0.637     0.670     0.653       473
-
-    accuracy                          0.667      2441
-   macro avg      0.649     0.636     0.641      2441
-weighted avg      0.659     0.667     0.662      2441
-
-confusion matrix (rows = true, columns = predicted):
+== Confusion matrix, the original CNN (FER+ labels; rows = true, columns = predicted)
           angry  disgust  fear  happy  sad  surprise  neutral
-angry       179        3    38     24   37         4       38
-disgust       8       27     2      0    3         1        0
-fear         46        4   157     13   38        34       46
-happy        11        0    10    567   14        12       19
-sad          43        0    35     34  138         7       64
-surprise      5        1    26     20    4       242       14
-neutral      34        2    14     38   63         5      317
+angry       134        5    39      8    8         5        4
+disgust      10       14     6      3    1         0        2
+fear          3        0    39      4    4         9        2
+happy        14        1    20    583   10        23       23
+sad          32        4    55     15  103         2       25
+surprise     10        0    45     13    7       235       10
+neutral     111        4    87     38  207        14      431
 
-how often each emotion is predicted vs how often it is the true label:
-          true  predicted true share predicted share predicted / true
-emotion                                                              
-angry      323        326      13.2%           13.4%             1.01
-disgust     41         37       1.7%            1.5%             0.90
-fear       338        282      13.8%           11.6%             0.83
-happy      633        696      25.9%           28.5%             1.10
-sad        321        297      13.2%           12.2%             0.93
-surprise   312        305      12.8%           12.5%             0.98
-neutral    473        498      19.4%           20.4%             1.05
+== What each model was trained on, and its licence
+FER+: emotion-ferplus-8.onnx, ONNX model zoo, MIT licence; trained by Microsoft on the FER2013 training images with the FER+ crowd-sourced labels (labels MIT licence). The FER2013 images themselves come from a Kaggle research challenge and carry no stated licence.
+HSEmotion: enet_b0_8_best_afew.onnx, HSEmotion (A. Savchenko), code Apache-2.0; EfficientNet-B0 pretrained on VGGFace2 and fine-tuned on AffectNet, whose licence allows non-commercial research and education only: these weights carry that limit.
+the original CNN: model.h5, this project's own CNN, trained on the FER2013 training images (Kaggle / ICML 2013 challenge data).
 
+Notes: the CNN and FER+ were trained on FER2013 training images, so this test set is their own kind of picture;
+HSEmotion was trained on AffectNet's colour photos and sees grayscale 48-pixel faces here, which works against it.
+The CNN's crop is averaged with its mirror image, as in the app. Nothing was tuned on this test set or on anyone's face.

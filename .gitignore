@@ -21,3 +21,6 @@ models/**/model/
 
 # Output of the browser tests in tests/ (logs, screenshots, generated test pictures)
 tests/output/
+
+# Face-expression ONNX models: download with scripts/fetch_face_models.py (see face_models.py for licences)
+models/face/onnx/

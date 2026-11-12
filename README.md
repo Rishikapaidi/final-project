@@ -29,6 +29,48 @@ as the page (they share data through it and the sidebar's playlists press the
 Library button on it). Moving to a newer Streamlit means porting those
 components first; until then, keep the pin.
 
+### Face model
+
+The face is found with OpenCV's Haar cascade (`face.py`) and read by one of
+three face-expression models (`face_models.py`), each given the same face
+box and building its own crop from the original frame. Over the 3-second
+scan the app averages the model over every face in every frame (about 80).
+
+| `FACE_MODEL` | Model | Input | Trained on | Licence / limits |
+|---|---|---|---|---|
+| `cnn` (default) | this project's CNN (`model.h5`); each crop is averaged with its mirror image | 48x48 grayscale | FER2013 training images | the project's own |
+| `ferplus` | FER+ `emotion-ferplus-8` (ONNX model zoo) | 64x64 grayscale | FER2013 training images, FER+ crowd labels (Microsoft) | MIT |
+| `hsemotion` | HSEmotion `enet_b0_8_best_afew` | 224x224 colour | VGGFace2, then AffectNet | code Apache-2.0; AffectNet allows non-commercial research and education only, so these weights carry that limit |
+
+To compare them on your own webcam, fetch the ONNX files once
+(`python scripts/fetch_face_models.py --hsemotion`, which also checks their
+SHA-256) and start the app with, for example, `$env:FACE_MODEL="ferplus";
+streamlit run app.py`. The face tile says which model read the scan. If a
+model's file or `onnxruntime` is missing, the app uses the CNN. No model is
+trained or tuned on anyone's face.
+
+`python scripts/evaluate_face.py` compares them on FER2013 PrivateTest
+through the app's own path (detector, box, crop) and writes
+`models/face/report.txt`, scoring against the original FER2013 labels and,
+when `fer2013new.csv` is there (`fetch_face_models.py --labels`), the FER+
+labels (10 crowd votes per face). On the 2,441 faces the detector finds:
+
+| | accuracy (original) | macro-F1 (original) | accuracy (FER+) | macro-F1 (FER+) | angry/disgust/fear read as happy (FER+) | happy read as neutral or sad (FER+) | load / scan of 80 faces |
+|---|---|---|---|---|---|---|---|
+| CNN (+ mirror) | 64.8% | 0.607 | 63.5% | 0.543 | 5.0% | 4.9% | ~5 s (TensorFlow) / 0.5 s |
+| FER+ | 60.2% | 0.492 | 82.2% | 0.659 | 3.0% | 6.2% | 0.5 s / 0.5 s |
+| HSEmotion | 55.3% | 0.494 | 54.8% | 0.466 | 1.0% | 2.2% | 0.5 s / 1.2 s |
+
+Neither candidate is clearly better, so the CNN stays the default. FER+
+wins on the FER+ labels, mostly by reading neutral faces well, but it
+rarely says fear (30% recall) or disgust (25%), loses on the original
+labels, and is no better at reading smiles. HSEmotion makes the two
+webcam mistakes least often (anger, disgust or fear read as happy; a smile
+read as neutral or sad), but on these grayscale 48-pixel faces it is
+weakest overall; it was trained on colour photos, which this public test
+set can't show. Both test sets are FER2013 pictures, which the CNN and FER+
+were trained on, and none of these numbers come from webcam faces.
+
 ### Page design
 
 A light theme (`.streamlit/config.toml`) with bundled Fraunces and Inter fonts

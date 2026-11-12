@@ -12,3 +12,5 @@ joblib
 torch
 transformers
 requests
+# Optional face models (FACE_MODEL=ferplus / hsemotion, see face_models.py)
+onnxruntime
