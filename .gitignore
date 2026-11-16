@@ -24,3 +24,8 @@ tests/output/
 
 # Face-expression ONNX models: download with scripts/fetch_face_models.py (see face_models.py for licences)
 models/face/onnx/
+
+# FER2013 example sheets (photos of real people from a research dataset): kept local, not committed.
+# Rebuild them with scripts/make_fer2013_sheet.py
+docs/fer2013_examples.png
+docs/fer2013_misreads.png
