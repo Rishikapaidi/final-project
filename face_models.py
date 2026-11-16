@@ -1,7 +1,7 @@
 """The face-expression models the app can use, behind one interface.
 
 FACE_MODEL (an environment variable: cnn, ferplus or hsemotion) picks one,
-for example to compare them live on a webcam; FACE_MODEL_DEFAULT (cnn) is used
+for example to compare them live on a webcam; FACE_MODEL_DEFAULT (hsemotion) is used
 otherwise. models/face/report.txt compares them on FER2013 PrivateTest:
 
   ferplus    FER+ (emotion-ferplus-8 from the ONNX model zoo, MIT licence).
@@ -37,7 +37,9 @@ from fusion import FACE_MODEL_LABELS
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ONNX_DIR = os.path.join(BASE_DIR, "models", "face", "onnx")
 CNN_WEIGHTS = os.path.join(BASE_DIR, "model.h5")
-FACE_MODEL_DEFAULT = "cnn"   # see models/face/report.txt: neither candidate was clearly better
+# HSEmotion: the only one trained on natural colour photos (AffectNet) rather than FER2013, and the one that
+# confuses anger / disgust / fear with happy, and a smile with neutral or sad, least often (models/face/report.txt).
+FACE_MODEL_DEFAULT = "hsemotion"
 NAMES = {"ferplus": "FER+", "hsemotion": "HSEmotion", "cnn": "the original CNN"}
 
 # Each model's own classes -> ours (FACE_MODEL_LABELS); "contempt" goes into disgust.

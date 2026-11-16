@@ -86,9 +86,9 @@ def load_songs():
 
 @st.cache_resource(show_spinner=False)
 def load_face_model():
-    """The face-expression model (face_models.py: the original CNN by default;
-    FACE_MODEL=ferplus or hsemotion to compare, falling back to the CNN if that
-    model can't be loaded). It is loaded after the page appears; TensorFlow is
+    """The face-expression model (face_models.py: HSEmotion by default;
+    FACE_MODEL=cnn or ferplus to compare; the original CNN if the model asked
+    for can't be loaded). It is loaded after the page appears; TensorFlow is
     only imported for the CNN."""
     return face_models.load()
 

@@ -12,5 +12,5 @@ joblib
 torch
 transformers
 requests
-# Optional face models (FACE_MODEL=ferplus / hsemotion, see face_models.py)
+# The face models HSEmotion (the default) and FER+ (see face_models.py); without it the app uses the CNN
 onnxruntime

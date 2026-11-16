@@ -60,7 +60,7 @@ try:
         log(f"header (MOOD TUNE) visible:          {(t_head - t0) / 1000:5.1f}s after opening the page")
         log(f"'Listening to your mood...' visible: {(t_listen - t0) / 1000:5.1f}s")
         log(f"full page with the player:           {(t_full - t0) / 1000:5.1f}s  ({read_card(page)['headline']!r}, bars {legend(page)}, {fr.locator('.row').count()} songs)")
-        log(f"tensorflow imported {tf - t0 / 1000:+.1f}s after opening the page, i.e. {'AFTER' if tf * 1000 > t_listen else 'BEFORE'} the listening screen appeared" if tf else "tensorflow never imported?!")
+        log(f"tensorflow imported {tf - t0 / 1000:+.1f}s after opening the page, i.e. {'AFTER' if tf * 1000 > t_listen else 'BEFORE'} the listening screen appeared" if tf else "tensorflow not imported (the default face model, HSEmotion, runs on onnxruntime; TensorFlow is only for the CNN)")
         log(f"before any text: torch imported {first_import('torch') is not None}, transformers imported {first_import('transformers') is not None}")
         page.screenshot(path=f"{S}/cold_{RUN}_loaded.png")
 

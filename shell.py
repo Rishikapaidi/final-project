@@ -308,10 +308,11 @@ PROFILE_BODY = """
         <li>Hindi, Tamil, Telugu, Malayalam and Korean songs: "Spotify Tracks Dataset (Updated Every Week)" by gauthamvijayaraj on Kaggle, Apache 2.0 licence. Links go to Spotify.</li>
         <li>Previews and artwork: 30-second previews from the iTunes Search API, played from Apple's servers.</li>
         <li>Fonts: Fraunces and Inter, SIL Open Font License.</li>
+        <li>Face model: HSEmotion (enet_b0_8_best_afew) by Andrey Savchenko, code Apache-2.0, trained on AffectNet, whose licence allows non-commercial research and education only.</li>
       </ul>
       <h3>Limits</h3>
       <ul>
-        <li>The face model reads 63.2% of faces correctly on the FER2013 test set (3,589 faces). Fear and sad are the emotions it gets wrong most often.</li>
+        <li>The face model (HSEmotion, trained on the AffectNet photos) reads about 6 in 10 faces correctly on its own benchmark. On the grayscale FER2013 test set it reads 55%, and it sometimes takes a neutral face for angry or sad. Subtle expressions are hard for any model.</li>
         <li>Only 30-second previews play, not whole songs.</li>
         <li>Each song's language is as labelled in its dataset; MOOD TUNE does not check it.</li>
         <li>Telugu and Malayalam have too few songs for "Lift my mood", so they offer "Meet me here" only.</li>

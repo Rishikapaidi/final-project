@@ -6,7 +6,7 @@ fusion.FACE_MODEL_LABELS order that sum to one; every model reads the same box
 (the CNN's crop is exactly face.crop's; FER+ and the CNN read grayscale, so a
 colour change doesn't move them, HSEmotion reads the box in colour, so it
 does); "contempt" is added to disgust; a missing file or an unknown name falls
-back to the CNN, saying why; the default is the CNN. With the browser (sad
+back to the CNN, saying why; the default is HSEmotion. With the browser (sad
 face): the app run with FACE_MODEL=ferplus reads the scan with FER+ and says
 so on the face tile, and the mood card still checks out.
 """
@@ -34,7 +34,7 @@ gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 box = face.find_faces(gray, face.detector())[0]
 
 log("== EACH MODEL")
-check("the default is the CNN", face_models.wanted() == "cnn" and face_models.FACE_MODEL_DEFAULT == "cnn", f"wanted {face_models.wanted()!r}")
+check("the default is HSEmotion", face_models.wanted() == "hsemotion" and face_models.FACE_MODEL_DEFAULT == "hsemotion", f"wanted {face_models.wanted()!r}")
 for key in ("cnn", "ferplus", "hsemotion"):
     t0 = time.time(); m = face_models.load(key); t = time.time() - t0
     probs = m.predict([m.prepare(frame, gray, box)])
@@ -61,7 +61,7 @@ m = face_models.load("ferplus")
 check("a missing ONNX file falls back to the CNN, saying why", m.key == "cnn" and "missing" in (m.fallback or ""), repr(m.fallback))
 face_models.ONNX_DIR = real
 os.environ["FACE_MODEL"] = "nonsense"
-check("an unknown FACE_MODEL means the default", face_models.wanted() == "cnn")
+check("an unknown FACE_MODEL means the default", face_models.wanted() == "hsemotion")
 os.environ["FACE_MODEL"] = "ferplus"
 check("FACE_MODEL=ferplus is read", face_models.wanted() == "ferplus")
 del os.environ["FACE_MODEL"]

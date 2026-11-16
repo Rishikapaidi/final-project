@@ -1,8 +1,7 @@
 """Download the ONNX face-expression models into models/face/onnx/ and check them.
 
 Usage (from the project root):
-    python scripts/fetch_face_models.py              FER+ (the app's default face model)
-    python scripts/fetch_face_models.py --hsemotion  FER+ and HSEmotion (to compare with FACE_MODEL=hsemotion)
+    python scripts/fetch_face_models.py              HSEmotion (the app's default face model) and FER+
     python scripts/fetch_face_models.py --labels     also the FER+ labels for scripts/evaluate_face.py
 
   FER+  emotion-ferplus-8.onnx, from the ONNX model zoo (github.com/onnx/models,
@@ -43,7 +42,7 @@ def sha256(path):
 
 
 def main():
-    names = ["emotion-ferplus-8.onnx"] + (["enet_b0_8_best_afew.onnx"] if "--hsemotion" in sys.argv else [])
+    names = ["enet_b0_8_best_afew.onnx", "emotion-ferplus-8.onnx"]
     jobs = [(name, *FILES[name], OUT) for name in names]
     if "--labels" in sys.argv:
         jobs.append((*LABELS, os.path.join(ROOT, "data", "face_emotion", "raw")))
