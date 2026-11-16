@@ -61,17 +61,23 @@ labels (10 crowd votes per face). On the 2,441 faces the detector finds:
 | FER+ | 60.2% | 0.492 | 82.2% | 0.659 | 3.0% | 6.2% | 0.5 s / 0.5 s |
 | CNN (+ mirror) | 64.8% | 0.607 | 63.5% | 0.543 | 5.0% | 4.9% | ~5 s (TensorFlow) / 0.5 s |
 
-HSEmotion is the default because the FER2013-trained models (the CNN and
-FER+) read real webcam faces poorly: their training pictures are small,
-grayscale and often exaggerated. HSEmotion was trained on natural colour
-photos, loads in half a second (the CNN needs TensorFlow, about 5 s), and on
-this benchmark it makes the two webcam mistakes least often (anger, disgust
-or fear read as happy; a smile read as neutral or sad). Its weak spots: on
-these grayscale 48-pixel FER2013 faces it is the least accurate overall, it
-sometimes reads a neutral face as angry or sad, and it often reads surprise
-as fear. These numbers come from FER2013 pictures, not from webcam faces.
-The fusion settings (models/fusion/fusion_config.json) were fitted for the
-CNN and are used unchanged.
+HSEmotion is the default: chosen after an informal live webcam comparison by the developer, and because it was trained on natural colour photos. On the public benchmark no model was clearly better, and webcam accuracy was not measured.
+Its weak spots on this benchmark: on these grayscale 48-pixel FER2013 faces
+it is the least accurate overall, it sometimes reads a neutral face as angry
+or sad, and it often reads surprise as fear. These numbers come from FER2013
+pictures, not from webcam faces.
+
+The face + text fusion settings were fitted for each face model on public
+data only (FER2013 PublicTest x GoEmotions validation pairs;
+`python scripts/evaluate_fusion.py --face hsemotion`). HSEmotion's fit keeps
+the rule (log-linear) and the face weight (0.55) and lowers the face
+temperature from 1.931 to 1.448; it scored a little better on the validation
+pairs (fused macro-F1 0.799 against 0.789 with the CNN's settings), so the app
+uses it with HSEmotion (`models/fusion/hsemotion/fusion_config.json`); on the
+test pairs the two are 0.800 and 0.798. The CNN keeps its own settings
+(`models/fusion/fusion_config.json`). Fused macro-F1 on the test pairs: CNN
+0.816 (face alone 0.615, text alone 0.689), HSEmotion 0.800 (face alone
+0.531, text alone 0.689).
 
 ### Page design
 

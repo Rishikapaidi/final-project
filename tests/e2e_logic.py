@@ -108,7 +108,8 @@ def headline(at):
 # --- the mood card, checked against the probabilities computed here, independently of the app
 import fusion
 from fusion import EMOTIONS as CANON
-CONFIG = json.load(open(f"{ROOT}/models/fusion/fusion_config.json"))
+import face_models
+CONFIG = face_models.fusion_config(face_models.resolved())   # the same settings the app uses
 NEGATIVE = ["sad", "angry", "fear", "disgust"]
 def negative(probs):
     return float(sum(probs[CANON.index(e)] for e in NEGATIVE))

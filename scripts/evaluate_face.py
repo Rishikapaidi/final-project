@@ -160,6 +160,8 @@ def main():
     log("Notes: the CNN and FER+ were trained on FER2013 training images, so this test set is their own kind of picture;")
     log("HSEmotion was trained on AffectNet's colour photos and sees grayscale 48-pixel faces here, which works against it.")
     log("The CNN's crop is averaged with its mirror image, as in the app. Nothing was tuned on this test set or on anyone's face.")
+    log("")
+    log("Why HSEmotion is the app's default: Chosen after an informal live webcam comparison by the developer, and because it was trained on natural colour photos. On the public benchmark no model was clearly better, and webcam accuracy was not measured.")
 
     out = os.path.join(ROOT, "models", "face", "report.txt")
     with open(out, "w", encoding="utf-8") as f:

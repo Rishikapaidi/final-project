@@ -1,0 +1,86 @@
+Face model: hsemotion (whole 48x48 FER2013 images) | text model: DistilBERT
+
+== (a) EACH MODEL ON ITS OWN TEST SET
+-- Face model, FER2013 PrivateTest (n=3,589)
+              precision    recall  f1-score   support
+
+       angry      0.504     0.507     0.506       491
+     disgust      0.186     0.545     0.278        55
+        fear      0.335     0.411     0.369       528
+       happy      0.854     0.841     0.847       879
+         sad      0.493     0.401     0.442       594
+    surprise      0.546     0.416     0.472       416
+     neutral      0.568     0.564     0.566       626
+
+    accuracy                          0.557      3589
+   macro avg      0.498     0.526     0.497      3589
+weighted avg      0.574     0.557     0.562      3589
+
+-- Text model, GoEmotions test (n=4,590)
+              precision    recall  f1-score   support
+
+       angry      0.427     0.649     0.515       325
+     disgust      0.422     0.645     0.510        76
+        fear      0.496     0.779     0.606        77
+       happy      0.816     0.835     0.825      1367
+         sad      0.449     0.656     0.533       259
+    surprise      0.463     0.713     0.561       449
+     neutral      0.822     0.561     0.667      2037
+
+    accuracy                          0.674      4590
+   macro avg      0.556     0.691     0.603      4590
+weighted avg      0.724     0.674     0.682      4590
+
+Face accuracy 55.7% is within the normal range for FER2013 (warning threshold 75%): no sign of test-set leakage from this number alone.
+Note: 288 PrivateTest images are pixel-identical to FER2013 Training images (a known FER2013 issue).
+
+== CALIBRATION (temperatures fitted on each model's own validation set)
+face: T = 1.448 | test ECE 0.093 -> 0.027 | test mean confidence 0.648 -> 0.549 (accuracy 0.557)
+text: T = 1.306 | test ECE 0.119 -> 0.043 | test mean confidence 0.791 -> 0.710 (accuracy 0.674)
+
+== SELECTION ON VALIDATION PAIRS (50 pairs x 7 emotions, 20 random pairings)
+face only (w=1.00): macro-F1 0.518
+text only (w=0.00): macro-F1 0.703
+weighted_average  best face_weight 0.55: macro-F1 0.767 +/- 0.016   (without calibration: best w 0.50, 0.760)
+log_linear        best face_weight 0.55: macro-F1 0.799 +/- 0.016   (without calibration: best w 0.55, 0.799)
+CHOSEN: log_linear, face_weight 0.55
+
+== FINAL: TEST PAIRS (FER2013 PrivateTest x GoEmotions test; settings chosen on validation)
+                             macro-F1 mean +/- std   min   max   beats better single model in
+Face only                    0.531 +/- 0.021   0.502 0.594   
+Text only                    0.689 +/- 0.022   0.645 0.725   
+weighted_average, w=0.55     0.763 +/- 0.015   0.726 0.784   100% of pairings
+log_linear, w=0.55           0.800 +/- 0.015   0.771 0.822   100% of pairings
+
+Per-class F1 on test pairs (all pairings pooled):
+          Face only  Text only  weighted_average, w=0.55  log_linear, w=0.55
+angry         0.485      0.612                     0.686               0.710
+disgust       0.612      0.728                     0.806               0.804
+fear          0.345      0.820                     0.782               0.829
+happy         0.786      0.786                     0.888               0.913
+sad           0.417      0.654                     0.726               0.746
+surprise      0.521      0.692                     0.782               0.869
+neutral       0.552      0.536                     0.671               0.728
+
+Confusion matrix, chosen rule on test pairs (rows = true, columns = predicted; 20 pairings pooled, 1000 pairs per emotion):
+          angry  disgust  fear  happy  sad  surprise  neutral
+angry       779       29    26     14   49        29       74
+disgust     196      723    20     13   33         2       13
+fear         62       13   797      9   66        18       35
+happy         2        1     5    958    2        18       14
+sad          76       14    31     19  714        20      126
+surprise     10        5    36     23    9       887       30
+neutral      69       13     7     62   41        68      740
+
+== THE CNN'S SETTINGS AGAINST THE NEW FIT, ON THIS MODEL'S PAIRS
+CNN's settings: log_linear, face_weight 0.55, T_face 1.931, T_text 1.306
+new fit:        log_linear, face_weight 0.55, T_face 1.448, T_text 1.306
+                       validation pairs             test pairs
+CNN's settings, face only      0.518 +/- 0.023     0.531 +/- 0.021
+CNN's settings, text only      0.703 +/- 0.016     0.689 +/- 0.022
+CNN's settings, fused          0.789 +/- 0.015     0.798 +/- 0.017
+new fit, face only             0.518 +/- 0.023     0.531 +/- 0.021
+new fit, text only             0.703 +/- 0.016     0.689 +/- 0.022
+new fit, fused                 0.799 +/- 0.016     0.800 +/- 0.015
+
+The new fit beats the CNN's settings on the validation pairs: saved as models/fusion/hsemotion/fusion_config.json, which the app uses with this face model.

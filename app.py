@@ -34,8 +34,8 @@ import uplift
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEXT_MODEL_DIR = os.path.join(BASE_DIR, "models", "text_emotion_distilbert", "model")
 SONGS_FILE = os.path.join(BASE_DIR, "data", "songs", "songs_clean.csv")
-with open(os.path.join(BASE_DIR, "models", "fusion", "fusion_config.json")) as f:
-    FUSION_CONFIG = json.load(f)
+# The fusion settings fitted for the face model in use (HSEmotion's own, or the CNN's).
+FUSION_CONFIG = face_models.fusion_config(face_models.resolved())
 # Emotions whose fused probability is at least this share go into the playlist mix.
 MIN_EMOTION_SHARE = 0.15
 # Guided webcam scan: a short countdown, then a few seconds of capture.

@@ -6,9 +6,9 @@ FER+ labels: 2,422 of these faces have an emotion as the FER+ majority (FER+ and
 == Summary
                   ms / face accuracy (original) macro-F1 (original) accuracy (FER+) macro-F1 (FER+)
 model                                                                                              
-FER+                    6.5               60.2%               0.492           82.2%           0.659
-HSEmotion              24.2               55.3%               0.494           54.8%           0.466
-the original CNN        3.0               64.8%               0.607           63.5%           0.543
+FER+                    9.1               60.2%               0.492           82.2%           0.659
+HSEmotion              22.5               55.3%               0.494           54.8%           0.466
+the original CNN        2.2               64.8%               0.607           63.5%           0.543
 
 == Recall per emotion, original labels
            FER+ HSEmotion the original CNN
@@ -78,3 +78,5 @@ the original CNN: model.h5, this project's own CNN, trained on the FER2013 train
 Notes: the CNN and FER+ were trained on FER2013 training images, so this test set is their own kind of picture;
 HSEmotion was trained on AffectNet's colour photos and sees grayscale 48-pixel faces here, which works against it.
 The CNN's crop is averaged with its mirror image, as in the app. Nothing was tuned on this test set or on anyone's face.
+
+Why HSEmotion is the app's default: Chosen after an informal live webcam comparison by the developer, and because it was trained on natural colour photos. On the public benchmark no model was clearly better, and webcam accuracy was not measured.

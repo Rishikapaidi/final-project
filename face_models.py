@@ -26,6 +26,8 @@ fusion.FACE_MODEL_LABELS order, so fusion and everything after it work
 unchanged. Classes outside our seven (FER+ and HSEmotion's "contempt") are
 added to "disgust". Nothing here is trained or tuned on anyone's face.
 """
+import importlib.util
+import json
 import os
 
 import cv2
@@ -37,8 +39,8 @@ from fusion import FACE_MODEL_LABELS
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ONNX_DIR = os.path.join(BASE_DIR, "models", "face", "onnx")
 CNN_WEIGHTS = os.path.join(BASE_DIR, "model.h5")
-# HSEmotion: the only one trained on natural colour photos (AffectNet) rather than FER2013, and the one that
-# confuses anger / disgust / fear with happy, and a smile with neutral or sad, least often (models/face/report.txt).
+# Chosen after an informal live webcam comparison by the developer, and because it was trained on natural
+# colour photos. On the public benchmark no model was clearly better, and webcam accuracy was not measured.
 FACE_MODEL_DEFAULT = "hsemotion"
 NAMES = {"ferplus": "FER+", "hsemotion": "HSEmotion", "cnn": "the original CNN"}
 
@@ -133,6 +135,26 @@ def wanted():
     """The model asked for: FACE_MODEL if it names one, otherwise FACE_MODEL_DEFAULT."""
     name = os.environ.get("FACE_MODEL", "").strip().lower()
     return name if name in NAMES else FACE_MODEL_DEFAULT
+
+
+def resolved(name=None):
+    """The model load(name) would give, without loading it: the one asked for if its file
+    and onnxruntime are there, otherwise the CNN."""
+    name = name or wanted()
+    if name in ONNX_MODELS and not (os.path.exists(os.path.join(ONNX_DIR, ONNX_MODELS[name].FILE))
+                                    and importlib.util.find_spec("onnxruntime")):
+        return "cnn"
+    return name
+
+
+def fusion_config(key):
+    """The face + text fusion settings for a face model: models/fusion/<key>/fusion_config.json
+    when scripts/evaluate_fusion.py --face <key> found a better fit for it on the validation
+    pairs, otherwise the CNN's (models/fusion/fusion_config.json)."""
+    own = os.path.join(BASE_DIR, "models", "fusion", key, "fusion_config.json")
+    path = own if key != "cnn" and os.path.exists(own) else os.path.join(BASE_DIR, "models", "fusion", "fusion_config.json")
+    with open(path) as f:
+        return json.load(f)
 
 
 def load(name=None):

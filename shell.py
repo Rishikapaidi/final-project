@@ -312,7 +312,7 @@ PROFILE_BODY = """
       </ul>
       <h3>Limits</h3>
       <ul>
-        <li>The face model (HSEmotion, trained on the AffectNet photos) reads about 6 in 10 faces correctly on its own benchmark. On the grayscale FER2013 test set it reads 55%, and it sometimes takes a neutral face for angry or sad. Subtle expressions are hard for any model.</li>
+        <li>The face model is HSEmotion. On our own test with grayscale FER2013 faces it read 55% of them correctly; its authors report their own figures on AffectNet (github.com/HSE-asavchenko/face-emotion-recognition). It sometimes takes a neutral face for angry or sad. Subtle expressions are hard for any model.</li>
         <li>Only 30-second previews play, not whole songs.</li>
         <li>Each song's language is as labelled in its dataset; MOOD TUNE does not check it.</li>
         <li>Telugu and Malayalam have too few songs for "Lift my mood", so they offer "Meet me here" only.</li>

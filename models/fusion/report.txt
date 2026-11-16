@@ -1,3 +1,5 @@
+Face model: cnn (whole 48x48 FER2013 images) | text model: DistilBERT
+
 == (a) EACH MODEL ON ITS OWN TEST SET
 -- Face model, FER2013 PrivateTest (n=3,589)
               precision    recall  f1-score   support

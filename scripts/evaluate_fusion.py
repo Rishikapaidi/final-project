@@ -17,8 +17,21 @@ Steps:
    macro-F1.
 5. The chosen settings are reported once on pairs built from the test sets.
 
+The face model is the CNN (model.h5) unless --face names another one of
+face_models.py (hsemotion or ferplus); faces are always the whole 48x48
+FER2013 images. For another model:
+- its probabilities are cached as data/fusion/face_val_<model>.npz /
+  face_test_<model>.npz, and its outputs go to models/fusion/<model>/;
+- the CNN's settings (models/fusion/fusion_config.json) are also scored on
+  this model's validation and test pairs, and the new fit is saved as
+  models/fusion/<model>/fusion_config.json ONLY if it beats them on the
+  validation pairs (otherwise as fusion_config_candidate.json, unused); the
+  app uses a model's own settings when that file is there
+  (face_models.fusion_config).
+
 Usage (from the project root):
-    python scripts/evaluate_fusion.py
+    python scripts/evaluate_fusion.py                    the CNN
+    python scripts/evaluate_fusion.py --face hsemotion   HSEmotion
 
 Reads   data/face_emotion/raw/*.parquet  (FER2013, see data/README.md)
         data/text_emotion/go_emotions_single.csv
@@ -98,11 +111,28 @@ def text_probabilities(split, text_model_dir):
     return align_text(np.concatenate(out)), df.emotion_mapped.values
 
 
+def model_face_probabilities(split, key):
+    """A face_models.py model on the whole 48x48 images (the image is the face box), in chunks."""
+    from PIL import Image
+    import face_models
+    model = face_models.load(key)
+    assert model.key == key, f"{key} could not be loaded: {model.fallback}"
+    df = pd.read_parquet(os.path.join("data", "face_emotion", "raw", f"{split}-0000.parquet"))
+    images = [np.asarray(Image.open(io.BytesIO(b["bytes"])).convert("L")) for b in df.image]
+    probs = np.concatenate([model.predict([model.prepare(img, img, (0, 0, img.shape[1], img.shape[0])) for img in images[i:i + 256]])
+                            for i in range(0, len(images), 256)])
+    labels = np.array([FER2013_LABELS[i] for i in df.label])
+    return align_face(probs), labels
+
+
 def load_probabilities(args):
     os.makedirs(args.cache_dir, exist_ok=True)
+    suffix = "" if args.face == "cnn" else f"_{args.face}"
+    face = (lambda split: face_probabilities(split, args.face_model)) if args.face == "cnn" else \
+           (lambda split: model_face_probabilities(split, args.face))
     jobs = {
-        "face_val": lambda: face_probabilities("publicTest", args.face_model),
-        "face_test": lambda: face_probabilities("privateTest", args.face_model),
+        f"face_val{suffix}": lambda: face("publicTest"),
+        f"face_test{suffix}": lambda: face("privateTest"),
         "text_val": lambda: text_probabilities("validation", args.text_model),
         "text_test": lambda: text_probabilities("test", args.text_model),
     }
@@ -162,10 +192,14 @@ def sweep(face_probs, text_probs, pairings):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--face-model", default="model.h5")
+    parser.add_argument("--face", default="cnn", choices=["cnn", "hsemotion", "ferplus"])
     parser.add_argument("--text-model", default=os.path.join("models", "text_emotion_distilbert", "model"))
     parser.add_argument("--cache-dir", default=os.path.join("data", "fusion"))
     parser.add_argument("--out-dir", default=os.path.join("models", "fusion"))
     args = parser.parse_args()
+    cnn_config_path = os.path.join(args.out_dir, "fusion_config.json")
+    if args.face != "cnn":
+        args.out_dir = os.path.join(args.out_dir, args.face)
     os.makedirs(args.out_dir, exist_ok=True)
 
     lines = []
@@ -174,7 +208,9 @@ def main():
         lines.append(s)
 
     data = load_probabilities(args)
-    (fv, fv_y), (ft, ft_y) = data["face_val"], data["face_test"]
+    suffix = "" if args.face == "cnn" else f"_{args.face}"
+    (fv, fv_y), (ft, ft_y) = data[f"face_val{suffix}"], data[f"face_test{suffix}"]
+    log(f"Face model: {args.face} (whole 48x48 FER2013 images) | text model: DistilBERT\n")
     (tv, tv_y), (tt, tt_y) = data["text_val"], data["text_test"]
 
     # --- (a) each model on its own test set
@@ -257,13 +293,39 @@ def main():
         f"{REPEATS} pairings pooled, {PAIRS_PER_CLASS * REPEATS} pairs per emotion):")
     log(pd.DataFrame(cm, index=EMOTIONS, columns=EMOTIONS).to_string())
 
+    # --- another face model: the CNN's settings on the same pairs, and keep the new fit only if it beats them
+    config_name = "fusion_config.json"
+    if args.face != "cnn":
+        old = json.load(open(cnn_config_path))
+        def score(cfg, f_probs, t_probs, pairs):
+            fc, tc = calibrate(f_probs, cfg["face_temperature"]), calibrate(t_probs, cfg["text_temperature"])
+            s = [f1_score(y, fuse_probs(fc[f], tc[t], cfg["face_weight"], cfg["method"]).argmax(1), labels=range(7), average="macro")
+                 for f, t, y in pairs]
+            return np.mean(s), np.std(s)
+        new = {"method": chosen.method, "face_weight": float(chosen.face_weight), "face_temperature": t_face, "text_temperature": t_text}
+        single = lambda cfg, w, pairs, fp, tp: score({**cfg, "face_weight": w, "method": "weighted_average"}, fp, tp, pairs)
+        log(f"\n== THE CNN'S SETTINGS AGAINST THE NEW FIT, ON THIS MODEL'S PAIRS")
+        log(f"CNN's settings: {old['method']}, face_weight {old['face_weight']:.2f}, T_face {old['face_temperature']:.3f}, T_text {old['text_temperature']:.3f}")
+        log(f"new fit:        {new['method']}, face_weight {new['face_weight']:.2f}, T_face {t_face:.3f}, T_text {t_text:.3f}")
+        log(f"{'':16} {'validation pairs':>22} {'test pairs':>22}")
+        for name, cfg in (("CNN's settings", old), ("new fit", new)):
+            for part, w in (("face only", 1.0), ("text only", 0.0), ("fused", None)):
+                v = score(cfg, fv, tv, val_pairs) if w is None else single(cfg, w, val_pairs, fv, tv)
+                t = score(cfg, ft, tt, test_pairs) if w is None else single(cfg, w, test_pairs, ft, tt)
+                log(f"{name + ', ' + part:30} {v[0]:.3f} +/- {v[1]:.3f}     {t[0]:.3f} +/- {t[1]:.3f}")
+        better = score(new, fv, tv, val_pairs)[0] > score(old, fv, tv, val_pairs)[0]
+        config_name = "fusion_config.json" if better else "fusion_config_candidate.json"
+        log(f"\nThe new fit {'beats' if better else 'does not beat'} the CNN's settings on the validation pairs: "
+            + (f"saved as models/fusion/{args.face}/fusion_config.json, which the app uses with this face model."
+               if better else f"not used (saved as {config_name} only); the app keeps the CNN's settings."))
+
     # --- outputs
     for df, name in [(val_sweep, "sweep_validation.csv"), (test_sweep, "sweep_test.csv")]:
         df.drop(columns="scores").to_csv(os.path.join(args.out_dir, name), index=False, float_format="%.4f")
-    with open(os.path.join(args.out_dir, "fusion_config.json"), "w") as f:
+    with open(os.path.join(args.out_dir, config_name), "w") as f:
         json.dump({"method": chosen.method, "face_weight": float(chosen.face_weight),
                    "face_temperature": round(t_face, 4), "text_temperature": round(t_text, 4),
-                   "face_input_scaling": "pixels / 255",
+                   **({"face_input_scaling": "pixels / 255"} if args.face == "cnn" else {"face_model": args.face}),
                    "chosen_on": "validation pairs (FER2013 PublicTest x GoEmotions validation)"}, f, indent=2)
 
     fig, axes = plt.subplots(1, 2, figsize=(13, 4.8), sharey=True)
