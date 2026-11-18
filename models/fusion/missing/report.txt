@@ -1,0 +1,32 @@
+FUSION WHEN ONE SIGNAL IS MISSING (app.py combine_emotions, run from its own source)
+Test pairs: FER2013 PrivateTest x GoEmotions test, same true emotion, 50 pairs x 7 emotions = 350 per pairing,
+20 pairings (seed 42; the same pairs as scripts/evaluate_fusion.py). Mean +/- std over the 20 pairings.
+
+== HSEmotion (default): T_face 1.4483, T_text 1.3061, face weight 0.55 (from models/fusion/hsemotion/fusion_config.json)
+No text -> face only, all 3,589 PrivateTest faces: max |app - calibrated face model| = 3.3e-16; top emotion identical to the uncalibrated model's: True; accuracy 55.7%
+No face -> text only, all 4,590 GoEmotions test comments: max |app - calibrated text model| = 2.2e-16; top emotion identical: True; accuracy 67.4%
+
+Same test pairs (20 pairings x 350 pairs). Better single model: text only.
+                                                     accuracy         macro-F1   fused beats the better single model (macro-F1)
+Face only (no text)                          0.528 +/- 0.020  0.531 +/- 0.021   
+Text only (no face)                          0.688 +/- 0.023  0.689 +/- 0.022   
+Fused, log_linear, w=0.55 (app)              0.800 +/- 0.015  0.800 +/- 0.015   in 100% of pairings (20 of 20)
+Fused, weighted_average, w=0.55              0.764 +/- 0.014  0.763 +/- 0.015   in 100% of pairings (20 of 20)
+Cross-check with evaluate_fusion.py's sweep_test.csv (macro-F1): face only 0.5310 vs 0.5310, text only 0.6895 vs 0.6895, log_linear 0.7997 vs 0.7997, weighted_average 0.7625 vs 0.7625 -> match
+
+== CNN (secondary): T_face 1.9311, T_text 1.3061, face weight 0.55 (from models/fusion/fusion_config.json)
+No text -> face only, all 3,589 PrivateTest faces: max |app - calibrated face model| = 2.2e-16; top emotion identical to the uncalibrated model's: True; accuracy 63.2%
+No face -> text only, all 4,590 GoEmotions test comments: max |app - calibrated text model| = 2.2e-16; top emotion identical: True; accuracy 67.4%
+
+Same test pairs (20 pairings x 350 pairs). Better single model: text only.
+                                                     accuracy         macro-F1   fused beats the better single model (macro-F1)
+Face only (no text)                          0.614 +/- 0.021  0.615 +/- 0.021   
+Text only (no face)                          0.688 +/- 0.023  0.689 +/- 0.022   
+Fused, log_linear, w=0.55 (app)              0.815 +/- 0.018  0.816 +/- 0.018   in 100% of pairings (20 of 20)
+Fused, weighted_average, w=0.55              0.800 +/- 0.018  0.799 +/- 0.018   in 100% of pairings (20 of 20)
+Cross-check with evaluate_fusion.py's sweep_test.csv (macro-F1): face only 0.6149 vs 0.6149, text only 0.6895 vs 0.6895, log_linear 0.8165 vs 0.8165, weighted_average 0.7993 vs 0.7993 -> match
+
+Notes: with one signal missing the fusion rule does not matter (the missing side gets weight 0), so 'face only' and
+'text only' are the same for both rules. Faces are whole 48x48 FER2013 images (no webcam, no face detector). The CNN's
+cached outputs (data/fusion/face_test.npz) are of one crop, not averaged with its mirror image as in the app;
+HSEmotion's are as in the app. Pairs share a true emotion, so this shows agreement cases only (see models/fusion/conflict/).
