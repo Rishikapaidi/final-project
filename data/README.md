@@ -109,7 +109,9 @@ folder to recompute.
 
 ## Songs: `data/songs/songs_clean.csv`
 
-The song list the app recommends from: 10,901 English songs from Muse and
+The song list the app recommends from: 10,901 English songs from Muse
+(Akiki and Burghardt 2021, *Journal of Open Humanities Data*,
+DOI [10.5334/johd.33](https://doi.org/10.5334/johd.33); CC BY 4.0) and
 25,815 songs in Hindi, Tamil, Telugu, Malayalam and Korean from a Spotify
 dataset (see "Songs in other languages" below). It is committed to git
 (7.4 MB), so there is nothing to run after cloning. To rebuild it from

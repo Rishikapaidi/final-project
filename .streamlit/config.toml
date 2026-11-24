@@ -29,6 +29,10 @@ style = "normal"
 [client]
 toolbarMode = "minimal"
 
+[browser]
+# Do not send Streamlit its anonymous usage statistics.
+gatherUsageStats = false
+
 [server]
 # Serves static/ at app/static/ (the bundled fonts).
 enableStaticServing = true

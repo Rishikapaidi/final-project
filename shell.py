@@ -304,7 +304,7 @@ PROFILE_BODY = """
         Explore lets you browse the songs by mood and by language.</p>
       <h3>Where the songs come from</h3>
       <ul>
-        <li>English songs: the Muse dataset (<code>muse_v3.csv</code>), with listeners' mood tags. Links go to Last.fm.</li>
+        <li>English songs: the Muse dataset (<code>muse_v3.csv</code>; Akiki and Burghardt 2021, Journal of Open Humanities Data, doi:10.5334/johd.33), CC BY 4.0 licence, with listeners' mood tags. Links go to Last.fm.</li>
         <li>Hindi, Tamil, Telugu, Malayalam and Korean songs: "Spotify Tracks Dataset (Updated Every Week)" by gauthamvijayaraj on Kaggle, Apache 2.0 licence. Links go to Spotify.</li>
         <li>Previews and artwork: 30-second previews from the iTunes Search API, played from Apple's servers.</li>
         <li>Fonts: Fraunces and Inter, SIL Open Font License.</li>
@@ -321,6 +321,7 @@ PROFILE_BODY = """
       <ul>
         <li>Your webcam picture (or photo) is analysed in memory and never saved.</li>
         <li>Your words are kept only for this visit.</li>
+        <li>Song previews and artwork are loaded from Apple's servers, and artwork for non-English songs also from Spotify's image servers, so those services can see your IP address.</li>
         <li>Liked songs, your playlists, recently played (the last 50 songs, without times or moods), your name and these settings stay in this browser, on this computer; only the theme, default language and default mode go to the server, in a cookie.</li>
       </ul>
     </div>

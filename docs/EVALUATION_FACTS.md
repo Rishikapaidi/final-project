@@ -325,7 +325,7 @@ the random baseline):
 | GoEmotions (`google-research-datasets/go_emotions`, Hugging Face) | text model training and evaluation | Dataset card: the GitHub repository holding it is Apache 2.0. The comments are Reddit content. |
 | DistilBERT `distilbert-base-uncased` | text model base | Apache 2.0 |
 | HSEmotion `enet_b0_8_best_afew` (A. Savchenko) | default face model | code Apache-2.0; trained on AffectNet, whose licence allows **non-commercial research and education only** |
-| Muse (`muse_v3.csv`) | English songs, valence and arousal | **Unknown**: not stated in this project and not yet checked |
+| Muse (`muse_v3.csv`; Akiki and Burghardt 2021, *Journal of Open Humanities Data*, DOI 10.5334/johd.33) | English songs, valence and arousal | CC BY 4.0 |
 | "Spotify Tracks Dataset (Updated Every Week)", gauthamvijayaraj, Kaggle | songs in other languages | Apache 2.0 |
 | iTunes Search API previews and artwork | playback only | Apple's terms; not redistributed |
 
