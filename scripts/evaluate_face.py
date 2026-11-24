@@ -17,11 +17,13 @@ Labels:
             Read from data/face_emotion/raw/fer2013new.csv when it is there
             (python scripts/fetch_face_models.py --labels).
 
-Fair-comparison notes, also printed in the report: the CNN and FER+ were
-trained on the FER2013 training images (the CNN with the original labels,
-FER+ with the FER+ labels), so this test set is their own kind of picture;
-HSEmotion was trained on AffectNet's colour photos and sees grayscale 48-pixel
-faces here, which works against it. Nothing is tuned on this test set.
+Fair-comparison notes, also printed in the report: FER+ was trained on the
+FER2013 training images (with the FER+ labels), so this test set is its own
+kind of picture; the CNN (model.h5) is inherited and its training is not
+documented (its 7 classes and 48x48 grayscale input match FER2013, so it may
+have been trained on FER2013 too); HSEmotion was trained on AffectNet's
+colour photos and sees grayscale 48-pixel faces here, which works against it.
+Nothing is tuned on this test set.
 
 Usage (from the project root):
     python scripts/evaluate_face.py                 every model whose files are here
@@ -158,7 +160,8 @@ def main():
     for key in results:
         log(f"{face_models.NAMES[key]}: {LICENCES[key]}")
     log("")
-    log("Notes: the CNN and FER+ were trained on FER2013 training images, so this test set is their own kind of picture;")
+    log("Notes: FER+ was trained on FER2013 training images, so this test set is its own kind of picture; the CNN (model.h5)")
+    log("is inherited and its training is not documented (its 7 classes and 48x48 grayscale input match FER2013);")
     log("HSEmotion was trained on AffectNet's colour photos and sees grayscale 48-pixel faces here, which works against it.")
     log("The CNN's crop is averaged with its mirror image, as in the app. Nothing was tuned on this test set or on anyone's face.")
     log("")

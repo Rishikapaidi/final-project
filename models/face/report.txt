@@ -73,9 +73,10 @@ neutral     111        4    87     38  207        14      431
 == What each model was trained on, and its licence
 FER+: emotion-ferplus-8.onnx, ONNX model zoo, MIT licence; trained by Microsoft on the FER2013 training images with the FER+ crowd-sourced labels (labels MIT licence). The FER2013 images themselves come from a Kaggle research challenge and carry no stated licence.
 HSEmotion: enet_b0_8_best_afew.onnx, HSEmotion (A. Savchenko), code Apache-2.0; EfficientNet-B0 pretrained on VGGFace2 and fine-tuned on AffectNet, whose licence allows non-commercial research and education only: these weights carry that limit.
-the original CNN: model.h5, this project's own CNN, trained on the FER2013 training images (Kaggle / ICML 2013 challenge data).
+the original CNN: model.h5, a CNN inherited from the project this one started from (see CREDITS.md); its training is not documented (its 7 classes and 48x48 grayscale input match FER2013). Its source states no licence.
 
-Notes: the CNN and FER+ were trained on FER2013 training images, so this test set is their own kind of picture;
+Notes: FER+ was trained on FER2013 training images, so this test set is its own kind of picture; the CNN (model.h5)
+is inherited and its training is not documented (its 7 classes and 48x48 grayscale input match FER2013);
 HSEmotion was trained on AffectNet's colour photos and sees grayscale 48-pixel faces here, which works against it.
 The CNN's crop is averaged with its mirror image, as in the app. Nothing was tuned on this test set or on anyone's face.
 

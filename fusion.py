@@ -1,7 +1,8 @@
 """Combine face and text emotion predictions into one emotion.
 
-The face model (model.h5, FER2013) and the text model (DistilBERT, GoEmotions
-mapped to FER2013) predict the same 7 emotions, but list them in different
+The face model (HSEmotion by default; or the CNN model.h5, inherited, training
+not documented) and the text model (DistilBERT, GoEmotions mapped to the
+FER2013 categories) predict the same 7 emotions, but list them in different
 orders and spellings. Everything here works on the canonical order below, and
 `align_face` / `align_text` reorder each model's raw probability vector by name.
 

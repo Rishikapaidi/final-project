@@ -12,7 +12,8 @@ call the app's own code rather than copies of it:
 - `app.py`'s `combine_emotions`, `face_view`, `text_view` and `build_queue` run from `app.py`'s own source through `scripts/app_code.py`, because importing `app.py` would start the Streamlit page.
 
 The primary face model is **HSEmotion** (the app's default). The CNN
-(`model.h5`) is reported as a secondary row.
+(`model.h5`, inherited from the project this one started from; its training
+is not documented) is reported as a secondary row.
 
 | Evaluation | Script | Outputs |
 |---|---|---|
@@ -320,7 +321,7 @@ the random baseline):
 
 | Source | Used for | Licence |
 |---|---|---|
-| FER2013 (Kaggle / ICML 2013 challenge; Hugging Face copy `Aaryan333/fer2013_train_publicTest_privateTest`) | face test and validation data; CNN training | **No stated licence**; research challenge data |
+| FER2013 (Kaggle / ICML 2013 challenge; Hugging Face copy `Aaryan333/fer2013_train_publicTest_privateTest`) | face test and validation data (the inherited CNN's training data is not documented) | **No stated licence**; research challenge data |
 | FER+ labels (Microsoft) | `scripts/evaluate_face.py` only | MIT |
 | GoEmotions (`google-research-datasets/go_emotions`, Hugging Face) | text model training and evaluation | Dataset card: the GitHub repository holding it is Apache 2.0. The comments are Reddit content. |
 | DistilBERT `distilbert-base-uncased` | text model base | Apache 2.0 |
