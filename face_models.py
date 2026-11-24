@@ -13,8 +13,10 @@ otherwise. models/face/report.txt compares them on FER2013 PrivateTest:
              AffectNet, whose licence allows non-commercial research and
              education only, so these weights carry that limit. Input: the
              face box in colour (RGB), 224x224, ImageNet normalisation.
-  cnn        The app's original CNN (model.h5), trained on FER2013. Input:
-             the face box, grayscale, 48x48, pixels / 255. It is also the
+  cnn        The CNN (model.h5) inherited from the project this one started
+             from (see CREDITS.md). Its training is not documented; its 7
+             classes and 48x48 grayscale input match FER2013. Input: the
+             face box, grayscale, 48x48, pixels / 255. It is also the
              fallback when an ONNX model's file or onnxruntime is missing.
 
 The ONNX files are not in the repository: scripts/fetch_face_models.py

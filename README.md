@@ -1,21 +1,90 @@
+# MOOD TUNE
 
-# Emotion-based music recommendation system
+MOOD TUNE is a Streamlit web app that suggests music for the mood you are in.
+It reads your expression in a 3-second webcam scan (or an uploaded photo) and,
+if you like, a sentence about your day, and combines the two into one reading
+over seven emotions (angry, disgust, fear, happy, sad, surprise, neutral):
 
-This web-based app written in Python will first scan your current emotion with the help of OpenCV & then crop the image of your face from the entire frame once the cropped image is ready it will give this image to a trained MACHINE LEARNING model to predict the emotion of the cropped image. This will happen 30-40 times in 2-3 seconds, now once we have a list of emotions (containing duplicate elements) with us it will first sort the list based on frequency & remove the duplicates. After performing all the above steps we will have a list containing the user's emotions in sorted order, Now we have to iterate over the list & recommend songs based on emotions in the list.
+- **Face:** OpenCV finds the face; HSEmotion (the default) reads its expression.
+- **Text:** DistilBERT, fine-tuned on GoEmotions mapped to the same seven emotions.
+- **Fusion:** a weighted log-linear rule with per-model calibration, fitted on public data (`fusion.py`).
 
+Then it plays 30-second previews in the language you choose (English, Hindi,
+Tamil, Telugu, Malayalam or Korean):
+
+- **"Meet me here"** (Resonance) plays songs that match the mood;
+- **"Lift my mood"** (Uplift) plays a five-song path from a low mood towards a calmer or brighter one (`uplift.py`, `UPLIFT.md`).
+
+Nothing about your mood, scan or time is stored, and pictures stay in memory.
+
+MOOD TUNE is a research and education project. The default face model's
+weights allow non-commercial research and education use only (see
+`CREDITS.md`).
 
 ## Installation & Run
 
-Create a new project in Pycharm and add the above files. After that open the terminal and run the following command. This will install all the modules needed to run this app. 
+Tested with Python 3.13 on Windows; the commands below are for PowerShell.
 
-```bash
-  pip install -r requirements.txt
-```
+1. **Get the code and install the packages** (from the project root):
 
-To run the app, type the following command in the terminal. 
-```bash
-  streamlit run app.py
-```
+   ```powershell
+   python -m venv venv
+   .\venv\Scripts\Activate.ps1
+   pip install -r requirements.txt
+   ```
+
+2. **Download the face models** (HSEmotion and FER+, checked by SHA-256).
+   They go into `models/face/onnx/` and are not in the repository:
+
+   ```powershell
+   python scripts/fetch_face_models.py
+   ```
+
+   Without them, or without `onnxruntime`, the app uses the CNN (`model.h5`) instead.
+
+3. **The text model (optional).** The fine-tuned DistilBERT model
+   (`models/text_emotion_distilbert/model/`) is not in the repository.
+   Without it the app reads the face only and says so. To build it, download
+   GoEmotions, then fine-tune; on a CPU training takes a few hours and resumes
+   if interrupted:
+
+   ```powershell
+   python scripts/prepare_go_emotions.py
+   python scripts/train_text_emotion_distilbert.py
+   ```
+
+4. **Run the app:**
+
+   ```powershell
+   streamlit run app.py
+   ```
+
+   It opens at http://localhost:8501. The scan uses the webcam of the
+   computer running the app; "Upload a photo instead" works without one.
+
+The song list (`data/songs/songs_clean.csv`) and the saved previews
+(`data/songs/previews.csv`) are in the repository, so nothing else is needed
+to play music. By default the app makes no song lookups; it plays only songs
+with a saved preview (see `data/README.md`).
+
+### Data and evaluation scripts (optional)
+
+| Script | What it does |
+|---|---|
+| `scripts/prepare_fer2013.py` | Downloads FER2013 and checks it against the official split sizes; needed by the face and fusion evaluations |
+| `scripts/prepare_go_emotions.py` | Downloads GoEmotions and maps its 28 labels to the 7 emotions |
+| `scripts/train_text_emotion.py`, `scripts/train_text_emotion_distilbert.py` | The text-model baseline and DistilBERT |
+| `scripts/prepare_songs.py` | Rebuilds `songs_clean.csv` from `muse_v3.csv` and the Spotify tracks file (`data/songs/raw/`, not committed) |
+| `scripts/fetch_previews.py` | Fills the preview cache slowly from the iTunes Search API |
+| `scripts/evaluate_face.py` | Compares the face models (`models/face/report.txt`) |
+| `scripts/evaluate_fusion.py` | Fits and reports the fusion settings (`models/fusion/`) |
+| `scripts/evaluate_fusion_conflict.py`, `scripts/evaluate_fusion_missing.py` | Report fusion when signals disagree or one is missing |
+| `scripts/evaluate_uplift.py` | Checks the Uplift playlists |
+
+The data sources and the evaluation numbers are in `data/README.md` and
+`docs/EVALUATION_FACTS.md`; the tests are described in `tests/README.md`.
+
+## How MOOD TUNE works
 
 ### Streamlit version
 
@@ -40,7 +109,7 @@ scan the app averages the model over every face in every frame (about 80).
 |---|---|---|---|---|
 | `hsemotion` (default) | HSEmotion `enet_b0_8_best_afew` | 224x224 colour | VGGFace2, then AffectNet (about 450,000 natural colour photos) | code Apache-2.0; AffectNet allows non-commercial research and education only, so these weights carry that limit |
 | `ferplus` | FER+ `emotion-ferplus-8` (ONNX model zoo) | 64x64 grayscale | FER2013 training images, FER+ crowd labels (Microsoft) | MIT |
-| `cnn` | this project's CNN (`model.h5`); each crop is averaged with its mirror image | 48x48 grayscale | FER2013 training images | the project's own |
+| `cnn` | the CNN inherited from the project this one started from (`model.h5`, see Credits); each crop is averaged with its mirror image | 48x48 grayscale | not documented (its 7 classes and 48x48 grayscale input match FER2013) | no licence stated by its source; see `CREDITS.md` |
 
 The ONNX files are not in the repository: `python scripts/fetch_face_models.py`
 downloads HSEmotion and FER+ into `models/face/onnx/` and checks their SHA-256.
@@ -194,33 +263,25 @@ keeps playing while the app reruns, and none of it is sent to the server.
 
 ## Libraries
 
-- Streamlit
-- Opencv
-- Numpy
-- Pandas
-- Tensorflow
-- Keras
-
-
-
-
+- Streamlit (pinned to 1.64.0, see above)
+- OpenCV (`opencv-python`)
+- ONNX Runtime: the HSEmotion and FER+ face models
+- PyTorch and Hugging Face Transformers: the DistilBERT text model
+- TensorFlow and Keras: only for the CNN (`FACE_MODEL=cnn`, or the fallback)
+- NumPy, pandas, scikit-learn, matplotlib, joblib
+- requests: the optional iTunes preview lookups
 
 ## Demo video
 
- [Emotion-based music recommendation system](
-
-https://github.com/Hiralsathwara/Emotion-based-music-recommendation-system/assets/127468119/5b2626f6-68fe-499c-9c3e-56b37f7c5d26
-
-)
- 
+Demo video: coming soon.
 
 ## Authors
 
-- [HIRAL SATHWARA](https://github.com/Hiralsathwara)
+- Rishika Paidi
 
+## Credits
 
+Started from Hiral Sathwara's Emotion-based music recommendation system (2024), https://github.com/Hiralsathwara/Emotion-based-music-recommendation-system. From it this project still uses the CNN weights model.h5 and a few generic lines of app.py.
 
-## Support
-
-For support,hiral sathwara (https://www.linkedin.com/in/hiral-sathwara-873561269/)
-
+Third-party files, data and models, with their licences, are listed in
+`CREDITS.md`.

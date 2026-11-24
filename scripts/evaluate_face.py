@@ -56,7 +56,8 @@ FRAME_SIZE = (480, 640)   # the frame each face is placed on
 FACE_SIZE = 240           # the size the 48x48 face is enlarged to inside that frame
 NEGATIVE = ["angry", "disgust", "fear"]
 LICENCES = {
-    "cnn": "model.h5, this project's own CNN, trained on the FER2013 training images (Kaggle / ICML 2013 challenge data).",
+    "cnn": "model.h5, a CNN inherited from the project this one started from (see CREDITS.md); its training is not "
+           "documented (its 7 classes and 48x48 grayscale input match FER2013). Its source states no licence.",
     "ferplus": "emotion-ferplus-8.onnx, ONNX model zoo, MIT licence; trained by Microsoft on the FER2013 training images with the "
                "FER+ crowd-sourced labels (labels MIT licence). The FER2013 images themselves come from a Kaggle research "
                "challenge and carry no stated licence.",
