@@ -563,7 +563,8 @@ def home_page(language):
                 state["user_text"] = state.get("text", "")
             # A form, so the text is read on "Check my mood" (or Enter), not on every keystroke.
             with st.form("textform", border=False):
-                user_text = st.text_input("How was your day?", key="user_text", max_chars=180,
+                # autocomplete="off": no browser autofill ("Saved info") under the box.
+                user_text = st.text_input("How was your day?", key="user_text", max_chars=180, autocomplete="off",
                                           placeholder="e.g. Finally finished my exams!")
                 st.form_submit_button("Check my mood", type="primary")
             state["text"] = user_text

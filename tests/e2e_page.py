@@ -77,9 +77,18 @@ with sync_playwright() as pw:
                 box.fill(text); time.sleep(0.3)
                 counter = page.locator(".st-key-user_text [data-testid=InputInstructions]").inner_text().replace(chr(10), " ")
                 log(f"text box: typing 200 characters keeps {too_long} | counter {counter!r} | placeholder {box.get_attribute('placeholder')!r}")
-                box.press("Enter")
+                # No browser autofill ("Saved info") on the page's text boxes, and no suggestion list in the page while typing.
+                search = named_frame(page, "topbar").locator("#q")
+                popups = page.evaluate("""() => [...document.querySelectorAll('[role=listbox], datalist, [data-baseweb=popover]')]
+                    .filter(e => e.offsetParent !== null || e.tagName === 'DATALIST').length""")
+                log(f"autofill off: 'How was your day?' autocomplete={box.get_attribute('autocomplete')!r} | search box "
+                    f"autocomplete={search.get_attribute('autocomplete')!r} | suggestion lists in the page while typing: {popups}")
+                if name.startswith("4"):
+                    page.get_by_role("button", name="Check my mood").click()   # the button, here; Enter in scenario 3
+                else:
+                    box.press("Enter")
                 waited = wait_for_text_bars(page)
-                log(f"   Text bars appeared {waited:.1f}s after Enter" if waited is not None else "   NO Text bars after 60 s")
+                log(f"   Text bars appeared {waited:.1f}s after {'the Check my mood button' if name.startswith('4') else 'Enter'}" if waited is not None else "   NO Text bars after 60 s")
             bar = bar_frame(page); path = path_frame(page); time.sleep(1.5)
             log(f"theme: {theme_report(page, bar, path, named_frame(page, 'topbar'), named_frame(page, 'actions'), named_frame(page, 'navlists'), named_frame(page, 'quickpicks'))}")
             card = read_card(page)

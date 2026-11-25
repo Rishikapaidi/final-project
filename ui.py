@@ -100,7 +100,11 @@ PAGE_CSS = """
   .st-key-hero [data-testid="stLayoutWrapper"]:has(> .st-key-facetile),
   .st-key-hero [data-testid="stLayoutWrapper"]:has(> .st-key-texttile) { flex:1 1 auto; }
   /* Streamlit's "Press Enter to submit form · 12/180" goes under the box instead of over the text */
-  .st-key-user_text [data-testid="stTextInput"] > div:has(> [data-testid="InputInstructions"]) { position:static; height:auto; }
+  /* "Press Enter to submit form  n/180" shows under the box only while it has focus. Its 25px are kept
+     whether it shows or not: otherwise clicking "Check my mood" takes the focus off the box, the line
+     disappears, the button jumps up 25px mid-click and the click is lost. */
+  .st-key-user_text [data-testid="stTextInput"] { position:relative; padding-bottom:25px; }
+  .st-key-user_text [data-testid="stTextInput"] > div:has(> [data-testid="InputInstructions"]) { position:absolute; left:0; right:0; bottom:0; height:25px; }
   .st-key-user_text [data-testid="InputInstructions"] { position:static; color:#d6d0f2 !important; font-size:12px; padding:6px 2px 0; text-align:right; }
   .st-key-facetile, .st-key-texttile { background:var(--purple-2); border:1px solid rgba(255,255,255,.1); border-radius:20px;
                                       padding:20px; flex:1; gap:14px; }
