@@ -1,7 +1,7 @@
 # MOOD TUNE
 
 MOOD TUNE is a Streamlit web app that suggests music for the mood you are in.
-It reads your expression in a 3-second webcam scan (or an uploaded photo) and,
+It reads your expression in a quick webcam scan (or an uploaded photo) and,
 if you like, a sentence about your day, and combines the two into one reading
 over seven emotions (angry, disgust, fear, happy, sad, surprise, neutral):
 
@@ -102,8 +102,11 @@ components first; until then, keep the pin.
 
 The face is found with OpenCV's Haar cascade (`face.py`) and read by one of
 three face-expression models (`face_models.py`), each given the same face
-box and building its own crop from the original frame. Over the 3-second
-scan the app averages the model over every face in every frame (about 80).
+box and building its own crop from the original frame. A scan takes about
+3 seconds: the camera opens (DirectShow on Windows, which opens in about 1 s
+against about 6 s for the default backend), then half a second to get ready
+and a 1-second capture; the app averages the model over the faces in 10
+frames spread evenly across the capture.
 
 | `FACE_MODEL` | Model | Input | Trained on | Licence / limits |
 |---|---|---|---|---|

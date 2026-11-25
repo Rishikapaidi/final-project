@@ -38,11 +38,15 @@ SONGS_FILE = os.path.join(BASE_DIR, "data", "songs", "songs_clean.csv")
 FUSION_CONFIG = face_models.fusion_config(face_models.resolved())
 # Emotions whose fused probability is at least this share go into the playlist mix.
 MIN_EMOTION_SHARE = 0.15
-# Guided webcam scan: a short countdown, then a few seconds of capture.
-GET_READY_SECONDS = 2
-CAPTURE_SECONDS = 3
+# Guided webcam scan: a short "get ready", then a short capture. The face model
+# reads SCAN_FRAMES frames spread evenly over the capture rather than every frame:
+# each frame costs about 33 ms of face detection and each face about 50 ms of
+# HSEmotion, so reading all ~30 frames would add several seconds.
+GET_READY_SECONDS = 0.5
+CAPTURE_SECONDS = 1.0
 WARM_UP_FRAMES = 5         # first frames of the capture are dropped (exposure still settling)
 MAX_CAPTURE_FRAMES = 120   # safety cap (about 4 s at 30 frames a second)
+SCAN_FRAMES = 10
 SCAN_IMAGE_WIDTH = 480
 BOX_GREEN = (84, 185, 29)  # the accent green, in OpenCV's blue-green-red order
 # Auto picks Uplift when the mood is low (uplift.should_uplift), otherwise Resonance.
@@ -165,12 +169,12 @@ def summarise_scan(frames):
 def guided_webcam_scan(screen):
     """A short guided scan: "Get ready..." for GET_READY_SECONDS, then capture for CAPTURE_SECONDS.
 
-    The first WARM_UP_FRAMES captured frames are dropped. Returns the frames kept
-    (an empty list if there is no webcam). `screen` is an st.empty() that shows
+    The first WARM_UP_FRAMES captured frames are dropped, and at most SCAN_FRAMES of
+    the rest, spread evenly, are returned (an empty list if there is no webcam). `screen` is an st.empty() that shows
     the instructions.
     """
     cv2.ocl.setUseOpenCL(False)
-    cap = cv2.VideoCapture(0)
+    cap = open_camera()
     try:
         if not cap.isOpened():
             return []
@@ -183,7 +187,7 @@ def guided_webcam_scan(screen):
                 screen.markdown(ui.scan_screen("Get ready...", f"Look at the camera &middot; {shown}"), unsafe_allow_html=True)
             if not cap.read()[0]:
                 return []
-        screen.markdown(ui.scan_screen("Hold your expression...", "Reading your face for a few seconds"),
+        screen.markdown(ui.scan_screen("Hold your expression...", "Reading your face"),
                         unsafe_allow_html=True)
         frames, end = [], time.time() + CAPTURE_SECONDS
         while time.time() < end and len(frames) < WARM_UP_FRAMES + MAX_CAPTURE_FRAMES:
@@ -191,9 +195,24 @@ def guided_webcam_scan(screen):
             if not ok:
                 break
             frames.append(frame)
-        return frames[WARM_UP_FRAMES:]
+        kept = frames[WARM_UP_FRAMES:]
+        if len(kept) > SCAN_FRAMES:
+            kept = [kept[i] for i in np.linspace(0, len(kept) - 1, SCAN_FRAMES).round().astype(int)]
+        return kept
     finally:
         cap.release()
+
+
+def open_camera():
+    """The webcam. On Windows DirectShow is tried first: the default backend (Media
+    Foundation) took about 6 s to open the camera, DirectShow about 1 s. If DirectShow
+    cannot open it, the default backend is used."""
+    if os.name == "nt":
+        cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+        if cap.isOpened():
+            return cap
+        cap.release()
+    return cv2.VideoCapture(0)
 
 
 def photo_frame(data):
