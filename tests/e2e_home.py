@@ -15,7 +15,7 @@ Saves screenshots of the top of Home and of Quick picks.
 """
 import os, time
 from playwright.sync_api import sync_playwright
-from pagekit import OUT, theme_report, bar_frame, image_files, log, named_frame, new_images, path_frame, start_server, stop
+from pagekit import tap_scan, OUT, theme_report, bar_frame, image_files, log, named_frame, new_images, path_frame, start_server, stop
 
 PORT = 8624
 
@@ -51,6 +51,7 @@ try:
         page.goto(f"http://localhost:{PORT}")
         page.wait_for_selector(".st-key-quickpicks iframe", timeout=180000)
         qp = picks(page); during = qp.locator("#title").inner_text()
+        tap_scan(page)
         page.wait_for_selector(".st-key-path iframe", timeout=180000); bar = bar_frame(page); path = path_frame(page); time.sleep(1.5)
         state = lambda: bar.evaluate("window.player.state()")
         queue_id = bar.evaluate("DATA.id")
@@ -144,7 +145,8 @@ try:
     with sync_playwright() as pw:
         browser = pw.chromium.launch(channel="msedge", headless=True)
         page = browser.new_page(viewport={"width": 1440, "height": 900}); errors = []; page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"http://localhost:{PORT + 1}"); page.wait_for_selector("[data-testid=stAlert]", timeout=180000); time.sleep(1.5)
+        page.goto(f"http://localhost:{PORT + 1}"); page.wait_for_selector("#scanidle", timeout=180000)
+        page.wait_for_selector(".st-key-quickpicks iframe", timeout=180000); time.sleep(1.5)   # no scan yet: the camera is off
         log("== NO FACE, BEFORE ANY READING")
         log(f"chips selected before any reading {[t.strip() for t in page.locator('[class*=st-key-chip_mood_] button[kind=primary]').all_inner_texts()]}")
         qp = picks(page); data = qp.evaluate("window.quickpicks.tracks()")

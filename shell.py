@@ -319,6 +319,7 @@ PROFILE_BODY = """
       </ul>
       <h3>Privacy</h3>
       <ul>
+        <li>The webcam opens only when you tap "Tap to scan", never when the page opens.</li>
         <li>Your webcam picture (or photo) is analysed in memory and never saved.</li>
         <li>Your words are kept only for this visit.</li>
         <li>Song previews and artwork are loaded from Apple's servers, and artwork for non-English songs also from Spotify's image servers, so those services can see your IP address.</li>

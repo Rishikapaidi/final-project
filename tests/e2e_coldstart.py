@@ -1,7 +1,7 @@
 """Cold-start timing and 'no function names on the page' check, in headless Edge."""
 import os, subprocess, sys, time, urllib.request
 from playwright.sync_api import sync_playwright
-from pagekit import legend, read_card
+from pagekit import legend, read_card, tap_scan
 
 HERE = os.path.dirname(os.path.abspath(__file__)); from pagekit import OUT as S; ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); PY = sys.executable
 RUN = sys.argv[1] if len(sys.argv) > 1 else "1"; PORT = str(8570 + int(RUN))
@@ -23,8 +23,10 @@ setInterval(check, 50);
 """ % repr(FLAG)
 
 mod_log = f"{S}/modules_{RUN}.txt"; open(mod_log, "w").close()
+cam_log = f"{S}/cam_cold_{RUN}.txt"; open(cam_log, "w").close()
+opened = lambda: open(cam_log).read().count("opened")
 t_server = time.time()
-server = subprocess.Popen([PY, f"{HERE}/fake_camera_server.py"], env={**os.environ, "TEST_APP": os.environ.get("TEST_APP", "app.py"), "TEST_PORT": PORT, "TEST_FRAME": "sad", "TEST_PREVIEWS": "real", "TEST_MODULE_LOG": mod_log},
+server = subprocess.Popen([PY, f"{HERE}/fake_camera_server.py"], env={**os.environ, "TEST_APP": os.environ.get("TEST_APP", "app.py"), "TEST_PORT": PORT, "TEST_FRAME": "sad", "TEST_PREVIEWS": "real", "TEST_MODULE_LOG": mod_log, "TEST_CAM_LOG": cam_log},
                           stdout=open(f"{S}/server_cold_{RUN}.log", "w"), stderr=subprocess.STDOUT)
 def modules():
     rows = [r.split() for r in open(mod_log).read().split(";") if r.strip()]
@@ -44,6 +46,16 @@ try:
         t0 = time.time() * 1000
         page.goto(f"http://localhost:{PORT}", wait_until="commit")
         page.wait_for_selector(".st-key-topleft iframe", timeout=120000); t_head = time.time() * 1000
+        # First load: the face tile is idle and the webcam stays off until "Tap to scan".
+        page.wait_for_selector("#scanidle", timeout=120000); t_idle = time.time() * 1000
+        page.wait_for_selector(".st-key-quickpicks iframe", timeout=120000); time.sleep(3)
+        button = page.locator(".st-key-rescan button >> visible=true").first.inner_text()
+        log(f"first load: idle tile {(t_idle - t0) / 1000:.1f}s after opening the page | button {button!r} | "
+            f"camera opened {opened()} time(s) after 3 s on the page (0 = stays off until the tap) | "
+            f"no reading yet: {page.locator('.result-wait').count() == 1} | warnings {page.locator('[data-testid=stAlert]').count()}")
+        page.screenshot(path=f"{S}/cold_{RUN}_idle.png")
+        t0 = time.time() * 1000   # from here on, times are from the tap
+        tap_scan(page)
         page.wait_for_selector(".listening", timeout=120000); t_listen = time.time() * 1000
         page.screenshot(path=f"{S}/cold_{RUN}_listening.png")
         page.wait_for_selector(".st-key-playerbar iframe", timeout=180000)
@@ -57,10 +69,10 @@ try:
         t_full = time.time() * 1000
         seen = page.evaluate("window.__seen")
         tf = first_import("tensorflow")
-        log(f"header (MOOD TUNE) visible:          {(t_head - t0) / 1000:5.1f}s after opening the page")
-        log(f"'Listening to your mood...' visible: {(t_listen - t0) / 1000:5.1f}s")
-        log(f"full page with the player:           {(t_full - t0) / 1000:5.1f}s  ({read_card(page)['headline']!r}, bars {legend(page)}, {fr.locator('.row').count()} songs)")
-        log(f"tensorflow imported {tf - t0 / 1000:+.1f}s after opening the page, i.e. {'AFTER' if tf * 1000 > t_listen else 'BEFORE'} the listening screen appeared" if tf else "tensorflow not imported (the default face model, HSEmotion, runs on onnxruntime; TensorFlow is only for the CNN)")
+        log(f"'Listening to your mood...' visible: {(t_listen - t0) / 1000:5.1f}s after the tap | camera opened {opened()} time(s)")
+        log(f"full page with the player:           {(t_full - t0) / 1000:5.1f}s after the tap  ({read_card(page)['headline']!r}, bars {legend(page)}, {fr.locator('.row').count()} songs) "
+            f"| button now {page.locator('.st-key-rescan button >> visible=true').first.inner_text()!r}")
+        log(f"tensorflow imported {tf - t0 / 1000:+.1f}s after the tap, i.e. {'AFTER' if tf * 1000 > t_listen else 'BEFORE'} the listening screen appeared" if tf else "tensorflow not imported (the default face model, HSEmotion, runs on onnxruntime; TensorFlow is only for the CNN)")
         log(f"before any text: torch imported {first_import('torch') is not None}, transformers imported {first_import('transformers') is not None}")
         page.screenshot(path=f"{S}/cold_{RUN}_loaded.png")
 

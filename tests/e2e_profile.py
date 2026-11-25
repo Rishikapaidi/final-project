@@ -14,7 +14,7 @@ and back). Saves screenshots of the menu, Settings and Privacy.
 """
 import os, sys, time
 from playwright.sync_api import sync_playwright
-from pagekit import (OUT, THEME, ROOT, bar_frame, count_reruns, image_files, log, named_frame, new_images, path_frame, reruns,
+from pagekit import (tap_scan, OUT, THEME, ROOT, bar_frame, count_reruns, image_files, log, named_frame, new_images, path_frame, reruns,
                      start_server, stop, theme_report)
 
 sys.path.insert(0, ROOT)
@@ -44,7 +44,7 @@ try:
     with sync_playwright() as pw:
         browser = pw.chromium.launch(channel="msedge", headless=True)
         page = browser.new_page(viewport={"width": 1440, "height": 900}); errors = []; page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"http://localhost:{PORT}"); page.wait_for_selector(".st-key-path iframe", timeout=180000)
+        page.goto(f"http://localhost:{PORT}"); tap_scan(page); page.wait_for_selector(".st-key-path iframe", timeout=180000)
         bar, path = bar_frame(page), path_frame(page); time.sleep(1.5)
         prof = named_frame(page, "actions"); state = lambda: bar.evaluate("window.player.state()")
         log(f"theme at the start ({THEME}): {theme_report(page, *components(page))}")
@@ -84,7 +84,7 @@ try:
         log(f"Default language Tamil, Default mode 'Meet me here': 'Songs in' now still {page.locator('.st-key-language input').input_value()!r} (for the next visit) "
             f"| toast {page.locator('#moodtune-toast').inner_text()!r} | cookie {cookie(page)!r} | app reruns {reruns(page) - runs0}")
         page.keyboard.press("Escape"); time.sleep(0.3)
-        page.reload(); page.wait_for_selector(".st-key-path iframe", timeout=180000); bar, path = bar_frame(page), path_frame(page); time.sleep(2)
+        page.reload(); tap_scan(page); page.wait_for_selector(".st-key-path iframe", timeout=180000); bar, path = bar_frame(page), path_frame(page); time.sleep(2)
         langs = sorted(set(bar.evaluate("DATA.tracks.map(t => t.language)")))
         log(f"after a reload: 'Songs in' {page.locator('.st-key-language input').input_value()!r} | chosen card {page.locator('.choice-card.on h3').all_inner_texts()} "
             f"(recommended {[c.locator('h3').inner_text() for c in page.locator('.choice-card').all() if c.locator('.tag').count()]}) | queue {bar.evaluate('DATA.mode')} in {langs} "
@@ -137,4 +137,4 @@ try:
 finally:
     stop(server)
 cam = open(cam_log).read().count("opened") if os.path.exists(cam_log) else "?"
-log(f"camera opened {cam} time(s) (each page load and the rescan) | image files created or changed on disk by the app: {new_images(before)}")
+log(f"camera opened {cam} time(s) (each tap: two page loads with a tap each, and the rescan) | image files created or changed on disk by the app: {new_images(before)}")

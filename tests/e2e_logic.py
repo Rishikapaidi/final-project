@@ -63,9 +63,14 @@ class FakeCap:
 cv2.VideoCapture = FakeCap
 
 def start(frame):
+    """Open the app; then, if a frame is given, press "Tap to scan" with the fake webcam showing it.
+    frame None: no scan at all (the webcam is never opened), e.g. for a text-only reading."""
     FakeCap.frame = frame
     at = AppTest.from_file(f"{ROOT}/app.py", default_timeout=600).run()
     assert not at.exception, [e.value for e in at.exception]
+    if frame is not None:
+        at.button(key="rescan").click().run()
+        assert not at.exception, [e.value for e in at.exception]
     return at
 
 def describe(at):
@@ -114,7 +119,7 @@ NEGATIVE = ["sad", "angry", "fear", "disgust"]
 def negative(probs):
     return float(sum(probs[CANON.index(e)] for e in NEGATIVE))
 def expected_card(at):
-    face = at.session_state["scan"]["face_probs"]
+    face = at.session_state["scan"]["face_probs"] if "scan" in at.session_state else None
     text = at.session_state["text_results"].get(at.session_state["user_text"].strip())
     face_cal = None if face is None else fusion.calibrate(fusion.align_face(face), CONFIG["face_temperature"])
     text_cal = None if text is None else fusion.calibrate(fusion.align_text(text), CONFIG["text_temperature"])
@@ -163,15 +168,35 @@ def set_language(at, language):
 def languages_of(at):
     return pd.Series([lang_of[t["lastfm"]] for t in at.session_state["queue"]["tracks"]]).value_counts().to_dict()
 
-print("RESULT == AUTO MODE, text only (no face)")
+print("RESULT == FIRST LOAD: NO SCAN UNTIL THE TAP")
+FakeCap.opened = 0
+at = start(None)
+idle = any('id="scanidle"' in m.value for m in at.markdown)
+wait = any('class="result-wait"' in m.value for m in at.markdown)
+print(f"RESULT first load: camera opened {FakeCap.opened} | idle tile {idle} | button {at.button(key='rescan').label!r} | "
+      f"no reading yet {wait and 'queue' not in at.session_state} | warnings {[w.value for w in at.warning]} | exceptions {len(at.exception)}")
+set_text(at, texts["sad"])
+print(f"RESULT text only, no scan: camera opened {FakeCap.opened} | {describe(at)}")
+no_scan = expected_card(at)["fused"]
+for key in ("choose_resonance", "choose_uplift"):
+    at.button(key=key).click().run()
+    print(f"RESULT    {key}: exceptions {len(at.exception)} | queue {at.session_state['queue']['mode']} | camera opened {FakeCap.opened}")
+blank_scan = start(blank); set_text(blank_scan, texts["sad"])
+same = all(abs(no_scan[e] - expected_card(blank_scan)["fused"][e]) < 1e-12 for e in no_scan)
+print(f"RESULT the same words after a scan that found no face give the same reading: {same} | {headline(at)!r} vs {headline(blank_scan)!r}")
+FakeCap.opened = 0; at.button(key="rescan").click().run()
+idle_now = any('id="scanidle"' in m.value for m in at.markdown)
+print(f"RESULT after the tap: camera opened by the tap {FakeCap.opened} | button {at.button(key='rescan').label!r} | idle tile {idle_now} | exceptions {len(at.exception)}")
+
+print("RESULT == AUTO MODE, text only (no scan)")
 for e in EMO:
-    at = start(blank); set_text(at, texts[e])
+    at = start(None); set_text(at, texts[e])
     print(f"RESULT [{e:8}] {describe(at)}"); record(f"text {e}", at)
 
 print("RESULT == FORCED MODES")
-at = start(blank); set_text(at, texts["sad"]); set_mode(at, "Resonance")
+at = start(None); set_text(at, texts["sad"]); set_mode(at, "Resonance")
 print(f"RESULT [sad text, Resonance forced] {describe(at)}"); record("sad text resonance", at)
-at = start(blank); set_text(at, texts["happy"]); set_mode(at, "Uplift")
+at = start(None); set_text(at, texts["happy"]); set_mode(at, "Uplift")
 print(f"RESULT [happy text, Uplift forced ] {describe(at)}"); record("happy text uplift", at)
 
 print("RESULT == FACES")
@@ -196,7 +221,7 @@ if os.environ.get("TEST_ENGLISH_ONLY"):
 print("RESULT == LANGUAGES")
 for language in ["English", "Hindi", "Tamil", "Telugu", "Malayalam", "Korean"]:
     for label, frame, text, mode in [("sad face, auto", sad_frame, "", None), ("happy face, auto", happy_frame, "", None),
-                                     ("happy text, Uplift forced", blank, texts["happy"], "Uplift")]:
+                                     ("happy text, Uplift forced", None, texts["happy"], "Uplift")]:
         at = start(frame)
         if text: set_text(at, text)
         if mode: set_mode(at, mode)
@@ -215,7 +240,7 @@ for language in ["Hindi", "Telugu", "Korean", "English"]:
     set_language(at, language)
     after = [t["lastfm"] for t in at.session_state["queue"]["tracks"]]
     seen.append(f"{language}: rebuilt {before != after}, {at.session_state['queue']['mode']}, languages {languages_of(at)}")
-print(f"RESULT camera opened after load {a}, after 4 language changes {FakeCap.opened} | same scan: {at.session_state['scan_id'] == scan_id}")
+print(f"RESULT camera opened after load and the tap {a}, after 4 language changes {FakeCap.opened} | same scan: {at.session_state['scan_id'] == scan_id}")
 for line in seen: print(f"RESULT    {line}")
 
 print("RESULT == CHOICE CARDS")
@@ -236,7 +261,7 @@ for label, frame in [("sad face", sad_frame), ("happy face", happy_frame)]:
     set_mode(at, "Auto"); q2, m2 = tracks(at), at.session_state["queue"]["mode"]
     print(f"RESULT [{label}] Auto: {m0}, cards {c0} | clicking the recommended card keeps the queue: {same}")
     print(f"RESULT [{label}] clicking the other card: {m1}, rebuilt {q1 != q0}, cards {c1}, 'Let MOOD TUNE choose' shown {has_auto} "
-          f"| back to Auto: {m2}, rebuilt {q2 != q1} | camera opened {FakeCap.opened} time(s) in all (1 = only the first scan)")
+          f"| back to Auto: {m2}, rebuilt {q2 != q1} | camera opened {FakeCap.opened} time(s) in all (1 = only the tap)")
 at = start(sad_frame); set_language(at, "Telugu")
 print(f"RESULT [sad face, Telugu] {at.session_state['queue']['mode']} | cards {cards(at)}")
 set_mode(at, "Uplift"); print(f"RESULT [sad face, Telugu, Lift my mood clicked] {at.session_state['queue']['mode']} | note {at.session_state['queue']['note']!r} | cards {cards(at)['selected']}")
@@ -251,7 +276,7 @@ print(f"RESULT chosen Meet me here -> after text {m[1]}, after language {m[2]} (
       f"choice {at.session_state['mode_choice']}, queue {at.session_state['queue']['mode']}, "
       f"'Let MOOD TUNE choose' shown {any(b.key == 'choose_auto' for b in at.button)} | text kept {at.session_state['user_text']!r}")
 
-print("RESULT == CAMERA IS ONLY OPENED ON LOAD AND RE-SCAN")
+print("RESULT == CAMERA IS ONLY OPENED ON A TAP")
 FakeCap.opened = 0
 at = start(sad_frame); a = FakeCap.opened
 key1 = at.session_state["queue_key"]; q1 = [t["lastfm"] for t in at.session_state["queue"]["tracks"]]
@@ -260,6 +285,6 @@ set_mode(at, "Auto"); set_text(at, ""); c = FakeCap.opened
 q2 = [t["lastfm"] for t in at.session_state["queue"]["tracks"]]
 at.run(); q3 = [t["lastfm"] for t in at.session_state["queue"]["tracks"]]
 at.button(key="rescan").click().run(); d = FakeCap.opened
-print(f"RESULT camera opened: after load {a}, after 3 setting changes {b}, after 2 more {c}, after Re-scan {d}")
+print(f"RESULT camera opened: after load and the tap {a}, after 3 setting changes {b}, after 2 more {c}, after 'Tap to scan again' {d}")
 print(f"RESULT queue unchanged by a plain rerun: {q2 == q3} | queue rebuilt after settings round-trip (new random picks): {q1 != q2}")
 print(f"RESULT fake preview lookups made in total: {len(lookups)} | distinct songs cached: {len(previews._cache)}")

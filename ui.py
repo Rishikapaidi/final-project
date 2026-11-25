@@ -118,6 +118,13 @@ PAGE_CSS = """
                border-radius:14px; background:#25224a; color:#f1edfb; font-size:17px; }
   .pulse { width:58px; height:58px; border-radius:50%; background:var(--lavender); animation:pulse 1.3s ease-in-out infinite; }
   .listening-detail { font-size:13.5px; color:#cfc8ef; margin-top:-6px; }
+  /* before the first scan: a calm, still panel (the camera is off) */
+  .scan-idle { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; height:200px;
+               border-radius:14px; background:#25224a; color:#fbf8f3; text-align:center; padding:0 20px; margin-bottom:22px; }
+  .scan-idle .idle-icon { width:52px; height:52px; border-radius:50%; background:rgba(255,255,255,.08);
+                          display:flex; align-items:center; justify-content:center; }
+  .scan-idle .idle-title { font-size:15.5px; font-weight:600; }
+  .scan-idle .idle-hint { font-size:13px; color:#cfc8ef; }
   @keyframes pulse { 0%, 100% { transform:scale(.75); opacity:.55; } 50% { transform:scale(1.08); opacity:1; } }
   .st-key-hero [data-testid="stWidgetLabel"] p { color:#f1edfb; font-size:15px; font-weight:500; }
   .st-key-hero [data-testid="stTextInput"] [data-baseweb="input"] { background:#fff; border-radius:12px; border:2px solid transparent; }
@@ -435,7 +442,16 @@ HERO_HTML = ('<div><h2>Detect my mood</h2>'
 
 # Under the scan and the words, before there is a reading.
 RESULT_WAIT_HTML = ('<div class="result-wait"><b>Your mood reading appears here</b>'
-                    '<span>Look at the camera, or tell MOOD TUNE how your day was.</span></div>')
+                    '<span>Tap to scan, or tell MOOD TUNE how your day was.</span></div>')
+
+# The face tile before the first scan: the webcam is not opened until "Tap to scan".
+IDLE_TILE_HTML = ('<p class="tile-label">Your expression</p>'
+                  '<div class="scan-idle" id="scanidle"><div class="idle-icon" aria-hidden="true">'
+                  '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#cfc8ef" stroke-width="1.8" '
+                  'stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L17 6h2a2 2 0 0 1 2 2v9'
+                  'a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="12.5" r="3.5"/></svg></div>'
+                  '<div class="idle-title">Ready when you are</div>'
+                  '<div class="idle-hint">Your camera opens only when you tap.</div></div>')
 
 
 def scan_screen(title, detail=""):

@@ -1,7 +1,7 @@
 """Cold start with the background text-model warm-up: page timing, then text timing (after 30 s, or straight away)."""
 import os, subprocess, sys, time, urllib.request
 from playwright.sync_api import sync_playwright
-from pagekit import legend, read_card
+from pagekit import tap_scan, legend, read_card
 HERE = os.path.dirname(os.path.abspath(__file__)); from pagekit import OUT as S; ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); PY = sys.executable
 CASE = sys.argv[1]; PORT = {"wait30": "8561", "immediate": "8562"}[CASE]
 TEXT = "I miss her so much, everything feels empty and pointless now."
@@ -29,17 +29,19 @@ try:
         except Exception: time.sleep(0.25)
     with sync_playwright() as pw:
         b = pw.chromium.launch(channel="msedge", headless=True); ctx = b.new_context(viewport={"width": 1440, "height": 900}); ctx.add_init_script(WATCH); page = ctx.new_page()
-        t0 = time.time(); page.goto(f"http://localhost:{PORT}", wait_until="commit")
+        page.goto(f"http://localhost:{PORT}", wait_until="commit"); page.wait_for_selector("#scanidle", timeout=120000)
+        t0 = time.time(); tap_scan(page)   # times below are from the tap (the camera opens only on it)
         page.wait_for_selector(".listening", timeout=120000); t_listen = time.time()
         page.wait_for_selector(".st-key-playerbar iframe", timeout=180000)
         def player(need_text=False):
-            """The page once its player bar is up (and, with need_text, once the bars include Text)."""
+            """The page once the scan's reading is shown with its player (Face in the bars; with need_text, Text too).
+            The player bar itself is there from the first load, before any reading."""
             try:
-                if page.locator(".st-key-playerbar iframe").count() and (not need_text or "Text" in legend(page)): return page
+                if page.locator(".st-key-path iframe").count() and "Face" in legend(page) and (not need_text or "Text" in legend(page)): return page
             except Exception: pass
         while player() is None: time.sleep(0.1)
         t_full = time.time()
-        log(f"[{CASE}] listening screen {t_listen - t0:.1f}s | full page {t_full - t0:.1f}s after opening")
+        log(f"[{CASE}] listening screen {t_listen - t0:.1f}s | full page {t_full - t0:.1f}s after the tap")
         if CASE == "wait30":
             time.sleep(30)
             t_ready = when(lambda m: m["ready"] == "1")

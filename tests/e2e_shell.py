@@ -16,7 +16,7 @@ New playlist dialog.
 """
 import os, time
 from playwright.sync_api import sync_playwright
-from pagekit import (OUT, theme_report, bar_frame, count_reruns, image_files, log, named_frame, new_images, path_frame, reruns,
+from pagekit import (tap_scan, OUT, theme_report, bar_frame, count_reruns, image_files, log, named_frame, new_images, path_frame, reruns,
                      start_server, stop)
 
 PORT = 8622
@@ -66,7 +66,7 @@ try:
         browser = pw.chromium.launch(channel="msedge", headless=True)
         ctx = browser.new_context(viewport={"width": 1440, "height": 900}); ctx.add_init_script(WATCH)
         page = ctx.new_page(); errors = []; page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"http://localhost:{PORT}"); page.wait_for_selector(SELECTOR["home"], timeout=180000)
+        page.goto(f"http://localhost:{PORT}"); tap_scan(page); page.wait_for_selector(SELECTOR["home"], timeout=180000)
         bar, path = bar_frame(page), path_frame(page); time.sleep(1.5)
         state = lambda: bar.evaluate("window.player.state()")
         count_reruns(page)
@@ -155,7 +155,7 @@ try:
         log(f"fold: sidebar {nb['width']}px, labels under icons {page.locator('.st-key-nav_home p').evaluate('e => getComputedStyle(e).fontSize')} | playlists hidden "
             f"{not page.locator('.st-key-navlists').is_visible()} | aria-expanded {top.locator('#hamburger').get_attribute('aria-expanded')}")
         shot(page, "19_sidebar_folded")
-        page.reload(); page.wait_for_selector(SELECTOR["home"], timeout=180000); top = named_frame(page, "topbar"); time.sleep(1.5)
+        page.reload(); tap_scan(page); page.wait_for_selector(SELECTOR["home"], timeout=180000); top = named_frame(page, "topbar"); time.sleep(1.5)
         log(f"   kept after a reload: {page.evaluate('document.documentElement.classList.contains(`mt-nav-mini`)')} | page after a reload: Home {page.locator(SELECTOR['home']).count() == 1}")
         top.locator("#hamburger").click(); time.sleep(0.6)
         log(f"   unfold: sidebar {page.locator('.st-key-nav').bounding_box()['width']}px")
@@ -195,7 +195,7 @@ try:
     with sync_playwright() as pw:
         browser = pw.chromium.launch(channel="msedge", headless=True)
         page = browser.new_page(viewport={"width": 1440, "height": 900}); errors = []; page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"http://localhost:{PORT + 1}"); page.wait_for_selector("[data-testid=stAlert]", timeout=180000)
+        page.goto(f"http://localhost:{PORT + 1}"); tap_scan(page); page.wait_for_selector("[data-testid=stAlert]", timeout=180000)
         log("== NO FACE: THE PLAYER KEEPS THE LAST MOOD QUEUE")
         idle = bar_frame(page, idle=True).evaluate("DATA.id")
         box = page.get_by_label("How was your day?"); box.fill("I miss her so much, everything feels empty."); box.press("Enter")

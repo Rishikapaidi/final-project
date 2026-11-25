@@ -342,6 +342,11 @@ def choose(mode):
     st.session_state["mode_choice"] = mode
 
 
+def want_scan():
+    """ "Tap to scan" / "Tap to scan again": open the webcam on this run (and only then)."""
+    state["scan_wanted"] = True
+
+
 def new_scan(scan):
     """Store a new scan (webcam or photo). A new face reading goes back to the
     default mode (Auto unless Settings say otherwise), so a card chosen for the
@@ -448,14 +453,13 @@ def background_queue(language):
     """The queue on Explore and the Library: the last reading (no camera, no
     text model), so the player keeps the same songs; "Songs in" still applies."""
     scan = state.get("scan")
-    if scan is None:
-        return None
+    face_probs = scan["face_probs"] if scan else None
     text = state.get("text", "")
     text_probs = state.get("text_results", {}).get(text.strip())
-    emotions, fused = combine_emotions(scan["face_probs"], text_probs)
+    emotions, fused = combine_emotions(face_probs, text_probs)
     if fused is None:
         return None
-    return current_queue(emotions, fused, language, text, scan["face_probs"], text_probs)[0]
+    return current_queue(emotions, fused, language, text, face_probs, text_probs)[0]
 
 
 def play_chip(mood, language):
@@ -530,12 +534,8 @@ def home_page(language):
     """The chips, the greeting, the "Detect my mood" card (the scan, your words and
     the reading), Quick picks, the choice cards and the songs. Returns the queue,
     or None if there is no reading yet."""
-    # The chips are drawn once per run: straight away while the first scan runs (nothing
-    # can be selected yet), otherwise at the end, once this run's reading is known.
+    # The chips are drawn once per run, at the end, once this run's reading is known.
     chips_slot = st.empty()
-    chips_now = "scan" not in state
-    if chips_now:
-        chips_row(chips_slot, language)
     local = ui.local_now(st.context.timezone, st.context.timezone_offset)
     st.markdown(ui.greeting_html(local), unsafe_allow_html=True)
 
@@ -546,8 +546,11 @@ def home_page(language):
         with face_column, st.container(key="facetile"):
             face_slot = st.empty()
             with st.container(horizontal=True, gap="small"):
-                if st.button("Tap to scan again", key="rescan", help="Look at the webcam again"):
-                    state.pop("scan", None)
+                # "Tap to scan" until the webcam has been used this visit (an uploaded photo
+                # doesn't open it), "Tap to scan again" after that.
+                scanned = state.get("webcam_scans", 0) or state.get("scan_wanted")
+                st.button("Tap to scan again" if scanned else "Tap to scan", key="rescan", on_click=want_scan,
+                          help="Look at the webcam again" if scanned else "Opens your webcam for a quick scan")
                 with st.popover("Upload a photo instead"):
                     tile_photo = st.file_uploader("Upload a photo instead", type=PHOTO_TYPES, key="photo",
                                                   help="A backup if the webcam doesn't work.")
@@ -573,24 +576,34 @@ def home_page(language):
     with st.container(key="quickpicks"):
         picks_slot = st.empty()
     if "scan" not in state:
-        quick_picks(picks_slot, language)   # a default set while the first scan runs
+        quick_picks(picks_slot, language)   # a default set until there is a reading
 
     if tile_photo is not None and not read_photo(tile_photo):
         notices.warning("That file couldn't be read as a picture. Try a JPEG or PNG.")
 
-    # The webcam is only opened on first load and on "Tap to scan again"; anything
-    # else reuses the cached scan (face result and picture, both kept in memory only).
-    if "scan" not in state:
+    # The webcam is opened only on "Tap to scan" / "Tap to scan again", never on its
+    # own; anything else reuses the cached scan (face result and picture, both kept in
+    # memory only). Before the first scan the tile is idle and the camera is off.
+    if state.get("scan_wanted"):
         # The face model loads first, so the countdown and capture are not held up by it.
         face_slot.markdown(ui.scan_screen("Listening to your mood...", "Starting the camera"), unsafe_allow_html=True)
         load_face_model()
         frames = guided_webcam_scan(face_slot)
         face_slot.markdown(ui.scan_screen("Listening to your mood...", "Reading your expression"), unsafe_allow_html=True)
         new_scan({**summarise_scan(frames), "source": "webcam"})
-    scan = state["scan"]
-    face_slot.markdown(ui.face_tile_html(scan["image"], scan_note(scan), scan_tip(scan), model_name=load_face_model().name),
-                       unsafe_allow_html=True)
-    face_probs = scan["face_probs"]
+        state["webcam_scans"] = state.get("webcam_scans", 0) + 1
+        # Cleared only now: if this run is interrupted mid-scan (say Enter pressed in the
+        # text box), the next run scans again instead of losing the tap.
+        state["scan_wanted"] = False
+    scan = state.get("scan")
+    if scan is None:
+        face_slot.markdown(ui.IDLE_TILE_HTML, unsafe_allow_html=True)
+    else:
+        face_slot.markdown(ui.face_tile_html(scan["image"], scan_note(scan), scan_tip(scan), model_name=load_face_model().name),
+                           unsafe_allow_html=True)
+    # No scan, or a scan that found no face: the reading comes from the words alone
+    # (combine_emotions with face_probs None, the same path in both cases).
+    face_probs = scan["face_probs"] if scan else None
 
     # Each distinct text is read once per session. The first read also loads the
     # text model (unless the background warm-up already has), so a friendly
@@ -607,10 +620,10 @@ def home_page(language):
     emotions, fused = combine_emotions(face_probs, text_probs)
 
     if fused is None:
-        notices.warning("I couldn't see a face. Tap to scan again, upload a photo, or tell me how your day was.")
+        if scan is not None:   # a scan that found no face; before any scan the card's placeholder says what to do
+            notices.warning("I couldn't see a face. Tap to scan again, upload a photo, or tell me how your day was.")
         quick_picks(picks_slot, language)
-        if not chips_now:
-            chips_row(chips_slot, language)
+        chips_row(chips_slot, language)
         return None
 
     queue, view, wanted = current_queue(emotions, fused, language, user_text, face_probs, text_probs)
@@ -652,8 +665,7 @@ def home_page(language):
         else:
             # Cache-only by default: only songs already in data/songs/previews.csv can be played.
             st.info(f"No {language} songs with a saved preview match this mood yet. Try another language.")
-    if not chips_now:
-        chips_row(chips_slot, language)
+    chips_row(chips_slot, language)
     return queue
 
 

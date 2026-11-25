@@ -7,7 +7,7 @@ the narrow layout.
 """
 import os, sys, time
 from playwright.sync_api import sync_playwright
-from pagekit import (named_frame, theme_report, OUT, bar_frame, describe_card, full_shot, image_files, log, new_images, path_frame,
+from pagekit import (tap_scan, named_frame, theme_report, OUT, bar_frame, describe_card, full_shot, image_files, log, new_images, path_frame,
                      player_state, players, read_card, set_bars_open, start_server, stop, wait_for_text_bars)
 
 SAD_TEXT = "I miss her so much, everything feels empty and pointless now."
@@ -44,6 +44,16 @@ with sync_playwright() as pw:
             errors = []; page.on("pageerror", lambda e: errors.append(str(e)))
             page.goto(f"http://localhost:{8590 + n}")
             log(f"=== {name}")
+            # First load: nothing is scanned and the webcam stays off until "Tap to scan".
+            page.wait_for_selector("#scanidle", timeout=180000)
+            page.wait_for_selector(".st-key-quickpicks iframe", timeout=180000); time.sleep(3)
+            log(f"first load: camera opened {opened()} time(s) after 3 s (0 = off until the tap) | idle tile "
+                f"{page.locator('#scanidle').inner_text()!r} | button {page.locator('.st-key-rescan button >> visible=true').first.inner_text()!r} | "
+                f"reading placeholder {page.locator('.result-wait').count() == 1} | warnings {page.locator('[data-testid=stAlert]').count()} | "
+                f"choice cards {page.locator('.st-key-choice').count()} | page errors {errors}")
+            if n == 0:
+                full_shot(page, os.path.join(OUT, "page_00_first_load.png"))
+            tap_scan(page)
             if frame == "blank":
                 page.wait_for_selector("[data-testid=stAlert]", timeout=180000)
                 log("before any text:", page.locator("[data-testid=stAlert]").first.inner_text()[:100])

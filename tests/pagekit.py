@@ -73,6 +73,15 @@ def start_server(port, frame, name, previews="real", **env):
     return server
 
 
+def tap_scan(page, timeout=180000):
+    """Press "Tap to scan" / "Tap to scan again". The app opens the (fake) webcam only on
+    this tap, never on page load; returns once the click is sent."""
+    # Streamlit draws a button with a tooltip twice (one copy hidden), so take the visible one.
+    button = page.locator(".st-key-rescan button >> visible=true").first
+    button.wait_for(state="visible", timeout=timeout)
+    button.click()
+
+
 def stop(server):
     server.terminate()
     subprocess.run(["taskkill", "/F", "/T", "/PID", str(server.pid)], capture_output=True)

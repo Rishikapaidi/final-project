@@ -2,7 +2,7 @@
 import os, sys, time
 import pandas as pd
 from playwright.sync_api import sync_playwright
-from pagekit import OUT, ROOT, bar_frame, describe_card, full_shot, log, path_frame, player_state, players, read_card, start_server, stop
+from pagekit import tap_scan, OUT, ROOT, bar_frame, describe_card, full_shot, log, path_frame, player_state, players, read_card, start_server, stop
 
 SCENARIOS = [  # name, frame, language, screenshot
     ("hindi_sad", "sad", "Hindi", "8_songs_in_hindi"),
@@ -33,7 +33,7 @@ with sync_playwright() as pw:
         try:
             page = browser.new_page(viewport={"width": 1440, "height": 900})
             errors = []; page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(f"http://localhost:{8610 + n}")
+            page.goto(f"http://localhost:{8610 + n}"); tap_scan(page)
             log(f"=== {name}")
             page.wait_for_selector(".st-key-playerbar iframe", timeout=180000)
             bar, path = bar_frame(page), path_frame(page); time.sleep(1.5)

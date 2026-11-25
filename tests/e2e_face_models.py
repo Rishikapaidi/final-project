@@ -14,7 +14,7 @@ import io, os, sys, time
 import numpy as np, pandas as pd, cv2
 from PIL import Image
 from playwright.sync_api import sync_playwright
-from pagekit import ROOT, describe_card, log, path_frame, read_card, start_server, stop
+from pagekit import tap_scan, ROOT, describe_card, log, path_frame, read_card, start_server, stop
 
 sys.path.insert(0, ROOT)
 import face, face_models  # noqa: E402
@@ -72,7 +72,7 @@ try:
     with sync_playwright() as pw:
         browser = pw.chromium.launch(channel="msedge", headless=True)
         page = browser.new_page(viewport={"width": 1440, "height": 900}); errors = []; page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"http://localhost:{PORT}"); page.wait_for_selector(".st-key-path iframe", timeout=180000); path_frame(page); time.sleep(1.5)
+        page.goto(f"http://localhost:{PORT}"); tap_scan(page); page.wait_for_selector(".st-key-path iframe", timeout=180000); path_frame(page); time.sleep(1.5)
         label = page.locator(".st-key-facetile .tile-label").inner_text()
         card = read_card(page)
         check("the face tile says FER+ read the scan", "FER+" in label, repr(label))

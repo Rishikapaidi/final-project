@@ -3,7 +3,7 @@ import io, os, subprocess, sys, time, urllib.request, tempfile
 import numpy as np, pandas as pd, cv2
 from PIL import Image
 from playwright.sync_api import sync_playwright
-from pagekit import bar_frame, full_shot, legend, path_frame, player_state, read_card, wait_for_text_bars
+from pagekit import tap_scan, bar_frame, full_shot, legend, path_frame, player_state, read_card, wait_for_text_bars
 
 HERE = os.path.dirname(os.path.abspath(__file__)); from pagekit import OUT as S; ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); PY = sys.executable; PORT = "8586"
 def log(*a): print("RESULT", *a, flush=True)
@@ -55,7 +55,9 @@ try:
     with sync_playwright() as pw:
         b = pw.chromium.launch(channel="msedge", headless=True); page = b.new_page(viewport={"width": 1440, "height": 900})
         errors = []; page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"http://localhost:{PORT}"); page.wait_for_selector("[data-testid=stAlert]", timeout=180000)
+        page.goto(f"http://localhost:{PORT}"); page.wait_for_selector("#scanidle", timeout=180000); time.sleep(2)
+        log(f"first load: camera opened {opened()} time(s) (0 = off until the tap) | button {page.locator('.st-key-rescan button >> visible=true').first.inner_text()!r} | idle tile {page.locator('#scanidle').count() == 1}")
+        tap_scan(page); page.wait_for_selector("[data-testid=stAlert]", timeout=180000)
         log(f"webcam sees no face: {page.locator('[data-testid=stAlert]').first.inner_text()!r} | tile {page.locator('.st-key-facetile').inner_text()[:60]!r} | camera opened {opened()} time(s)")
         log(f"no-face note and tip under the webcam picture: {page.locator('.tile-note').all_inner_texts() == NO_FACE_NOTE} {page.locator('.tile-note').all_inner_texts()}")
         def close_popover():

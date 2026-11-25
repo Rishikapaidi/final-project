@@ -13,7 +13,7 @@ screenshots of the queue panel, the Library, the song menu, Settings and About.
 """
 import os, re, sys, time
 from playwright.sync_api import sync_playwright
-from pagekit import (OUT, actions_frame, bar_frame, count_reruns, image_files, log, named_frame, new_images, path_frame,
+from pagekit import (tap_scan, OUT, actions_frame, bar_frame, count_reruns, image_files, log, named_frame, new_images, path_frame,
                      reruns, start_server, stop)
 
 PORT = 8620
@@ -38,7 +38,7 @@ def shot(page, name):
 def open_page(ctx):
     page = ctx.new_page()
     page.errors = []; page.on("pageerror", lambda e: page.errors.append(str(e)))
-    page.goto(f"http://localhost:{PORT}")
+    page.goto(f"http://localhost:{PORT}"); tap_scan(page)
     page.wait_for_selector(".st-key-path iframe", timeout=180000)
     bar, path, top = bar_frame(page), path_frame(page), actions_frame(page)
     time.sleep(1.5)
@@ -267,7 +267,7 @@ try:
         log(f"repeat button after the setting: {state()['repeat']}")
         cur = state()["current"]; bar.evaluate("window.player.audio.currentTime = window.player.audio.duration - 1"); time.sleep(3); s = state()
         log(f"autoplay off: stops at the end of the song {s['paused']} (same song {s['current'] == cur})")
-        page.reload(); page.wait_for_selector(".st-key-path iframe", timeout=180000)
+        page.reload(); tap_scan(page); page.wait_for_selector(".st-key-path iframe", timeout=180000)
         bar, path, top = bar_frame(page), path_frame(page), actions_frame(page); time.sleep(2.5)
         log(f"after a reload: liked songs kept {liked()} | sidebar {sidebar(page)} | repeat {state()['repeat']} | emotions open "
             f"{page.locator('.st-key-moodcard details').get_attribute('open') is not None} | larger text {page.evaluate('document.documentElement.classList.contains(`moodtune-large`)')}")
@@ -316,4 +316,4 @@ try:
 finally:
     stop(server)
 cam = open(cam_log).read().count("opened") if os.path.exists(cam_log) else "?"
-log(f"camera opened {cam} time(s) (once per page load) | image files created or changed on disk by the app: {new_images(before)}")
+log(f"camera opened {cam} time(s) (once per tap: two page loads with a tap each) | image files created or changed on disk by the app: {new_images(before)}")

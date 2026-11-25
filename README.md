@@ -59,8 +59,10 @@ Tested with Python 3.13 on Windows; the commands below are for PowerShell.
    streamlit run app.py
    ```
 
-   It opens at http://localhost:8501. The scan uses the webcam of the
-   computer running the app; "Upload a photo instead" works without one.
+   It opens at http://localhost:8501 with the camera off. The webcam (of
+   the computer running the app) opens only when you press "Tap to scan";
+   "Upload a photo instead" works without one, and a sentence alone gives a
+   reading from your words.
 
 The song list (`data/songs/songs_clean.csv`) and the saved previews
 (`data/songs/previews.csv`) are in the repository, so nothing else is needed
@@ -187,7 +189,10 @@ A music-app layout with MOOD TUNE's own name, logo and colours:
     language is chosen only with "Songs in";
   - the **Detect my mood** card: the face scan and your words side by side,
     and the reading under them (the "X% low" gauge, the headline, how low
-    face and text lean, "See all 7 emotions");
+    face and text lean, "See all 7 emotions"). Nothing is scanned when the
+    page opens: the face tile waits, camera off, until you press "Tap to
+    scan" ("Tap to scan again" after that). Words alone give a reading from
+    the text, the same way as a scan that found no face;
   - **Quick picks**: 12 songs in a grid (3 columns on a wide window) with
     Play all, picked at random from the reading's top emotion in "Songs in"
     (or a mix of that language before there is a reading). The pick is kept

@@ -12,7 +12,7 @@ On a narrow screen the tabs sit under the art. Runs in either theme
 """
 import os, time
 from playwright.sync_api import sync_playwright
-from pagekit import (OUT, bar_frame, count_reruns, image_files, log, named_frame, new_images, path_frame, read_card, reruns,
+from pagekit import (tap_scan, OUT, bar_frame, count_reruns, image_files, log, named_frame, new_images, path_frame, read_card, reruns,
                      start_server, stop, theme_report)
 
 PORT = 8627
@@ -28,7 +28,7 @@ try:
     with sync_playwright() as pw:
         browser = pw.chromium.launch(channel="msedge", headless=True)
         page = browser.new_page(viewport={"width": 1440, "height": 900}); errors = []; page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(f"http://localhost:{PORT}"); page.wait_for_selector(".st-key-path iframe", timeout=180000)
+        page.goto(f"http://localhost:{PORT}"); tap_scan(page); page.wait_for_selector(".st-key-path iframe", timeout=180000)
         bar, path = bar_frame(page), path_frame(page); time.sleep(1.5)
         state = lambda: bar.evaluate("window.player.state()")
         count_reruns(page); runs0, queue_id = reruns(page), bar.evaluate("DATA.id")
