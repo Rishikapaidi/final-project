@@ -1,0 +1,61 @@
+start emotion,language,measure,unit,Uplift,Random,Resonance,Uplift - Random,95% interval of Uplift - Random,Uplift - Resonance,n paths,"n paths (random, Resonance)",n steps,playable songs in start bucket,flag
+sad,English,steps in the intended direction,%,99.75,51.38,47.75,48.38,+45.9 to +50.7,52.00,200,"200, 200",800,149,
+sad,English,all 4 steps in the intended direction,%,99.00,0.50,0.50,98.50,+96.5 to +100.0,98.50,200,"200, 200",,149,
+sad,English,song 5 vs song 1 in the intended direction,%,100.00,56.00,48.50,44.00,+37.0 to +51.0,51.50,200,"200, 200",,149,
+sad,Hindi,steps in the intended direction,%,99.75,49.12,47.12,50.63,+48.2 to +53.1,52.63,200,"200, 200",800,17,small song pool: 17 playable sad songs
+sad,Hindi,all 4 steps in the intended direction,%,99.00,2.00,0.50,97.00,+94.5 to +99.0,98.50,200,"200, 200",,17,small song pool: 17 playable sad songs
+sad,Hindi,song 5 vs song 1 in the intended direction,%,100.00,48.50,53.50,51.50,+45.5 to +58.5,46.50,200,"200, 200",,17,small song pool: 17 playable sad songs
+sad,Tamil,steps in the intended direction,%,98.88,49.25,42.38,49.62,+47.2 to +52.2,56.50,200,"200, 200",800,23,small song pool: 23 playable sad songs
+sad,Tamil,all 4 steps in the intended direction,%,95.50,0.00,0.00,95.50,+92.0 to +98.5,95.50,200,"200, 200",,23,small song pool: 23 playable sad songs
+sad,Tamil,song 5 vs song 1 in the intended direction,%,100.00,54.50,43.00,45.50,+39.0 to +52.0,57.00,200,"200, 200",,23,small song pool: 23 playable sad songs
+sad,Korean,steps in the intended direction,%,99.38,50.62,42.38,48.75,+46.4 to +51.2,57.00,200,"200, 200",800,24,small song pool: 24 playable sad songs
+sad,Korean,all 4 steps in the intended direction,%,97.50,2.00,0.00,95.50,+92.5 to +98.0,97.50,200,"200, 200",,24,small song pool: 24 playable sad songs
+sad,Korean,song 5 vs song 1 in the intended direction,%,100.00,49.50,41.00,50.50,+43.5 to +57.5,59.00,200,"200, 200",,24,small song pool: 24 playable sad songs
+angry,English,steps in the intended direction,%,97.88,47.38,39.38,50.50,+47.8 to +53.2,58.50,200,"200, 200",800,176,
+angry,English,all 4 steps in the intended direction,%,91.50,1.00,0.00,90.50,+86.0 to +94.5,91.50,200,"200, 200",,176,
+angry,English,song 5 vs song 1 in the intended direction,%,100.00,45.50,35.00,54.50,+48.0 to +61.5,65.00,200,"200, 200",,176,
+angry,English,"valence change, song 5 minus song 1 (calming paths)",valence points,1.47,0.03,0.04,1.44,+1.1 to +1.8,1.44,200,"200, 200",,176,
+angry,Hindi,steps in the intended direction,%,96.00,49.88,44.25,46.12,+43.2 to +48.9,51.75,200,"200, 200",800,25,small song pool: 25 playable angry songs
+angry,Hindi,all 4 steps in the intended direction,%,85.00,1.00,0.00,84.00,+79.0 to +89.0,85.00,200,"200, 200",,25,small song pool: 25 playable angry songs
+angry,Hindi,song 5 vs song 1 in the intended direction,%,100.00,50.00,43.50,50.00,+43.0 to +56.5,56.50,200,"200, 200",,25,small song pool: 25 playable angry songs
+angry,Hindi,"valence change, song 5 minus song 1 (calming paths)",valence points,1.45,-0.24,0.01,1.69,+1.5 to +1.9,1.44,200,"200, 200",,25,small song pool: 25 playable angry songs
+angry,Tamil,steps in the intended direction,%,92.00,53.00,45.88,39.00,+36.0 to +42.0,46.13,200,"200, 200",800,24,small song pool: 24 playable angry songs
+angry,Tamil,all 4 steps in the intended direction,%,73.00,0.50,0.50,72.50,+66.0 to +78.5,72.50,200,"200, 200",,24,small song pool: 24 playable angry songs
+angry,Tamil,song 5 vs song 1 in the intended direction,%,100.00,51.00,48.50,49.00,+42.5 to +55.5,51.50,200,"200, 200",,24,small song pool: 24 playable angry songs
+angry,Tamil,"valence change, song 5 minus song 1 (calming paths)",valence points,1.47,-0.08,-0.00,1.55,+1.3 to +1.8,1.47,200,"200, 200",,24,small song pool: 24 playable angry songs
+angry,Korean,steps in the intended direction,%,95.75,47.50,41.38,48.25,+45.4 to +51.0,54.37,200,"200, 200",800,27,small song pool: 27 playable angry songs
+angry,Korean,all 4 steps in the intended direction,%,84.50,0.50,0.00,84.00,+79.0 to +89.0,84.50,200,"200, 200",,27,small song pool: 27 playable angry songs
+angry,Korean,song 5 vs song 1 in the intended direction,%,100.00,43.50,42.00,56.50,+49.5 to +63.0,58.00,200,"200, 200",,27,small song pool: 27 playable angry songs
+angry,Korean,"valence change, song 5 minus song 1 (calming paths)",valence points,1.37,-0.18,-0.00,1.55,+1.3 to +1.8,1.37,200,"200, 200",,27,small song pool: 27 playable angry songs
+fear,English,steps in the intended direction,%,99.75,51.38,48.00,48.38,+45.9 to +50.9,51.75,200,"200, 200",800,162,
+fear,English,all 4 steps in the intended direction,%,99.00,1.50,1.00,97.50,+95.0 to +99.5,98.00,200,"200, 200",,162,
+fear,English,song 5 vs song 1 in the intended direction,%,100.00,52.50,46.00,47.50,+40.5 to +54.5,54.00,200,"200, 200",,162,
+fear,English,"valence change, song 5 minus song 1 (calming paths)",valence points,1.98,0.01,-0.02,1.97,+1.7 to +2.3,2.00,200,"200, 200",,162,
+fear,Hindi,steps in the intended direction,%,93.62,48.62,46.25,45.00,+42.1 to +47.9,47.38,200,"200, 200",800,28,small song pool: 28 playable fear songs
+fear,Hindi,all 4 steps in the intended direction,%,75.50,0.00,1.00,75.50,+69.5 to +81.5,74.50,200,"200, 200",,28,small song pool: 28 playable fear songs
+fear,Hindi,song 5 vs song 1 in the intended direction,%,100.00,46.00,42.00,54.00,+47.0 to +61.0,58.00,200,"200, 200",,28,small song pool: 28 playable fear songs
+fear,Hindi,"valence change, song 5 minus song 1 (calming paths)",valence points,2.03,-0.05,-0.03,2.08,+1.8 to +2.3,2.06,200,"200, 200",,28,small song pool: 28 playable fear songs
+fear,Tamil,steps in the intended direction,%,94.75,50.00,49.75,44.75,+41.8 to +47.6,45.00,200,"200, 200",800,26,small song pool: 26 playable fear songs
+fear,Tamil,all 4 steps in the intended direction,%,81.50,0.50,0.00,81.00,+75.0 to +86.5,81.50,200,"200, 200",,26,small song pool: 26 playable fear songs
+fear,Tamil,song 5 vs song 1 in the intended direction,%,100.00,51.50,53.50,48.50,+41.5 to +55.5,46.50,200,"200, 200",,26,small song pool: 26 playable fear songs
+fear,Tamil,"valence change, song 5 minus song 1 (calming paths)",valence points,2.05,-0.03,0.04,2.08,+1.8 to +2.3,2.01,200,"200, 200",,26,small song pool: 26 playable fear songs
+fear,Korean,steps in the intended direction,%,96.00,48.62,47.75,47.37,+44.4 to +50.1,48.25,200,"200, 200",800,18,small song pool: 18 playable fear songs
+fear,Korean,all 4 steps in the intended direction,%,84.50,0.50,0.50,84.00,+79.0 to +89.0,84.00,200,"200, 200",,18,small song pool: 18 playable fear songs
+fear,Korean,song 5 vs song 1 in the intended direction,%,100.00,47.50,45.50,52.50,+45.5 to +59.0,54.50,200,"200, 200",,18,small song pool: 18 playable fear songs
+fear,Korean,"valence change, song 5 minus song 1 (calming paths)",valence points,1.97,-0.13,-0.00,2.09,+1.9 to +2.3,1.97,200,"200, 200",,18,small song pool: 18 playable fear songs
+disgust,English,steps in the intended direction,%,89.88,51.38,48.50,38.50,+35.6 to +41.5,41.38,200,"200, 200",800,162,
+disgust,English,all 4 steps in the intended direction,%,62.00,1.00,1.00,61.00,+54.0 to +68.0,61.00,200,"200, 200",,162,
+disgust,English,song 5 vs song 1 in the intended direction,%,100.00,49.00,45.00,51.00,+44.0 to +58.5,55.00,200,"200, 200",,162,
+disgust,English,"valence change, song 5 minus song 1 (calming paths)",valence points,2.51,0.11,0.02,2.41,+2.1 to +2.7,2.49,200,"200, 200",,162,
+disgust,Hindi,steps in the intended direction,%,67.62,50.25,46.25,17.38,+13.9 to +21.1,21.38,200,"200, 200",800,26,small song pool: 26 playable disgust songs
+disgust,Hindi,all 4 steps in the intended direction,%,16.50,0.00,0.50,16.50,+11.5 to +21.5,16.00,200,"200, 200",,26,small song pool: 26 playable disgust songs
+disgust,Hindi,song 5 vs song 1 in the intended direction,%,99.50,51.00,51.50,48.50,+42.0 to +55.0,48.00,200,"200, 200",,26,small song pool: 26 playable disgust songs
+disgust,Hindi,"valence change, song 5 minus song 1 (calming paths)",valence points,2.57,0.17,0.01,2.40,+2.2 to +2.6,2.56,200,"200, 200",,26,small song pool: 26 playable disgust songs
+disgust,Tamil,steps in the intended direction,%,72.12,48.88,45.88,23.25,+19.8 to +26.8,26.25,200,"200, 200",800,28,small song pool: 28 playable disgust songs
+disgust,Tamil,all 4 steps in the intended direction,%,20.50,1.00,0.00,19.50,+14.0 to +25.5,20.50,200,"200, 200",,28,small song pool: 28 playable disgust songs
+disgust,Tamil,song 5 vs song 1 in the intended direction,%,100.00,47.00,47.50,53.00,+45.5 to +60.0,52.50,200,"200, 200",,28,small song pool: 28 playable disgust songs
+disgust,Tamil,"valence change, song 5 minus song 1 (calming paths)",valence points,2.55,0.23,-0.00,2.32,+2.1 to +2.6,2.56,200,"200, 200",,28,small song pool: 28 playable disgust songs
+disgust,Korean,steps in the intended direction,%,77.62,49.38,46.25,28.25,+24.8 to +31.8,31.37,200,"200, 200",800,23,small song pool: 23 playable disgust songs
+disgust,Korean,all 4 steps in the intended direction,%,29.00,0.50,0.50,28.50,+22.5 to +35.0,28.50,200,"200, 200",,23,small song pool: 23 playable disgust songs
+disgust,Korean,song 5 vs song 1 in the intended direction,%,100.00,58.00,45.50,42.00,+35.0 to +49.0,54.50,200,"200, 200",,23,small song pool: 23 playable disgust songs
+disgust,Korean,"valence change, song 5 minus song 1 (calming paths)",valence points,2.49,-0.05,-0.01,2.55,+2.3 to +2.8,2.50,200,"200, 200",,23,small song pool: 23 playable disgust songs

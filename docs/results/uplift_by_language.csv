@@ -1,0 +1,17 @@
+language,measure,unit,Uplift,Random,Resonance,Uplift - Random,95% interval of Uplift - Random,Uplift - Resonance,n paths,"n paths (random, Resonance)",n steps
+English,steps in the intended direction,%,96.81,50.38,45.91,46.44,+45.0 to +47.8,50.91,800,"800, 800",3200
+English,all 4 steps in the intended direction,%,87.88,1.00,0.62,86.88,+84.4 to +89.2,87.25,800,"800, 800",
+English,song 5 vs song 1 in the intended direction,%,100.00,50.75,43.62,49.25,+45.9 to +52.6,56.38,800,"800, 800",
+English,"valence change, song 5 minus song 1 (calming paths)",valence points,1.99,0.05,0.01,1.94,+1.8 to +2.1,1.98,600,"600, 600",
+Hindi,steps in the intended direction,%,89.25,49.47,45.97,39.78,+38.0 to +41.5,43.28,800,"800, 800",3200
+Hindi,all 4 steps in the intended direction,%,69.00,0.75,0.50,68.25,+65.1 to +71.4,68.50,800,"800, 800",
+Hindi,song 5 vs song 1 in the intended direction,%,99.88,48.88,47.62,51.00,+47.4 to +54.4,52.25,800,"800, 800",
+Hindi,"valence change, song 5 minus song 1 (calming paths)",valence points,2.02,-0.04,-0.00,2.06,+1.9 to +2.2,2.02,600,"600, 600",
+Tamil,steps in the intended direction,%,89.44,50.28,45.97,39.16,+37.4 to +40.8,43.47,800,"800, 800",3200
+Tamil,all 4 steps in the intended direction,%,67.62,0.50,0.12,67.12,+63.7 to +70.2,67.50,800,"800, 800",
+Tamil,song 5 vs song 1 in the intended direction,%,100.00,51.00,48.12,49.00,+45.5 to +52.4,51.88,800,"800, 800",
+Tamil,"valence change, song 5 minus song 1 (calming paths)",valence points,2.02,0.04,0.01,1.98,+1.8 to +2.1,2.01,600,"600, 600",
+Korean,steps in the intended direction,%,92.19,49.03,44.44,43.16,+41.7 to +44.7,47.75,800,"800, 800",3200
+Korean,all 4 steps in the intended direction,%,73.88,0.88,0.25,73.00,+69.9 to +76.1,73.62,800,"800, 800",
+Korean,song 5 vs song 1 in the intended direction,%,100.00,49.62,43.50,50.37,+46.9 to +53.6,56.50,800,"800, 800",
+Korean,"valence change, song 5 minus song 1 (calming paths)",valence points,1.94,-0.12,-0.00,2.06,+1.9 to +2.2,1.95,600,"600, 600",

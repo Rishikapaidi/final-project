@@ -10,6 +10,7 @@ Usage (from the project root):
                                                   # which is what the app can play
     python scripts/evaluate_uplift.py --language Hindi [--previews]
     python scripts/evaluate_uplift.py --check     # the playlist check below
+    python scripts/evaluate_uplift.py --tables    # only rebuild docs/results/ from the last --check
 
 Songs are drawn from one language (default English). Bucket centres and the
 distance scale always come from the English (Muse) songs, as in the app.
@@ -39,7 +40,16 @@ Reads   data/songs/songs_clean.csv  (and data/songs/previews.csv with --previews
 Writes  models/uplift/report.txt    (report_previews.txt with --previews);
         for another language report_<language>.txt / report_previews_<language>.txt;
         --check: models/uplift/playlist_check.txt, playlist_check.csv,
-        playlist_check_paths.csv, playlist_check_steps.png
+        playlist_check_paths.csv, playlist_check_steps.png; and docs/results/:
+        uplift_by_emotion / _by_language / _by_emotion_language (.csv, .md),
+        uplift_by_emotion.png, uplift_by_language.png, uplift_wording.md
+
+The intended progression (progression_tables): sad paths should get
+brighter (valence rises at each step); angry, fear and disgust paths should
+get calmer (arousal falls at each step; their valence change is reported
+too). Each is measured as the share of steps in that direction, all 4 steps
+in it, and song 5 against song 1, for the Uplift path and for the random and
+Resonance baselines built from the same readings with the same seed.
 """
 import argparse
 import os
@@ -157,6 +167,7 @@ def path_metrics(rows, waypoints, scale, start_emotion, reading_emotions):
 def playlist_check():
     import eval_common as ec
     import face_models
+    import mood
     import player
     import previews
     import app_code
@@ -229,7 +240,10 @@ def playlist_check():
                     else:
                         links = []      # Uplift offered for this language, but no playable song on the path
                     rows = by_link.loc[links].reset_index()
-                    paths.append({**base, "method": "uplift", "offered_by_app": offered, "note": queue["note"] or "",
+                    # The words the app shows with this path (path card title and subtitle, the mood card's sentence).
+                    words = ({"title": player.path_title(queue["journey"]), "subtitle": queue["subtitle"],
+                              "message": mood.card(r["fused"], "Uplift", queue["journey"])["message"]} if offered else {})
+                    paths.append({**base, "method": "uplift", "offered_by_app": offered, "note": queue["note"] or "", **words,
                                   **path_metrics(rows, journey["waypoints"], scale, e, r["emotions"])})
                     picked = player.playable_songs(songs[in_language], uplift.N_SONGS, np.random.default_rng())
                     rows = by_link.loc[[s.lastfm_url for s, _ in picked]].reset_index()
@@ -360,6 +374,204 @@ def playlist_check():
     with open(os.path.join(out_dir, "playlist_check.txt"), "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
     print(f"written to {out_dir}")
+    progression_tables(P, songs, playable)
+
+
+# --- The intended progression of each Uplift path, against random and Resonance playlists ---------------
+# sad -> neutral -> happy is meant to get BRIGHTER: valence rises at every step.
+# angry / fear / disgust -> neutral are meant to get CALMER: arousal falls at every step (their valence
+# change is reported too). These match the planned waypoints (uplift.plan_journey), which rise in valence
+# for every start emotion and fall in arousal for angry, fear and disgust.
+INTENDED = {"sad": ("valence", 1, "brighter"), "angry": ("arousal", -1, "calmer"),
+            "fear": ("arousal", -1, "calmer"), "disgust": ("arousal", -1, "calmer")}
+RESULTS_DIR = os.path.join("docs", "results")
+MIN_PATHS = 30      # a cell with fewer complete paths than this is marked too small to read
+SMALL_POOL = 30     # fewer playable songs than this in the start emotion's bucket (that language): marked
+BOOTSTRAP = 2000    # paired bootstrap over readings, for the 95% interval of Uplift minus random
+METHOD_NAMES = {"uplift": "Uplift", "random": "Random", "resonance": "Resonance"}
+MEASURES = [("steps", "steps in the intended direction"), ("all4", "all 4 steps in the intended direction"),
+            ("end", "song 5 vs song 1 in the intended direction"), ("dv", "valence change, song 5 minus song 1 (calming paths)")]
+
+
+def _intended_measures(P):
+    """One row per complete path: its measures on the intended axis of its start emotion."""
+    P = P[P.complete.astype(bool)].copy()
+    axis = P.start_emotion.map(lambda e: INTENDED[e][0])
+    sign = P.start_emotion.map(lambda e: INTENDED[e][1]).to_numpy()
+    V = P[[f"V{i}" for i in range(1, 6)]].to_numpy(float)
+    A = P[[f"A{i}" for i in range(1, 6)]].to_numpy(float)
+    X = np.where((axis == "valence").to_numpy()[:, None], V, A)
+    right = np.sign(np.diff(X, axis=1)) == sign[:, None]
+    P["steps"] = right.mean(axis=1)                  # share of the path's 4 steps
+    P["all4"] = right.all(axis=1).astype(float)
+    P["end"] = (np.sign(X[:, -1] - X[:, 0]) == sign).astype(float)
+    P["dv"] = np.where(P.start_emotion == "sad", np.nan, V[:, -1] - V[:, 0])
+    return P
+
+
+def _compare(G, rng):
+    """Uplift, random and Resonance on one group of paths: a list of rows, one per measure."""
+    rows = []
+    key = ["language", "start_emotion", "reading"]
+    by = {m: G[G.method == m].set_index(key) for m in METHOD_NAMES}
+    n = {m: len(by[m]) for m in METHOD_NAMES}
+    for measure, label in MEASURES:
+        vals = {m: by[m][measure].dropna() for m in METHOD_NAMES}
+        if not len(vals["uplift"]):
+            continue
+        paired = pd.concat([vals["uplift"].rename("u"), vals["random"].rename("r")], axis=1).dropna()
+        diffs = (paired.u - paired.r).to_numpy()
+        boots = [diffs[rng.integers(0, len(diffs), len(diffs))].mean() for _ in range(BOOTSTRAP)] if len(diffs) else [np.nan]
+        lo, hi = np.percentile(boots, [2.5, 97.5])
+        pct = measure != "dv"
+        scale = 100 if pct else 1
+        row = {"measure": label, "unit": "%" if pct else "valence points",
+               **{METHOD_NAMES[m]: vals[m].mean() * scale for m in METHOD_NAMES},
+               "Uplift - Random": (vals["uplift"].mean() - vals["random"].mean()) * scale,
+               "95% interval of Uplift - Random": f"{lo * scale:+.1f} to {hi * scale:+.1f}",
+               "Uplift - Resonance": (vals["uplift"].mean() - vals["resonance"].mean()) * scale,
+               "n paths": len(vals["uplift"]),
+               "n paths (random, Resonance)": f"{len(vals['random'])}, {len(vals['resonance'])}",
+               "n steps": 4 * len(vals["uplift"]) if measure == "steps" else ""}
+        rows.append(row)
+    return rows
+
+
+def _markdown(df, title, notes):
+    def cell(v, col):
+        if isinstance(v, float):
+            if np.isnan(v):
+                return ""
+            return f"{v:+.1f}" if col.startswith("Uplift -") else f"{v:.1f}"
+        return str(v)
+    head = "| " + " | ".join(df.columns) + " |\n|" + "|".join("---" for _ in df.columns) + "|\n"
+    body = "".join("| " + " | ".join(cell(v, c) for c, v in zip(df.columns, r)) + " |\n" for r in df.itertuples(index=False))
+    return f"# {title}\n\n" + "".join(f"{n}\n" for n in notes) + "\n" + head + body
+
+
+def progression_tables(P, songs, playable):
+    """docs/results/: the intended-progression tables (CSV and Markdown), two plots and the app's wording."""
+    os.makedirs(RESULTS_DIR, exist_ok=True)
+    rng = np.random.default_rng(SEED)
+    M = _intended_measures(P[P.language.isin(["English", "Hindi", "Tamil", "Korean"])])
+    languages = ["English", "Hindi", "Tamil", "Korean"]
+    emotions = list(INTENDED)
+    pool = {(lang, e): int(((songs.language == lang).values & (songs.bucket == e).values & playable).sum())
+            for lang in languages for e in emotions}
+    notes = ["Paths: the app's own Uplift path (`app.build_queue`, saved previews only) for 200 sampled fused readings per start",
+             "emotion (HSEmotion + DistilBERT on FER2013 PrivateTest x GoEmotions test pairs), in each language. Random: 5 playable",
+             "songs drawn at random from the same language (`player.playable_songs`); Resonance: the first 5 songs of a Resonance",
+             "playlist of the start emotion's bucket (`player.resonance_queue`). Same readings and the same seeded generator for all three.",
+             "",
+             "Intended direction: sad paths should get brighter (valence rises at each step); angry, fear and disgust paths should",
+             "get calmer (arousal falls at each step). Steps are strict: a step with no change counts as not in the direction.",
+             "Chance for a random path: 50% of steps, 0.8% for all 4 steps (1 in 120 orders), 50% for song 5 vs song 1.",
+             "Difference columns are percentage points (valence points for the valence row). The 95% interval is a paired",
+             f"bootstrap over readings ({BOOTSTRAP} resamples). Valence and arousal are dataset values (Muse tags; Spotify",
+             "features mapped by percentile), not checked by people; this measures playlist structure, not any effect on a listener."]
+    tables = {}
+    rows = []
+    for e in emotions:
+        for r in _compare(M[M.start_emotion == e], rng):
+            rows.append({"start emotion": e, "intended": INTENDED[e][2] + f" ({INTENDED[e][0]} {'up' if INTENDED[e][1] > 0 else 'down'})", **r})
+    tables["by_emotion"] = (pd.DataFrame(rows), "Uplift paths by start emotion (English, Hindi, Tamil and Korean together)")
+    rows = []
+    for lang in languages:
+        for r in _compare(M[M.language == lang], rng):
+            rows.append({"language": lang, **r})
+    tables["by_language"] = (pd.DataFrame(rows), "Uplift paths by language (all four start emotions; each path on its own intended axis)")
+    rows = []
+    for e in emotions:
+        for lang in languages:
+            G = M[(M.start_emotion == e) & (M.language == lang)]
+            flags = []
+            if (G.method == "uplift").sum() < MIN_PATHS:
+                flags.append(f"too small to read (fewer than {MIN_PATHS} paths)")
+            if pool[(lang, e)] < SMALL_POOL:
+                flags.append(f"small song pool: {pool[(lang, e)]} playable {e} songs")
+            for r in _compare(G, rng):
+                rows.append({"start emotion": e, "language": lang, **r, "playable songs in start bucket": pool[(lang, e)],
+                             "flag": "; ".join(flags)})
+    tables["by_emotion_language"] = (pd.DataFrame(rows), "Uplift paths by start emotion and language")
+
+    for name, (df, title) in tables.items():
+        df.to_csv(os.path.join(RESULTS_DIR, f"uplift_{name}.csv"), index=False, float_format="%.2f")
+        extra = [] if name != "by_emotion_language" else [
+            "", f"Flags: a cell is too small to read below {MIN_PATHS} complete paths (none is: every cell has 200); a small song",
+            f"pool (fewer than {SMALL_POOL} playable songs in the start bucket in that language) means the paths reuse few songs."]
+        with open(os.path.join(RESULTS_DIR, f"uplift_{name}.md"), "w", encoding="utf-8") as f:
+            f.write(_markdown(df, title, notes + extra))
+    print(f"tables written to {RESULTS_DIR}")
+    _plots(tables)
+    _wording(P)
+
+
+def _plots(tables):
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    colours = {"Uplift": "#257de0", "Random": "#f47230", "Resonance": "#00b894"}   # categorical slots 1-3, validated
+    plt.rcParams.update({"font.size": 10, "axes.edgecolor": "#cccccc", "axes.labelcolor": "#191919",
+                         "xtick.color": "#666666", "ytick.color": "#666666"})
+    for name, key, ticks in [("by_emotion", "start emotion", lambda g: f"{g}\n{INTENDED[g][2]}\n({INTENDED[g][0]} {'up' if INTENDED[g][1] > 0 else 'down'})"),
+                             ("by_language", "language", lambda g: g)]:
+        df = tables[name][0]
+        groups = list(dict.fromkeys(df[key]))
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5.2))
+        for ax, measure in zip(axes, ["steps in the intended direction", "all 4 steps in the intended direction"]):
+            d = df[df.measure == measure].set_index(key)
+            x = np.arange(len(groups)); w = 0.26
+            for i, m in enumerate(colours):
+                vals = [d.loc[g, m] for g in groups]
+                bars = ax.bar(x + (i - 1) * w, vals, w - 0.02, color=colours[m], label=m, edgecolor="white", linewidth=2)
+                for b, v in zip(bars, vals):
+                    ax.text(b.get_x() + b.get_width() / 2, v + 1.2, f"{v:.0f}%", ha="center", va="bottom", fontsize=8, color="#191919")
+            ax.set_xticks(x, [ticks(g) for g in groups]); ax.set_ylim(0, 110); ax.set_yticks(range(0, 101, 25))
+            ax.set_ylabel(f"% of {'steps' if measure.startswith('steps') else 'paths'}")
+            n = int(d["n paths"].iloc[0])
+            ax.set_title(f"{measure[0].upper() + measure[1:]}\n(n = {n} paths per {key}" + (f", {4 * n} steps)" if measure.startswith("steps") else ")"),
+                         fontsize=10, color="#191919")
+            ax.grid(axis="y", color="#eeeeee"); ax.set_axisbelow(True)
+            for s in ("top", "right"):
+                ax.spines[s].set_visible(False)
+        fig.suptitle(f"Uplift vs random vs Resonance, by {key}", fontsize=12, color="#191919")
+        handles, labels = axes[0].get_legend_handles_labels()
+        fig.legend(handles, labels, loc="upper center", bbox_to_anchor=(0.5, 0.93), ncol=3, frameon=False, fontsize=9)
+        fig.tight_layout(rect=(0, 0, 1, 0.88)); fig.savefig(os.path.join(RESULTS_DIR, f"uplift_{name}.png"), dpi=150)
+        plt.close(fig)
+    print(f"plots written to {RESULTS_DIR}")
+
+
+def _wording(P):
+    """The words the app shows with each start emotion's Uplift path (English paths), and any 'brighter' / 'hopeful'."""
+    import ui
+    U = P[(P.method == "uplift") & (P.language == "English") & P.offered_by_app.astype(bool)]
+    lines = ["# What the app says with an Uplift path, by start emotion", "",
+             "From the app's own code on the English Uplift paths of the playlist check (200 readings per start emotion).",
+             "Other languages add \" in <language>\" to the subtitle. Nothing here was changed.", "",
+             "Shown with every Uplift path, whatever the start emotion:", "",
+             f"- choice card (button): \"{ui.CHOICES['Uplift'][2]}\", with the text \"{ui.CHOICES['Uplift'][3]}\"",
+             "- path card label: \"Your path\"; list headings \"Your path, in play order\" and \"Keep listening\"",
+             "- path card play button: no text, labelled \"Play\" for screen readers", ""]
+    flagged = []
+    for e in INTENDED:
+        S = U[U.start_emotion == e]
+        lines += [f"## {e} ({len(S)} paths; intended: {INTENDED[e][2]})", ""]
+        for col, label in [("title", "Path card title"), ("subtitle", "Subtitle"), ("message", "Mood card sentence (chosen by the reading's top emotion)")]:
+            counts = S[col].value_counts()
+            lines.append(f"- {label}: " + "; ".join(f"\"{t}\" ({c})" for t, c in counts.items()))
+            for t in counts.index:
+                for word in ("brighter", "hopeful", "lighter"):
+                    if word in t.lower() and INTENDED[e][2] == "calmer":
+                        flagged.append(f"{e}: {label.split(' (')[0].lower()} \"{t}\" says \"{word}\"")
+        lines.append("")
+    lines += ["## \"brighter\", \"hopeful\" or \"lighter\" on a calming path (angry, fear, disgust)", ""]
+    lines += [f"- {f}" for f in flagged] or ["- none in the path card title, subtitle or mood card sentence"]
+    lines += [f"- the choice card's text \"{ui.CHOICES['Uplift'][3]}\" is the same for every start emotion, calming ones included",
+              "- About (shell.py): \"a five-song path from a low mood towards a lighter one\", for every start emotion"]
+    with open(os.path.join(RESULTS_DIR, "uplift_wording.md"), "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+    print("\n".join(lines))
 
 
 def main():
@@ -368,9 +580,19 @@ def main():
                         help="only use songs that have a saved preview (data/songs/previews.csv)")
     parser.add_argument("--language", default="English", help="language to draw songs from (default English)")
     parser.add_argument("--check", action="store_true", help="the playlist check (see the top of this file)")
+    parser.add_argument("--tables", action="store_true",
+                        help="only rebuild docs/results/ from models/uplift/playlist_check_paths.csv (written by --check)")
     args = parser.parse_args()
     if args.check:
         return playlist_check()
+    if args.tables:
+        import previews
+        songs = pd.read_csv(os.path.join("data", "songs", "songs_clean.csv"), keep_default_na=False)
+        P = pd.read_csv(os.path.join("models", "uplift", "playlist_check_paths.csv"), keep_default_na=False,
+                        na_values={c: [""] for c in ["V1", "V2", "V3", "V4", "V5", "A1", "A2", "A3", "A4", "A5"]})
+        P["complete"] = P.complete.astype(str) == "True"
+        P["offered_by_app"] = P.offered_by_app.astype(str) == "True"
+        return progression_tables(P, songs, songs.lastfm_url.isin(previews.playable_urls()).values)
 
     songs = pd.read_csv(os.path.join("data", "songs", "songs_clean.csv"), keep_default_na=False)
     os.makedirs(os.path.join("models", "uplift"), exist_ok=True)

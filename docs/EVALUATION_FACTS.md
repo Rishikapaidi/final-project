@@ -21,6 +21,7 @@ is not documented) is reported as a secondary row.
 | 1. Signals disagree | `scripts/evaluate_fusion_conflict.py` | `models/fusion/conflict/report.txt`, `by_pair.csv`, `by_confidence.csv`, `polarity.csv`, `conflict_heatmap.png` |
 | 2. One signal missing | `scripts/evaluate_fusion_missing.py` | `models/fusion/missing/report.txt`, `summary.csv` |
 | 3. Uplift playlist check | `scripts/evaluate_uplift.py --check` | `models/uplift/playlist_check.txt`, `playlist_check.csv`, `playlist_check_steps.png` (and `playlist_check_paths.csv`, not committed: one row per path, 2.9 MB) |
+| 3b. Uplift intended progression | `scripts/evaluate_uplift.py --check` (or `--tables` to rebuild from the last check) | `docs/results/uplift_by_emotion`, `_by_language`, `_by_emotion_language` (`.csv`, `.md`), `uplift_by_emotion.png`, `uplift_by_language.png`, `uplift_wording.md` |
 
 Run them from the project root with `.\venv\Scripts\python.exe`. Items 1 and
 2 take about a minute each; item 3 takes about 12 minutes. All three read the
@@ -314,6 +315,84 @@ the random baseline):
   - English: Muse listener mood tags;
   - other languages: Spotify valence and energy, mapped onto the Muse scale by percentile. On 45 songs in both datasets the agreement is r = 0.50 for valence and 0.28 for arousal (`data/README.md`).
   - They were not validated by people. This checks playlist structure, not any effect on a listener.
+
+### Item 3b: Uplift's intended progression against random and Resonance (`docs/results/`)
+
+**Intended direction for each start emotion:**
+
+- **Sad** paths (sad → neutral → happy) should get **brighter**: valence rises at every step.
+- **Angry, fear and disgust** paths (→ neutral) should get **calmer**: arousal falls at every step. Their valence change is reported as well.
+
+These match the planned waypoints, which rise in valence for every start emotion and fall in arousal for the three calming ones.
+
+**Measures**, on that axis, for complete paths:
+
+- the share of the 4 steps in the intended direction;
+- all 4 steps in it;
+- song 5 against song 1.
+
+A step with no change counts as not in the direction.
+
+**Comparison:**
+
+- **Random:** 5 playable songs drawn at random from the same language (`player.playable_songs`).
+- **Resonance:** the first 5 songs of a Resonance playlist of the start bucket (`player.resonance_queue`).
+- **Same inputs:** all three use the same readings (200 per start emotion) and the same seeded generator.
+- **Interval:** a paired bootstrap over readings (2,000 resamples) gives the 95% interval of Uplift minus random.
+- **Chance level** for a random path is 50% of steps, 0.8% for all 4 steps (1 order in 120), and 50% for song 5 against song 1.
+
+**By start emotion** (English, Hindi, Tamil and Korean together; 800 paths and 3,200 steps per row, the same for each method; `uplift_by_emotion.csv`):
+
+| Start, intended | Measure | Uplift | Random | Resonance | Uplift − random (95% interval) |
+|---|---|---|---|---|---|
+| sad, brighter | steps with valence up | 99.4% | 50.1% | 44.9% | +49.3 (+48.1 to +50.6) |
+| sad, brighter | all 4 steps up | 97.8% | 1.1% | 0.2% | +96.6 |
+| sad, brighter | song 5 brighter than song 1 | 100.0% | 52.1% | 46.5% | +47.9 |
+| angry, calmer | steps with arousal down | 95.4% | 49.4% | 42.7% | +46.0 (+44.5 to +47.4) |
+| angry, calmer | all 4 steps down | 83.5% | 0.8% | 0.1% | +82.8 |
+| angry, calmer | song 5 calmer than song 1 | 100.0% | 47.5% | 42.2% | +52.5 |
+| angry, calmer | valence change, song 5 − song 1 | +1.4 | −0.1 | 0.0 | +1.6 |
+| fear, calmer | steps with arousal down | 96.0% | 49.7% | 47.9% | +46.4 (+45.0 to +47.8) |
+| fear, calmer | all 4 steps down | 85.1% | 0.6% | 0.6% | +84.5 |
+| fear, calmer | song 5 calmer than song 1 | 100.0% | 49.4% | 46.8% | +50.6 |
+| fear, calmer | valence change, song 5 − song 1 | +2.0 | 0.0 | 0.0 | +2.0 |
+| disgust, calmer | steps with arousal down | 76.8% | 50.0% | 46.7% | +26.8 (+25.1 to +28.6) |
+| disgust, calmer | all 4 steps down | 32.0% | 0.6% | 0.5% | +31.4 |
+| disgust, calmer | song 5 calmer than song 1 | 99.9% | 51.2% | 47.4% | +48.6 |
+| disgust, calmer | valence change, song 5 − song 1 | +2.5 | +0.1 | 0.0 | +2.4 |
+
+**By language** (all four start emotions, each path on its own intended axis; 800 paths and 3,200 steps per language; `uplift_by_language.csv`):
+
+| Language | Steps in the intended direction: Uplift / random / Resonance | All 4 steps: Uplift / random / Resonance |
+|---|---|---|
+| English | 96.8% / 50.4% / 45.9% | 87.9% / 1.0% / 0.6% |
+| Hindi | 89.2% / 49.5% / 46.0% | 69.0% / 0.8% / 0.5% |
+| Tamil | 89.4% / 50.3% / 46.0% | 67.6% / 0.5% / 0.1% |
+| Korean | 92.2% / 49.0% / 44.4% | 73.9% / 0.9% / 0.2% |
+
+**By start emotion and language:** the 16 cells are in `uplift_by_emotion_language.csv`, with 200 paths and 800 steps each.
+
+- **No cell is too small to read** (the threshold is 30 paths).
+- **Song pools are small in every non-English cell:** fewer than 30 playable songs in the start bucket (17 to 28), so those paths reuse a few songs. Each such cell is flagged with its count.
+- **Weakest cells:**
+  - Disgust in Hindi: 67.6% of steps calmer, 16.5% with all 4 steps.
+  - Disgust in Tamil: 72.1% and 20.5%.
+  - Disgust in Korean: 77.6% and 29.0%.
+  - Angry in Tamil: 92.0% and 73.0%.
+
+  Disgust's planned arousal drop is small (about 0.12 per step), well within one bucket's spread.
+- **Strongest cells:** sad in every language, 99–100% of steps brighter.
+
+**The app's wording for each path** (`uplift_wording.md`, from the English paths of the same readings):
+
+- **Path card titles:**
+  - sad: "From heavy to hopeful"
+  - angry: "From tense to calm"
+  - fear: "From uneasy to calm"
+  - disgust: "From unsettled to calm"
+- **Subtitles:** sad: "5 songs in order, then more happy songs"; the other three: "5 songs in order, then more neutral songs".
+- **Mood card sentence:** chosen by the reading's top emotion. Only sad's says "ends a little brighter"; angry, fear and disgust's say "towards calmer".
+- **No calming path is called "brighter" or "hopeful".** But the "Lift my mood" choice card's text, "towards something lighter", is the same for every start emotion, and so is About's "a five-song path from a low mood towards a lighter one". The wording was not changed.
 
 ---
 
